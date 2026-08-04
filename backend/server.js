@@ -25,13 +25,16 @@ const { parseContactsFile } = require('./contacts-import');
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }));
+app.use(cors());
 app.use(express.json());
 
 // ─── Session ID Validation Middleware ─────────────────────────────────────────
 app.use((req, res, next) => {
   const sessionId = req.headers['x-session-id'] || req.query.sessionId;
   if (!sessionId && req.path.startsWith('/api')) {
+    if (req.path === '/api/status') {
+      return next();
+    }
     return res.status(400).json({ error: 'X-Session-ID header is required.' });
   }
   req.sessionId = sessionId;
@@ -51,8 +54,13 @@ function getSenderPhoneFromSession(req) {
 /**
  * GET /api/status
  * Returns connection state, QR, pairing code, and connected profile info.
+ * If no session ID is provided, returns { status: "ok" } (for deployment/health checks).
  */
 app.get('/api/status', (req, res) => {
+  if (!req.sessionId) {
+    return res.json({ status: "ok" });
+  }
+
   // Auto-initialize WhatsApp for this session if it's completely new/untracked
   if (!whatsapp.hasSession(req.sessionId)) {
     console.log(`[Server] Initializing untracked session: ${req.sessionId}`);
@@ -408,12 +416,12 @@ async function bootstrap() {
     });
   };
 
-  const availablePort = await findAvailablePort(PORT);
+  const availablePort = process.env.PORT ? parseInt(process.env.PORT, 10) : await findAvailablePort(PORT);
   
   const server = app.listen(availablePort, () => {
     console.log(`[Server] Running on http://localhost:${availablePort}`);
     
-    if (availablePort !== PORT) {
+    if (!process.env.PORT && availablePort !== PORT) {
       console.log(`[Server] Note: Using port ${availablePort} instead of ${PORT}`);
     }
   });
