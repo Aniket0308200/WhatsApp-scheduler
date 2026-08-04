@@ -1,0 +1,47 @@
+import axios from 'axios';
+
+// Get or generate a unique session ID for this browser client
+let sessionId = localStorage.getItem('wa_session_id');
+if (!sessionId) {
+  sessionId = 'session_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  localStorage.setItem('wa_session_id', sessionId);
+}
+
+const api = axios.create({
+  baseURL: '/api',
+  headers: {
+    'X-Session-ID': sessionId,
+  },
+});
+
+// ─── WhatsApp ─────────────────────────────────────────────────────────────────
+export const fetchStatus        = ()       => api.get('/status').then(r => r.data);
+export const requestPairingCode = (phone)  => api.post('/pairing-code', { phone }).then(r => r.data);
+export const logout             = ()       => api.post('/logout').then(r => r.data);
+
+/** Look up a contact's display name. Returns { name, exists } */
+export const fetchContactName = (phone) =>
+  api.get(`/contact/${phone}`).then(r => r.data);
+
+/** Active live contact resolution for immediate name lookup */
+export const resolveContactLive = (phone) =>
+  api.post('/contacts/resolve', { phone }).then(r => r.data);
+
+/** Fetch all contacts from database */
+export const fetchAllContacts = () =>
+  api.get('/contacts').then(r => r.data);
+
+/** Search contacts by name or phone for autosuggest. Returns [{ phone, name }] */
+export const searchContacts = (q) =>
+  api.get(`/contacts/search?q=${encodeURIComponent(q)}`).then(r => r.data);
+
+export const importContacts = (file) =>
+  api.post('/contacts/import', file, {
+    headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-File-Name': file.name },
+  }).then(r => r.data);
+
+// ─── Messages ────────────────────────────────────────────────────────────────
+export const fetchMessages   = ()        => api.get('/messages').then(r => r.data);
+export const scheduleMessage = (payload) => api.post('/messages', payload).then(r => r.data);
+export const cancelMessage   = (id)      => api.delete(`/messages/${id}`).then(r => r.data);
+export const deleteMessage   = (id)      => api.delete(`/messages/${id}?permanent=true`).then(r => r.data);
