@@ -260,8 +260,15 @@ app.post('/api/messages', async (req, res) => {
     return res.status(400).json({ error: 'WhatsApp is not connected for this session.' });
   }
 
-  if (!phone || !/^\d{7,15}$/.test(phone.replace(/\D/g, ''))) {
-    return res.status(400).json({ error: 'Invalid phone number (digits only, 7–15 chars).' });
+  const isGroup = phone && phone.endsWith('@g.us');
+  if (isGroup) {
+    if (!/^\d+@g\.us$/.test(phone)) {
+      return res.status(400).json({ error: 'Invalid group JID.' });
+    }
+  } else {
+    if (!phone || !/^\d{7,15}$/.test(phone.replace(/\D/g, ''))) {
+      return res.status(400).json({ error: 'Invalid phone number (digits only, 7–15 chars).' });
+    }
   }
   if (!message || !message.trim()) {
     return res.status(400).json({ error: 'Message cannot be empty.' });
@@ -276,7 +283,7 @@ app.post('/api/messages', async (req, res) => {
   }
 
   try {
-    const cleanPhone = phone.replace(/\D/g, '');
+    const cleanPhone = isGroup ? phone : phone.replace(/\D/g, '');
     let cleanName  = recipientName ? String(recipientName).trim().slice(0, 100) : null;
 
     if (!cleanName && whatsapp.getStatus(req.sessionId) === 'connected') {

@@ -170,9 +170,10 @@ async function upsertContacts(senderPhone, contacts) {
   const dbInstance = await getDb(senderPhone);
   let changed = 0;
   for (const contact of contacts || []) {
-    const phone = String(contact.phone || '').replace(/\D/g, '');
+    const isGroup = contact.jid && contact.jid.endsWith('@g.us');
+    const phone = isGroup ? contact.jid : String(contact.phone || '').replace(/\D/g, '');
     const name = typeof contact.name === 'string' ? contact.name.trim().slice(0, 100) : '';
-    if (phone.length < 7) continue;
+    if (!isGroup && phone.length < 7) continue;
 
     dbInstance.run(
       `INSERT INTO contacts (phone, jid, name, source, updated_at)

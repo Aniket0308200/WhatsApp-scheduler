@@ -83,7 +83,7 @@ const ALL_COUNTRIES = [
 ].sort((a, b) => a.name.localeCompare(b.name));
 
 // ─── Searchable Country Picker ────────────────────────────────────────────────
-function CountryPicker({ value, onChange }) {
+function CountryPicker({ value, onChange, disabled }) {
   const [open,    setOpen]    = useState(false);
   const [search,  setSearch]  = useState('');
   const ref                   = useRef(null);
@@ -115,10 +115,11 @@ function CountryPicker({ value, onChange }) {
   };
 
   return (
-    <div className="relative flex-shrink-0" ref={ref}>
+    <div className={`relative flex-shrink-0 ${disabled ? 'opacity-40 pointer-events-none' : ''}`} ref={ref}>
       {/* Trigger button */}
       <button
         type="button"
+        disabled={disabled}
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-1.5 border border-slate-200 dark:border-wa-dbdr rounded-xl px-3 py-2.5 text-sm bg-slate-50 dark:bg-wa-dsurf hover:bg-slate-100/80 dark:hover:bg-wa-dbdr/50 focus:outline-none focus:ring-2 focus:ring-wa-teal/40 min-w-[110px] justify-between transition-colors text-gray-700 dark:text-wa-dtext"
       >
@@ -262,8 +263,11 @@ function ContactsImportModal({ onClose, onImported }) {
   );
 }
 
-export default function SchedulerForm({ isConnected, onScheduled }) {
+export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
   const getFullPhone = (cc, ph) => {
+    if (ph && ph.endsWith('@g.us')) {
+      return ph;
+    }
     const cleanedInput = ph.replace(/\D/g, '');
     if (!cleanedInput) return '';
     if (cleanedInput.startsWith(cc) && cleanedInput.length > cc.length + 5) {
@@ -310,6 +314,7 @@ export default function SchedulerForm({ isConnected, onScheduled }) {
   const [contactsList,    setContactsList]    = useState([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [directorySearch, setDirectorySearch] = useState('');
+  const [directoryTab,    setDirectoryTab]    = useState('all');
 
   const loadContactsList = useCallback(async () => {
     if (!isConnected) return;
@@ -397,21 +402,35 @@ export default function SchedulerForm({ isConnected, onScheduled }) {
   };
 
   const handleSelectContactFromDirectory = (c) => {
-    const { countryCode: cc, phone: ph } = parseFullPhone(c.phone);
-    setCountryCode(cc);
-    setPhone(ph);
-    setContactName(c.name || null);
-    setContactExists(true);
+    const isGroup = c.phone && c.phone.endsWith('@g.us');
+    if (isGroup) {
+      setPhone(c.phone);
+      setContactName(c.name || null);
+      setContactExists(true);
+    } else {
+      const { countryCode: cc, phone: ph } = parseFullPhone(c.phone);
+      setCountryCode(cc);
+      setPhone(ph);
+      setContactName(c.name || null);
+      setContactExists(true);
+    }
     setShowDirectory(false);
     toast.success(`Selected contact: ${c.name || `+${c.phone}`}`);
   };
 
   const handleSelectSuggestion = (contact) => {
-    const { countryCode: cc, phone: ph } = parseFullPhone(contact.phone);
-    setCountryCode(cc);
-    setPhone(ph);
-    setContactName(contact.name || null);
-    setContactExists(true);
+    const isGroup = contact.phone && contact.phone.endsWith('@g.us');
+    if (isGroup) {
+      setPhone(contact.phone);
+      setContactName(contact.name || null);
+      setContactExists(true);
+    } else {
+      const { countryCode: cc, phone: ph } = parseFullPhone(contact.phone);
+      setCountryCode(cc);
+      setPhone(ph);
+      setContactName(contact.name || null);
+      setContactExists(true);
+    }
     setSuggestions([]);
     setShowSuggestions(false);
     toast.success(`Selected: ${contact.name || `+${contact.phone}`}`);
@@ -555,6 +574,11 @@ export default function SchedulerForm({ isConnected, onScheduled }) {
   const cleanDirSearch = directorySearch.trim().toLowerCase();
   const dirSearchDigits = cleanDirSearch.replace(/\D/g, '');
   const filteredContacts = contactsList.filter(c => {
+    // Filter by tab
+    const isGroup = c.phone && c.phone.endsWith('@g.us');
+    if (directoryTab === 'personal' && isGroup) return false;
+    if (directoryTab === 'group' && !isGroup) return false;
+
     if (!cleanDirSearch) return true;
     const matchesName = c.name ? String(c.name).toLowerCase().includes(cleanDirSearch) : false;
     const matchesPhone = dirSearchDigits ? (c.phone ? String(c.phone).includes(dirSearchDigits) : false) : false;
@@ -603,7 +627,7 @@ export default function SchedulerForm({ isConnected, onScheduled }) {
             </button>
           </div>
           <div className="flex gap-2">
-            <CountryPicker value={countryCode} onChange={setCountryCode} />
+            <CountryPicker value={countryCode} onChange={setCountryCode} disabled={phone && phone.endsWith('@g.us')} />
             <div className="flex-1 relative" ref={formRef}>
               <input
                 type="text"
@@ -615,8 +639,22 @@ export default function SchedulerForm({ isConnected, onScheduled }) {
                 }}
                 placeholder="Search name or type number…"
                 required
-                className="w-full border border-slate-200 dark:border-wa-dbdr rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white dark:bg-wa-dsurf text-gray-900 dark:text-wa-dtext focus:outline-none focus:ring-2 focus:ring-wa-teal/40 focus:border-wa-teal pr-8 transition-colors"
+                className="w-full border border-slate-200 dark:border-wa-dbdr rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white dark:bg-wa-dsurf text-gray-900 dark:text-wa-dtext focus:outline-none focus:ring-2 focus:ring-wa-teal/40 focus:border-wa-teal pr-14 transition-colors"
               />
+              {phone && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPhone('');
+                    setContactName(null);
+                    setContactExists(false);
+                  }}
+                  className={`absolute top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-white hover:scale-110 active:scale-95 transition-transform ${fetchingName ? 'right-9' : 'right-3'}`}
+                  title="Clear recipient"
+                >
+                  ✕
+                </button>
+              )}
               {fetchingName && (
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-wa-teal border-t-transparent rounded-full animate-spin" />
               )}
@@ -827,9 +865,17 @@ export default function SchedulerForm({ isConnected, onScheduled }) {
                 &times;
               </button>
             </div>
+
+            {/* Syncing status indicator in directory */}
+            {isSyncing && (
+              <div className="bg-blue-50 dark:bg-blue-950/20 px-5 py-2.5 border-b border-blue-100/50 dark:border-wa-dbdr/30 flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400 font-semibold animate-pulse">
+                <span className="w-3.5 h-3.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                <span>WhatsApp data is syncing now... please wait a moment.</span>
+              </div>
+            )}
             
             {/* Search Input */}
-            <div className="p-4 border-b border-slate-200 dark:border-wa-dbdr bg-slate-50/20 dark:bg-transparent">
+            <div className="p-4 pb-2 bg-slate-50/20 dark:bg-transparent">
               <div className="relative">
                 <input
                   type="text"
@@ -845,6 +891,31 @@ export default function SchedulerForm({ isConnected, onScheduled }) {
                   </button>
                 )}
               </div>
+            </div>
+
+            {/* Tabs inside directory */}
+            <div className="px-4 pb-3 flex gap-1.5 border-b border-slate-100 dark:border-wa-dbdr/40 bg-slate-50/20 dark:bg-transparent">
+              <button
+                type="button"
+                onClick={() => setDirectoryTab('all')}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors ${directoryTab === 'all' ? 'bg-wa-teal text-white' : 'bg-slate-100 dark:bg-wa-dsurf text-gray-600 dark:text-wa-dmuted hover:bg-slate-200/70 dark:hover:bg-wa-dbdr/50'}`}
+              >
+                All ({contactsList.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setDirectoryTab('personal')}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors ${directoryTab === 'personal' ? 'bg-wa-teal text-white' : 'bg-slate-100 dark:bg-wa-dsurf text-gray-600 dark:text-wa-dmuted hover:bg-slate-200/70 dark:hover:bg-wa-dbdr/50'}`}
+              >
+                Personal ({contactsList.filter(c => !c.phone?.endsWith('@g.us')).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setDirectoryTab('group')}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors ${directoryTab === 'group' ? 'bg-wa-teal text-white' : 'bg-slate-100 dark:bg-wa-dsurf text-gray-600 dark:text-wa-dmuted hover:bg-slate-200/70 dark:hover:bg-wa-dbdr/50'}`}
+              >
+                Groups ({contactsList.filter(c => c.phone?.endsWith('@g.us')).length})
+              </button>
             </div>
             
             {/* Scrollable list */}
@@ -905,8 +976,8 @@ export default function SchedulerForm({ isConnected, onScheduled }) {
                           <p className={`text-sm font-semibold truncate ${hasName ? 'text-gray-800 dark:text-wa-dtext' : 'text-gray-500 dark:text-wa-dmuted font-mono'}`}>
                             {contactNameDisplay}
                           </p>
-                          <p className="text-xs text-gray-400 dark:text-wa-dmuted font-mono">
-                            +{c.phone}
+                          <p className="text-xs text-gray-400 dark:text-wa-dmuted font-mono truncate">
+                            {c.phone.endsWith('@g.us') ? c.phone : `+${c.phone}`}
                           </p>
                         </div>
                       </div>

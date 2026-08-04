@@ -13,6 +13,7 @@ export default function App() {
   const [qr,          setQr]          = useState(null);
   const [pairingCode, setPairingCode] = useState(null);
   const [profile,     setProfile]     = useState({ name: null, phone: null });
+  const [isSyncing,   setIsSyncing]   = useState(false);
   const [messages,    setMessages]    = useState([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
 
@@ -23,8 +24,10 @@ export default function App() {
       setQr(data.qr);
       setPairingCode(data.pairingCode);
       setProfile(data.profile || { name: null, phone: null });
+      setIsSyncing(Boolean(data.isSyncing));
     } catch {
       setWaStatus('disconnected');
+      setIsSyncing(false);
     }
   }, []);
 
@@ -51,7 +54,7 @@ export default function App() {
       <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.25] dark:opacity-[0.18] wp-light-bg dark:wp-dark-bg" />
 
       <div className="relative z-10 flex-col flex-1 flex">
-        <Header status={waStatus} profile={profile} onLogout={refreshStatus} />
+        <Header status={waStatus} profile={profile} onLogout={refreshStatus} isSyncing={isSyncing} />
 
         <main className="flex-1 container mx-auto px-4 py-6 max-w-5xl space-y-6">
           {!isConnected && (
@@ -63,7 +66,7 @@ export default function App() {
             />
           )}
 
-          <SchedulerForm isConnected={isConnected} onScheduled={refreshMessages} />
+          <SchedulerForm isConnected={isConnected} onScheduled={refreshMessages} isSyncing={isSyncing} />
 
           <MessageTable messages={messages} loading={loadingMsgs} onRefresh={refreshMessages} />
         </main>

@@ -31,7 +31,7 @@ const MoonIcon = () => (
   </svg>
 );
 
-export default function Header({ status, profile, onLogout }) {
+export default function Header({ status, profile, onLogout, isSyncing }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const { dark, toggle } = useTheme();
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.disconnected;
@@ -105,6 +105,15 @@ export default function Header({ status, profile, onLogout }) {
 
         {/* ── Right side: status + theme toggle + disconnect ────────────── */}
         <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Syncing Indicator */}
+          {isConnected && isSyncing && (
+            <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-500/25 text-blue-200 border border-blue-400/30 animate-pulse">
+              <span className="w-2.5 h-2.5 border-2 border-blue-200 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+              <span className="hidden xs:inline">Syncing Contacts…</span>
+              <span className="inline xs:hidden">Syncing…</span>
+            </span>
+          )}
+
           {/* Status badge */}
           <span className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${cfg.bg} ${cfg.text}`}>
             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot} ${cfg.pulse ? 'animate-pulse' : ''}`} />

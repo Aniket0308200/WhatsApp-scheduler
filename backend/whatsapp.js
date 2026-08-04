@@ -95,10 +95,16 @@ function cacheContacts(phone, cache, contacts) {
   const normalized = [];
   let changed = 0;
   for (const c of contacts || []) {
-    if (!c?.id || !c.id.endsWith('@s.whatsapp.net')) continue;
+    if (!c?.id) continue;
+    const isUser = c.id.endsWith('@s.whatsapp.net');
+    const isGroup = c.id.endsWith('@g.us');
+    if (!isUser && !isGroup) continue;
+
     const name = c.notify || c.name || c.verifiedName || c.pushName;
     const phonePart = c.id.split('@')[0].split(':')[0];
-    normalized.push({ phone: phonePart, jid: c.id, name: name || '', source: 'whatsapp' });
+    const keyPhone = isGroup ? c.id : phonePart;
+
+    normalized.push({ phone: keyPhone, jid: c.id, name: name || '', source: isGroup ? 'group_sync' : 'whatsapp' });
     if (name && cache[c.id] !== name) {
       cache[c.id] = name;
       changed++;
@@ -124,9 +130,10 @@ function processIncomingChats(phone, cache, chats) {
 
     const name = chat.name || chat.notify || chat.verifiedName || chat.pushName || '';
     const phonePart = chat.id.split('@')[0].split(':')[0];
+    const keyPhone = isGroup ? chat.id : phonePart;
 
     normalized.push({
-      phone: phonePart,
+      phone: keyPhone,
       jid: chat.id,
       name: name ? name.trim() : '',
       source: isGroup ? 'group_sync' : 'chat_sync'
@@ -162,20 +169,35 @@ function cacheMessages(phone, cache, messages) {
 
 async function hydrateContactCacheForUser(phone, cache) {
   const saved = await db.getAllContacts(phone);
-  if (saved.length === 0 && Object.keys(cache).length > 0) {
-    console.log(`[WA] [${phone}] Repopulating SQLite contacts table from JSON cache...`);
-    const normalized = Object.entries(cache).map(([jid, name]) => {
+  const savedJids = new Set(saved.map(c => c.jid || (c.phone.includes('@') ? c.phone : `${c.phone}@s.whatsapp.net`)));
+  
+  const missingFromDb = [];
+  for (const [jid, name] of Object.entries(cache || {})) {
+    if (!savedJids.has(jid)) {
+      const isGroup = jid.endsWith('@g.us');
       const phonePart = jid.split('@')[0].split(':')[0];
-      return { phone: phonePart, jid, name, source: 'whatsapp' };
-    });
-    await db.upsertContacts(phone, normalized);
-  } else {
-    for (const contact of saved) {
-      const jid = contact.jid || `${contact.phone}@s.whatsapp.net`;
-      cache[jid] = contact.name;
+      missingFromDb.push({
+        phone: isGroup ? jid : phonePart,
+        jid,
+        name: name || '',
+        source: isGroup ? 'group_sync' : 'whatsapp'
+      });
     }
   }
-  if (saved.length) console.log(`[WA] [${phone}] Restored ${saved.length} contacts from SQLite.`);
+
+  if (missingFromDb.length > 0) {
+    console.log(`[WA] [${phone}] Hydrating ${missingFromDb.length} missing contacts from JSON cache to SQLite...`);
+    await db.upsertContacts(phone, missingFromDb);
+  }
+
+  // Reload merged list from DB
+  const allContacts = await db.getAllContacts(phone);
+  for (const contact of allContacts) {
+    const jid = contact.jid || (contact.phone.includes('@') ? contact.phone : `${contact.phone}@s.whatsapp.net`);
+    cache[jid] = contact.name;
+  }
+  
+  console.log(`[WA] [${phone}] Restored ${allContacts.length} contacts from SQLite.`);
 }
 
 async function extractContactsFromChats(sessionId, phone) {
@@ -311,7 +333,8 @@ async function initWhatsApp(sessionId) {
       reconnectTimer: null,
       status: 'disconnected',
       connectedProfile: { name: null, phone: null, jid: null },
-      contactCache: {}
+      contactCache: {},
+      isSyncing: false
     };
     sessions.set(sessionId, session);
   }
@@ -412,6 +435,12 @@ async function initWhatsApp(sessionId) {
       session.status   = 'connected';
       session.qrBase64 = null;
       session.pairingCode = null;
+      session.isSyncing = true;
+
+      // Reset sync status after 60s max to prevent showing "Syncing" forever
+      setTimeout(() => {
+        if (session) session.isSyncing = false;
+      }, 60000);
 
       try {
         await updateConnectedProfile(sessionId);
@@ -486,6 +515,7 @@ async function initWhatsApp(sessionId) {
   });
 
   sock.ev.on('messaging-history.set', ({ chats, contacts, messages }) => {
+    session.isSyncing = false; // Syncing finished!
     const currentPhone = getPhone();
     if (currentPhone) {
       if (chats) processIncomingChats(currentPhone, session.contactCache, chats);
@@ -620,8 +650,8 @@ async function sendMessage(sessionId, phone, text) {
     throw new Error('WhatsApp is not connected for this session.');
   }
 
-  const cleaned = phone.replace(/\D/g, '');
-  const jid     = await resolveRecipientJid(sessionId, cleaned);
+  const isGroup = phone.endsWith('@g.us');
+  const jid     = isGroup ? phone : await resolveRecipientJid(sessionId, phone.replace(/\D/g, ''));
 
   try {
     const result = await session.sock.sendMessage(jid, { text });
@@ -761,6 +791,11 @@ function getConnectedProfile(sessionId) {
   return session ? session.connectedProfile : { name: null, phone: null, jid: null };
 }
 
+function getSyncStatus(sessionId) {
+  const session = sessions.get(sessionId);
+  return session ? Boolean(session.isSyncing) : false;
+}
+
 function getSessionByPhone(phone) {
   const cleaned = String(phone).replace(/\D/g, '');
   for (const session of sessions.values()) {
@@ -806,4 +841,5 @@ module.exports = {
   getConnectedProfile,
   getSessionByPhone,
   getPhoneFromSession,
+  getSyncStatus,
 };
