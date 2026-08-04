@@ -867,10 +867,19 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
             </div>
 
             {/* Syncing status indicator in directory */}
-            {isSyncing && (
-              <div className="bg-blue-50 dark:bg-blue-950/20 px-5 py-2.5 border-b border-blue-100/50 dark:border-wa-dbdr/30 flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400 font-semibold animate-pulse">
-                <span className="w-3.5 h-3.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                <span>WhatsApp data is syncing now... please wait a moment.</span>
+            {isSyncing ? (
+              <div className="bg-blue-50 dark:bg-blue-950/20 px-5 py-3 border-b border-blue-100/50 dark:border-wa-dbdr/30 flex flex-col gap-1.5 text-xs text-blue-700 dark:text-blue-300 font-medium">
+                <div className="flex items-center gap-2 font-semibold text-blue-800 dark:text-blue-300 animate-pulse">
+                  <span className="w-3.5 h-3.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                  <span>WhatsApp contacts are syncing in the background...</span>
+                </div>
+                <p className="text-gray-500 dark:text-wa-dmuted pl-5">
+                  Names will populate as WhatsApp history loading completes. You can also click <strong>"Import Contacts"</strong> to upload all your contacts instantly.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-slate-50 dark:bg-wa-dsurf/30 px-5 py-2.5 border-b border-slate-100 dark:border-wa-dbdr/30 text-xs text-gray-500 dark:text-wa-dmuted">
+                💡 Missing contact names? Syncing depends on your active chat history. Use the <strong>"Import Contacts"</strong> button to upload all names instantly.
               </div>
             )}
             
