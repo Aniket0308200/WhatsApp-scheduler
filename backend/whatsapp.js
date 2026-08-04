@@ -464,24 +464,29 @@ async function initWhatsApp(sessionId) {
     }
   });
 
+  // Helper to get phone number from session/sock in event listeners to prevent I/O race conditions
+  const getPhone = () => {
+    return session.connectedProfile.phone || (sock.authState?.creds?.me?.id ? sock.authState.creds.me.id.split('@')[0].split(':')[0] : null) || getPhoneFromSession(sessionId);
+  };
+
   // ── Contacts update — populate name cache ────────────────────────────────
   sock.ev.on('contacts.update', (contacts) => {
-    const currentPhone = session.connectedProfile.phone || getPhoneFromSession(sessionId);
+    const currentPhone = getPhone();
     if (currentPhone) cacheContacts(currentPhone, session.contactCache, contacts);
   });
 
   sock.ev.on('contacts.upsert', (contacts) => {
-    const currentPhone = session.connectedProfile.phone || getPhoneFromSession(sessionId);
+    const currentPhone = getPhone();
     if (currentPhone) cacheContacts(currentPhone, session.contactCache, contacts);
   });
 
   sock.ev.on('chats.upsert', (chats) => {
-    const currentPhone = session.connectedProfile.phone || getPhoneFromSession(sessionId);
+    const currentPhone = getPhone();
     if (currentPhone) processIncomingChats(currentPhone, session.contactCache, chats);
   });
 
   sock.ev.on('messaging-history.set', ({ chats, contacts, messages }) => {
-    const currentPhone = session.connectedProfile.phone || getPhoneFromSession(sessionId);
+    const currentPhone = getPhone();
     if (currentPhone) {
       if (chats) processIncomingChats(currentPhone, session.contactCache, chats);
       if (contacts) cacheContacts(currentPhone, session.contactCache, contacts);
@@ -491,7 +496,7 @@ async function initWhatsApp(sessionId) {
   });
 
   sock.ev.on('messages.upsert', ({ messages }) => {
-    const currentPhone = session.connectedProfile.phone || getPhoneFromSession(sessionId);
+    const currentPhone = getPhone();
     if (currentPhone) cacheMessages(currentPhone, session.contactCache, messages);
   });
 
@@ -717,6 +722,10 @@ async function updateConnectedProfile(sessionId) {
       
       // Enhanced profile name fallback chain
       let displayName = user.name || user.notify || user.verifiedName || user.pushName;
+      
+      if (!displayName && session.sock.authState?.creds?.me?.name) {
+        displayName = session.sock.authState.creds.me.name;
+      }
       
       // Try cached contacts
       if (!displayName) {
