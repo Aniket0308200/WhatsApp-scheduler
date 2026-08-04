@@ -7,8 +7,11 @@ if (!sessionId) {
   localStorage.setItem('wa_session_id', sessionId);
 }
 
-const api = axios.create({
-  baseURL: '/api',
+export const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://whatsapp-scheduler-backend-ubkz.onrender.com';
+const API_BASE_URL = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
+
+export const api = axios.create({
+  baseURL: API_BASE_URL,
   headers: {
     'X-Session-ID': sessionId,
   },
