@@ -4,7 +4,12 @@ const ThemeContext = createContext({ dark: false, toggle: () => {} });
 
 export function ThemeProvider({ children }) {
   const [dark, setDark] = useState(() => {
-    try { return localStorage.getItem('wa-theme') === 'dark'; } catch { return false; }
+    try {
+      const stored = localStorage.getItem('wa-theme');
+      return stored === null ? true : stored === 'dark';
+    } catch {
+      return true;
+    }
   });
 
   useEffect(() => {

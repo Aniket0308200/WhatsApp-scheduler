@@ -71,8 +71,12 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
             {WA_ICON}
           </div>
           <div>
-            <h1 className="font-bold text-base text-white leading-tight tracking-tight">WA Scheduler</h1>
-            <p className="text-[11px] text-green-300 dark:text-wa-dmuted leading-tight">WhatsApp Message Scheduler</p>
+            <h1 className="font-bold text-sm sm:text-base text-slate-100 leading-tight tracking-tight flex items-center gap-1.5 flex-wrap">
+              <span>WA Scheduler (WhatsApp Message Scheduler)</span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-green-500/20 text-green-300 border border-green-500/30 font-medium">
+                🔒 End-to-End Encrypted
+              </span>
+            </h1>
           </div>
         </div>
 
@@ -80,11 +84,11 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
         {isConnected && displayName && (
           <div className="hidden sm:flex items-center gap-2.5 bg-white/10 dark:bg-wa-dsurf border border-white/10 dark:border-wa-dbdr rounded-xl px-3 py-1.5 min-w-0 flex-1 max-w-[260px]">
             {/* Avatar */}
-            <div className="w-8 h-8 rounded-full bg-wa-green flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+            <div className="w-8 h-8 rounded-full bg-wa-green flex-shrink-0 flex items-center justify-center text-slate-100 font-bold text-sm shadow-sm">
               {avatarLetter}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-white truncate leading-tight">
+              <p className="text-sm font-semibold text-slate-100 truncate leading-tight">
                 {displayName}
               </p>
               {showPhoneSubtitle && (
@@ -124,7 +128,7 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
           <button
             onClick={toggle}
             aria-label="Toggle theme"
-            className="p-1.5 rounded-full text-white/70 hover:text-white hover:bg-white/10 dark:hover:bg-wa-dsurf transition-colors"
+            className="p-1.5 rounded-full text-slate-200/70 hover:text-slate-100 hover:bg-white/10 dark:hover:bg-wa-dsurf transition-colors"
             title={dark ? 'Switch to Light mode' : 'Switch to Dark mode'}
           >
             {dark ? <SunIcon /> : <MoonIcon />}
@@ -135,7 +139,7 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
             <button
               onClick={handleLogout}
               disabled={loggingOut}
-              className="text-xs bg-white/10 hover:bg-white/20 dark:bg-wa-dsurf dark:hover:bg-wa-dbdr px-3 py-1.5 rounded-full font-medium text-white disabled:opacity-50 transition-colors"
+              className="text-xs bg-white/10 hover:bg-white/20 dark:bg-wa-dsurf dark:hover:bg-wa-dbdr px-3 py-1.5 rounded-full font-medium text-slate-100 disabled:opacity-50 transition-colors"
             >
               {loggingOut ? '…' : 'Disconnect'}
             </button>
@@ -146,7 +150,7 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
       {/* ── Mobile profile strip ─────────────────────────────────────────── */}
       {isConnected && displayName && (
         <div className="sm:hidden bg-black/20 dark:bg-wa-dsurf/60 px-4 py-1.5 flex items-center gap-2 border-t border-black/10 dark:border-wa-dbdr">
-          <div className="w-5 h-5 rounded-full bg-wa-green flex items-center justify-center text-white font-bold text-[10px] flex-shrink-0">
+          <div className="w-5 h-5 rounded-full bg-wa-green flex items-center justify-center text-slate-100 font-bold text-[10px] flex-shrink-0">
             {avatarLetter}
           </div>
           <span className="text-xs text-green-200 dark:text-wa-dmuted truncate">

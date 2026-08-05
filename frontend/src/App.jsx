@@ -49,9 +49,9 @@ export default function App() {
   const isConnected = waStatus === 'connected';
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#f4f6f8] dark:bg-wa-dbg transition-colors duration-200">
+    <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#f0f2f5] dark:bg-[#0b141a] transition-colors duration-200">
       {/* Background Wallpaper Doodle with overlay opacity */}
-      <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.25] dark:opacity-[0.18] wp-light-bg dark:wp-dark-bg" />
+      <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.12] dark:opacity-[0.06] wp-custom-bg" />
 
       <div className="relative z-10 flex-col flex-1 flex">
         <Header status={waStatus} profile={profile} onLogout={refreshStatus} isSyncing={isSyncing} />

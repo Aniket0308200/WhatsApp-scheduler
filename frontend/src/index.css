@@ -4,12 +4,12 @@
 
 /* ── Base ──────────────────────────────────────────────────────────────────── */
 body {
-  @apply bg-gray-50 text-gray-900 antialiased font-sans;
+  @apply bg-[#f0f2f5] text-slate-800 antialiased font-sans;
   transition: background-color 0.2s, color 0.2s;
 }
 
 .dark body {
-  @apply bg-wa-dbg text-wa-dtext;
+  @apply bg-[#0b141a] text-wa-dtext;
 }
 
 /* ── Smooth transitions on all interactives ────────────────────────────────── */
@@ -34,6 +34,12 @@ button, input, textarea, select {
 .suggest-list { z-index: 60; }
 
 /* ── Custom Doodle Wallpaper Backgrounds ───────────────────────────────────── */
+.wp-custom-bg {
+  background-image: url('/light-dark-bg-png.png');
+  background-repeat: repeat;
+  background-position: center;
+}
+
 .wp-light-bg {
   background-image: url('/light-bg-wp.jpg');
   background-repeat: repeat;

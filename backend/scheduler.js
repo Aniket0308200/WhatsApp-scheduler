@@ -34,7 +34,7 @@ async function processAllDueMessages() {
         const sessionId = msg.sessionId;
         const msgId = msg._id;
 
-        console.log(`[Scheduler] [Session: ${sessionId}] Attempting #${msgId} → +${phone}`);
+        console.log(`[Scheduler] [Session: ${sessionId}] Attempting #${msgId} → [Encrypted]`);
 
         const sessionStatus = whatsapp.getStatus(sessionId);
         const isConnected = sessionStatus === 'connected';
@@ -47,13 +47,14 @@ async function processAllDueMessages() {
         }
 
         try {
-          // Decrypt the message strictly in-memory right at the boundary of dispatch
+          // Decrypt both messageText and recipientNumber strictly in-memory right at the boundary of dispatch
           const decryptedText = db.decryptMessage(msg.messageText);
-          await whatsapp.sendMessage(sessionId, phone, decryptedText);
+          const decryptedPhone = db.decryptMessage(phone);
+          await whatsapp.sendMessage(sessionId, decryptedPhone, decryptedText);
           
           // Delete scheduled messages from MongoDB upon successful dispatch to maintain end-to-end privacy
           await db.deleteMessageById(msgId);
-          console.log(`[Scheduler] [Session: ${sessionId}] ✓ #${msgId} sent to +${phone} and deleted from MongoDB`);
+          console.log(`[Scheduler] [Session: ${sessionId}] ✓ #${msgId} sent successfully and deleted from MongoDB`);
         } catch (err) {
           const errMsg = err?.message || String(err) || 'Unknown send error';
           console.error(`[Scheduler] [Session: ${sessionId}] ✗ #${msgId} FAILED: ${errMsg}`);

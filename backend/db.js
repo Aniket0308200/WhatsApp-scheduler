@@ -88,11 +88,12 @@ async function upsertUser(sessionId, phoneNumber, name) {
 async function insertMessage(sessionId, recipientNumber, messageText, scheduleTime, recipientName = null) {
   const user = await User.findOne({ sessionId });
   const encryptedText = encryptMessage(messageText);
+  const encryptedNumber = encryptMessage(recipientNumber);
   const msg = new ScheduledMessage({
     sessionId,
     userId: user ? user._id : null,
     recipientName,
-    recipientNumber,
+    recipientNumber: encryptedNumber,
     messageText: encryptedText,
     scheduleTime: new Date(scheduleTime),
     status: 'pending'
@@ -106,7 +107,7 @@ async function getAllMessages(sessionId) {
   const raw = await ScheduledMessage.find({ sessionId }).sort({ scheduleTime: 1 });
   return raw.map(msg => ({
     id: msg._id.toString(),
-    phone: msg.recipientNumber,
+    phone: decryptMessage(msg.recipientNumber),
     recipient_name: msg.recipientName,
     message: decryptMessage(msg.messageText),
     scheduled_at: msg.scheduleTime.toISOString(),
