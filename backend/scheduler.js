@@ -47,8 +47,9 @@ async function processAllDueMessages() {
         }
 
         try {
-          // Send message
-          await whatsapp.sendMessage(sessionId, phone, msg.messageText);
+          // Decrypt the message strictly in-memory right at the boundary of dispatch
+          const decryptedText = db.decryptMessage(msg.messageText);
+          await whatsapp.sendMessage(sessionId, phone, decryptedText);
           
           // Delete scheduled messages from MongoDB upon successful dispatch to maintain end-to-end privacy
           await db.deleteMessageById(msgId);

@@ -811,7 +811,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
           </div>
           <p className="text-xs text-gray-400 dark:text-wa-dmuted mt-1">
             {timeConfirmed
-              ? `⏰ Scheduled for ${format(new Date(scheduledAt), 'PPP p')} (local time)`
+              ? `⏰ Scheduled for ${new Date(scheduledAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (IST)`
               : 'Select a time at least 1 minute ahead, then click Confirm.'}
           </p>
         </div>

@@ -18,10 +18,10 @@ const FILTERS = ['all', 'pending', 'submitted', 'delivered', 'read', 'sent', 'fa
 function formatDate(val) {
   if (!val) return '—';
   try {
-    // Handles both "2025-07-30 14:30:00" (SQLite) and ISO strings
     const normalized = val.includes('T') ? val : val.replace(' ', 'T') + 'Z';
-    const d = parseISO(normalized);
-    return isValid(d) ? format(d, 'MMM d, yyyy  HH:mm') : val;
+    const d = new Date(normalized);
+    if (isNaN(d.getTime())) return val;
+    return d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
   } catch {
     return val;
   }

@@ -5,6 +5,26 @@
  */
 
 const mongoose = require('mongoose');
+const CryptoJS = require('crypto-js');
+
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'fallback-secret-key-123';
+
+function encryptMessage(text) {
+  if (!text) return '';
+  return CryptoJS.AES.encrypt(text, ENCRYPTION_KEY).toString();
+}
+
+function decryptMessage(ciphertext) {
+  if (!ciphertext) return '';
+  try {
+    const bytes = CryptoJS.AES.decrypt(ciphertext, ENCRYPTION_KEY);
+    return bytes.toString(CryptoJS.enc.Utf8);
+  } catch (e) {
+    console.error('[DB] Decryption failed, returning ciphertext:', e.message);
+    return ciphertext;
+  }
+}
+
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
@@ -67,12 +87,13 @@ async function upsertUser(sessionId, phoneNumber, name) {
 /** Insert a new scheduled message. */
 async function insertMessage(sessionId, recipientNumber, messageText, scheduleTime, recipientName = null) {
   const user = await User.findOne({ sessionId });
+  const encryptedText = encryptMessage(messageText);
   const msg = new ScheduledMessage({
     sessionId,
     userId: user ? user._id : null,
     recipientName,
     recipientNumber,
-    messageText,
+    messageText: encryptedText,
     scheduleTime: new Date(scheduleTime),
     status: 'pending'
   });
@@ -87,7 +108,7 @@ async function getAllMessages(sessionId) {
     id: msg._id.toString(),
     phone: msg.recipientNumber,
     recipient_name: msg.recipientName,
-    message: msg.messageText,
+    message: decryptMessage(msg.messageText),
     scheduled_at: msg.scheduleTime.toISOString(),
     status: msg.status,
     error: msg.error
@@ -193,4 +214,5 @@ module.exports = {
   markMessageSubmitted,
   updateMessageStatusByWhatsAppId,
   toSqliteUtc,
+  decryptMessage,
 };
