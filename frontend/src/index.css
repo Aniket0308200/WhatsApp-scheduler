@@ -4,7 +4,7 @@
 
 /* ── Base ──────────────────────────────────────────────────────────────────── */
 body {
-  @apply bg-[#f0f2f5] text-slate-800 antialiased font-sans;
+  @apply bg-white text-slate-800 antialiased font-sans;
   transition: background-color 0.2s, color 0.2s;
 }
 
@@ -38,6 +38,11 @@ button, input, textarea, select {
   background-image: url('/light-dark-bg-png.png');
   background-repeat: repeat;
   background-position: center;
+  filter: invert(0.9) contrast(1.1) brightness(0.85); /* Turns white lines into black-gray for light mode */
+}
+
+.dark .wp-custom-bg {
+  filter: none; /* Keeps original white/light lines for dark mode */
 }
 
 .wp-light-bg {

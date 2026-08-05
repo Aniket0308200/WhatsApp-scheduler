@@ -4,7 +4,9 @@ import { format, addMinutes } from 'date-fns';
 import { scheduleMessage, fetchContactName, resolveContactLive, searchContacts, importContacts, fetchAllContacts } from '../api';
 
 // ─── Complete country-code list ───────────────────────────────────────────────
-const ALL_COUNTRIES = [
+// ─── Complete country-code list ───────────────────────────────────────────────
+const INDIA_ITEM = { code: '91', name: 'India' };
+const OTHER_COUNTRIES = [
   { code: '93',  name: 'Afghanistan' },    { code: '355', name: 'Albania' },
   { code: '213', name: 'Algeria' },        { code: '376', name: 'Andorra' },
   { code: '244', name: 'Angola' },         { code: '54',  name: 'Argentina' },
@@ -32,7 +34,7 @@ const ALL_COUNTRIES = [
   { code: '502', name: 'Guatemala' },      { code: '224', name: 'Guinea' },
   { code: '509', name: 'Haiti' },          { code: '504', name: 'Honduras' },
   { code: '852', name: 'Hong Kong' },      { code: '36',  name: 'Hungary' },
-  { code: '354', name: 'Iceland' },        { code: '91',  name: 'India' },
+  { code: '354', name: 'Iceland' },
   { code: '62',  name: 'Indonesia' },      { code: '98',  name: 'Iran' },
   { code: '964', name: 'Iraq' },           { code: '353', name: 'Ireland' },
   { code: '972', name: 'Israel' },         { code: '39',  name: 'Italy' },
@@ -81,6 +83,8 @@ const ALL_COUNTRIES = [
   { code: '967', name: 'Yemen' },          { code: '260', name: 'Zambia' },
   { code: '263', name: 'Zimbabwe' },
 ].sort((a, b) => a.name.localeCompare(b.name));
+
+const ALL_COUNTRIES = [INDIA_ITEM, ...OTHER_COUNTRIES];
 
 // ─── Searchable Country Picker ────────────────────────────────────────────────
 function CountryPicker({ value, onChange, disabled }) {
@@ -293,7 +297,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
     return format(d, "yyyy-MM-dd'T'HH:mm");
   };
 
-  const [countryCode,   setCountryCode]   = useState('62');
+  const [countryCode,   setCountryCode]   = useState('91');
   const [phone,         setPhone]         = useState('');
   const [contactName,   setContactName]   = useState(null);   // fetched name
   const [contactExists, setContactExists] = useState(false);
@@ -851,17 +855,17 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
           {/* Drawer Panel */}
           <div className="relative w-full max-w-sm sm:max-w-md h-full bg-white dark:bg-wa-dpanel shadow-2xl border-l border-slate-200 dark:border-wa-dbdr flex flex-col z-10 animate-slide-in">
             {/* Drawer Header */}
-            <div className="px-5 py-4 border-b border-slate-200 dark:border-wa-dbdr flex items-center justify-between bg-slate-50/80 dark:bg-wa-dsurf/55">
+            <div className="px-5 py-4 border-b border-slate-200 dark:border-wa-dbdr flex items-center justify-between bg-emerald-600 dark:bg-wa-dpanel text-white">
               <div>
-                <h3 className="font-semibold text-gray-800 dark:text-wa-dtext flex items-center gap-1.5">
+                <h3 className="font-semibold text-white dark:text-wa-dtext flex items-center gap-1.5 text-base">
                   👥 Contacts Directory
-                  <span className="text-xs px-2 py-0.5 bg-wa-teal/15 text-wa-teal dark:text-wa-green rounded-full font-bold">
+                  <span className="text-xs px-2 py-0.5 bg-white/20 text-white dark:bg-wa-green/20 dark:text-wa-green rounded-full font-bold">
                     {contactsList.length}
                   </span>
                 </h3>
-                <p className="text-xs text-gray-400 mt-0.5">Click a contact to fill the scheduler form</p>
+                <p className="text-[11px] text-emerald-100/90 dark:text-wa-dmuted mt-0.5">Click a contact to fill the scheduler form</p>
               </div>
-              <button type="button" onClick={() => setShowDirectory(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white text-2xl font-light focus:outline-none">
+              <button type="button" onClick={() => setShowDirectory(false)} className="text-emerald-100 hover:text-white dark:text-gray-400 dark:hover:text-white text-2xl font-light focus:outline-none">
                 &times;
               </button>
             </div>
@@ -974,11 +978,11 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
                       key={c.phone + '-' + c.jid}
                       type="button"
                       onClick={() => handleSelectContactFromDirectory(c)}
-                      className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-wa-dsurf/40 rounded-xl flex items-center justify-between gap-3 transition-colors group"
+                      className="w-full text-left px-4 py-3.5 hover:bg-emerald-500/5 dark:hover:bg-emerald-500/10 rounded-xl flex items-center justify-between gap-3 transition-colors group border-b border-slate-100/50 dark:border-wa-dbdr/20"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         {/* Initial/Avatar */}
-                        <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-wa-dsurf text-gray-600 dark:text-wa-dtext flex items-center justify-center font-bold text-sm shrink-0 border border-slate-200/50 dark:border-wa-dbdr/30">
+                        <div className="w-10 h-10 rounded-full bg-emerald-500/10 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-sm shrink-0 border border-emerald-500/20">
                           {hasName ? c.name.charAt(0).toUpperCase() : '#'}
                         </div>
                         <div className="min-w-0">

@@ -71,12 +71,15 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
             {WA_ICON}
           </div>
           <div>
-            <h1 className="font-bold text-sm sm:text-base text-slate-100 leading-tight tracking-tight flex items-center gap-1.5 flex-wrap">
-              <span>WA Scheduler (WhatsApp Message Scheduler)</span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-green-500/20 text-green-300 border border-green-500/30 font-medium">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="font-bold text-sm sm:text-base text-slate-100 leading-tight tracking-tight">WA Scheduler</h1>
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 font-medium select-none">
                 🔒 End-to-End Encrypted
               </span>
-            </h1>
+            </div>
+            <p className="text-[10px] sm:text-[11px] text-green-300 dark:text-wa-dmuted leading-tight mt-0.5">
+              WhatsApp Message Scheduler
+            </p>
           </div>
         </div>
 

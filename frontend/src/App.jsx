@@ -49,7 +49,7 @@ export default function App() {
   const isConnected = waStatus === 'connected';
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#f0f2f5] dark:bg-[#0b141a] transition-colors duration-200">
+    <div className="min-h-screen flex flex-col relative overflow-hidden bg-white dark:bg-[#0b141a] transition-colors duration-200">
       {/* Background Wallpaper Doodle with overlay opacity */}
       <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.12] dark:opacity-[0.06] wp-custom-bg" />
 
@@ -71,8 +71,17 @@ export default function App() {
           <MessageTable messages={messages} loading={loadingMsgs} onRefresh={refreshMessages} />
         </main>
 
-        <footer className="text-center text-xs text-gray-400 dark:text-wa-dmuted py-4 border-t border-slate-200/80 dark:border-wa-dbdr bg-white/40 dark:bg-transparent backdrop-blur-xs">
-          WA Scheduler — messages sent locally via Baileys
+        <footer className="w-full text-center text-xs py-5 mt-auto border-t border-slate-200/80 dark:border-wa-dbdr bg-white/50 dark:bg-wa-dpanel/30 backdrop-blur-md transition-colors">
+          <div className="container mx-auto px-4 max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-500 dark:text-wa-dmuted font-medium">
+            <div className="flex flex-col items-center sm:items-start gap-1">
+              <span>© {new Date().getFullYear()} WA Scheduler. All rights reserved.</span>
+              <span className="text-[10px] text-gray-400 dark:text-wa-dmuted font-normal">Sent locally via Baileys integration</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] bg-slate-100/85 dark:bg-wa-dsurf px-3 py-1.5 rounded-full border border-slate-200/50 dark:border-wa-dbdr/50">
+              <span className="text-emerald-500">🔒</span>
+              <span>Local Encryption & End-to-End Secure Delivery</span>
+            </div>
+          </div>
         </footer>
       </div>
     </div>
