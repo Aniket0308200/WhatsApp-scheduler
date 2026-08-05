@@ -257,7 +257,7 @@ export default function MessageTable({ messages, loading, onRefresh }) {
       {!loading && filtered.length > 0 && (
         <div className="px-5 py-4 border-t border-gray-150 dark:border-wa-dbdr flex flex-col sm:flex-row items-center justify-between gap-4 bg-gray-50/50 dark:bg-wa-dsurf/10">
           {/* Page size select & current items info */}
-          <div className="flex items-center gap-2.5 text-xs text-gray-500 dark:text-wa-dmuted">
+          <div className="flex items-center flex-wrap justify-center sm:justify-start gap-2.5 text-xs text-gray-500 dark:text-wa-dmuted">
             <span>Show:</span>
             <select
               value={pageSize}

@@ -31,6 +31,13 @@ const MoonIcon = () => (
   </svg>
 );
 
+// Logout icon for disconnect button
+const LogoutIcon = () => (
+  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+  </svg>
+);
+
 export default function Header({ status, profile, onLogout, isSyncing }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const { dark, toggle } = useTheme();
@@ -62,7 +69,7 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
   };
 
   return (
-    <header className="bg-wa-dark dark:bg-wa-dpanel border-b border-black/20 dark:border-wa-dbdr shadow-sm transition-colors duration-200">
+    <header className="fixed top-0 left-0 right-0 z-40 bg-wa-dark dark:bg-wa-dpanel border-b border-black/20 dark:border-wa-dbdr shadow-md transition-colors duration-200">
       <div className="container mx-auto px-4 py-3 max-w-5xl flex items-center justify-between gap-3">
 
         {/* ── Logo + title ──────────────────────────────────────────────── */}
@@ -71,15 +78,21 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
             {WA_ICON}
           </div>
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
               <h1 className="font-bold text-sm sm:text-base text-slate-100 leading-tight tracking-tight">WA Scheduler</h1>
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 font-medium select-none">
+              <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 font-medium select-none">
                 🔒 End-to-End Encrypted
               </span>
             </div>
             <p className="text-[10px] sm:text-[11px] text-green-300 dark:text-wa-dmuted leading-tight mt-0.5">
               WhatsApp Message Scheduler
             </p>
+            {/* Show below the subtitle on mobile */}
+            <div className="sm:hidden mt-1">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 font-medium select-none">
+                🔒 End-to-End Encrypted
+              </span>
+            </div>
           </div>
         </div>
 
@@ -111,20 +124,20 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
         )}
 
         {/* ── Right side: status + theme toggle + disconnect ────────────── */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           {/* Syncing Indicator */}
           {isConnected && isSyncing && (
-            <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-500/25 text-blue-200 border border-blue-400/30 animate-pulse">
+            <span className="flex items-center gap-1 text-[10px] sm:text-xs font-semibold px-2 py-1 rounded-full bg-blue-500/25 text-blue-200 border border-blue-400/30 animate-pulse">
               <span className="w-2.5 h-2.5 border-2 border-blue-200 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-              <span className="hidden xs:inline">Syncing Contacts…</span>
-              <span className="inline xs:hidden">Syncing…</span>
+              <span className="hidden sm:inline">Syncing Contacts…</span>
+              <span className="inline sm:hidden">Syncing…</span>
             </span>
           )}
 
           {/* Status badge */}
-          <span className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${cfg.bg} ${cfg.text}`}>
-            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot} ${cfg.pulse ? 'animate-pulse' : ''}`} />
-            <span className="hidden xs:inline">{cfg.label}</span>
+          <span className={`flex items-center gap-1 text-[10px] sm:text-xs font-medium px-2.5 py-1 rounded-full ${cfg.bg} ${cfg.text}`}>
+            <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full flex-shrink-0 ${cfg.dot} ${cfg.pulse ? 'animate-pulse' : ''}`} />
+            <span className="hidden sm:inline">{cfg.label}</span>
           </span>
 
           {/* Dark/Light mode toggle */}
@@ -142,9 +155,17 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
             <button
               onClick={handleLogout}
               disabled={loggingOut}
-              className="text-xs bg-white/10 hover:bg-white/20 dark:bg-wa-dsurf dark:hover:bg-wa-dbdr px-3 py-1.5 rounded-full font-medium text-slate-100 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1 text-xs bg-white/10 hover:bg-white/20 dark:bg-wa-dsurf dark:hover:bg-wa-dbdr px-2.5 py-1.5 rounded-full font-medium text-slate-100 disabled:opacity-50 transition-colors"
+              title="Disconnect Session"
             >
-              {loggingOut ? '…' : 'Disconnect'}
+              {loggingOut ? (
+                '…'
+              ) : (
+                <>
+                  <LogoutIcon />
+                  <span className="hidden sm:inline ml-0.5">Disconnect</span>
+                </>
+              )}
             </button>
           )}
         </div>

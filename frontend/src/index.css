@@ -63,6 +63,35 @@ button, input, textarea, select {
   background-position: center;
 }
 
+@media (max-width: 425px) {
+  .responsive-badge-container {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
+  }
+}
+
+/* Customise browser datetime-local calendar picker icon */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: background-color 0.15s;
+  filter: invert(0.3) sepia(1) saturate(5) hue-rotate(120deg); /* Emerald green tint for light mode */
+}
+
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  background-color: rgba(16, 185, 129, 0.15);
+}
+
+.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8) sepia(1) saturate(5) hue-rotate(120deg) !important; /* Bright emerald green tint for dark mode */
+}
+
+.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  background-color: rgba(16, 185, 129, 0.25);
+}
+
 @keyframes slide-in {
   from {
     transform: translateX(100%);

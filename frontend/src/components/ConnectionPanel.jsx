@@ -109,14 +109,14 @@ export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) 
           <button
             key={key}
             onClick={() => handleTabChange(key)}
-            className={`flex-1 py-3 px-4 text-sm font-medium text-left transition-colors
+            className={`flex-1 py-3 px-3 sm:px-4 text-sm font-medium text-left transition-colors
               ${tab === key
                 ? 'border-b-2 border-wa-teal text-wa-teal bg-teal-50/40 dark:bg-wa-dsurf/50'
                 : 'text-gray-500 hover:text-gray-700 dark:text-wa-dmuted dark:hover:text-wa-dtext hover:bg-slate-50 dark:hover:bg-wa-dsurf/20'
               }`}
           >
-            <span className="block">{label}</span>
-            <span className="text-xs font-normal text-gray-400 dark:text-wa-dmuted">{sub}</span>
+            <span className="block text-xs sm:text-sm font-semibold">{label}</span>
+            <span className="text-[10px] font-normal text-gray-400 dark:text-wa-dmuted hidden sm:block mt-0.5">{sub}</span>
           </button>
         ))}
       </div>
@@ -208,8 +208,8 @@ export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) 
             {activeCode && (
               <div className="text-center">
                 <p className="text-xs text-gray-500 dark:text-wa-dmuted mb-2">Enter this code in WhatsApp:</p>
-                <div className="inline-flex items-center gap-1 bg-wa-light dark:bg-wa-dark/20 border border-wa-teal/30 dark:border-wa-dbdr rounded-xl px-6 py-3">
-                  <span className="text-2xl font-bold tracking-[0.25em] text-wa-dark dark:text-wa-green font-mono">
+                <div className="inline-flex items-center gap-1 bg-wa-light dark:bg-wa-dark/20 border border-wa-teal/30 dark:border-wa-dbdr rounded-xl px-4 py-2 sm:px-6 sm:py-3 max-w-full overflow-hidden">
+                  <span className="text-lg sm:text-2xl font-bold tracking-[0.1em] sm:tracking-[0.25em] text-wa-dark dark:text-wa-green font-mono">
                     {displayCode(activeCode)}
                   </span>
                 </div>

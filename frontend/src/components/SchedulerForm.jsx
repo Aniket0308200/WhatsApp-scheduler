@@ -590,11 +590,11 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
   });
 
   return (
-    <div className={`bg-white dark:bg-wa-dpanel rounded-2xl shadow-sm border overflow-visible transition-colors duration-200
+    <div className={`bg-white dark:bg-wa-dpanel rounded-2xl shadow-sm border overflow-visible transition-colors duration-200 mt-3
       ${isConnected ? 'border-slate-200 dark:border-wa-dbdr' : 'border-slate-200 dark:border-wa-dbdr opacity-60 pointer-events-none select-none'}`}>
 
       {/* ── Panel header ───────────────────────────────────────────────── */}
-      <div className="px-5 py-4 border-b border-slate-200 dark:border-wa-dbdr flex items-center justify-between gap-4">
+      <div className="px-5 py-4 border-b border-slate-200 dark:border-wa-dbdr flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4">
         <div>
           <h2 className="font-semibold text-gray-800 dark:text-wa-dtext">Schedule a Message</h2>
           <p className="text-xs text-gray-400 dark:text-wa-dmuted mt-0.5">
@@ -605,12 +605,12 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
           <button
             type="button"
             onClick={() => setShowDirectory(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-wa-teal/30 bg-wa-teal/10 px-3 py-1.5 text-xs font-semibold text-wa-teal hover:bg-wa-teal/20 backdrop-blur-xs transition-colors focus:outline-none"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-wa-teal/30 bg-wa-teal/10 px-3 py-2 sm:py-1.5 text-xs font-semibold text-wa-teal hover:bg-wa-teal/20 backdrop-blur-xs transition-colors focus:outline-none w-full sm:w-auto"
           >
             👥 Contacts Directory
           </button>
         ) : (
-          <span className="text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-medium">
+          <span className="text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-medium w-fit">
             Not connected
           </span>
         )}
@@ -620,12 +620,12 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
 
         {/* ── Recipient ─────────────────────────────────────────────────── */}
         <div>
-          <div className="mb-1.5 flex items-center justify-between gap-3">
+          <div className="mb-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
             <label className="block text-sm font-medium text-gray-700 dark:text-wa-dtext">
               Recipient Phone Number or Contact Name
             </label>
             <button type="button" onClick={() => setShowImportModal(true)}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 mb-2 text-xs font-semibold text-emerald-500 backdrop-blur-sm transition-colors hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/30">
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 sm:py-1 text-xs font-semibold text-emerald-500 backdrop-blur-sm transition-colors hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 w-full sm:w-auto shrink-0">
               <span aria-hidden="true">↑</span>
               Import Contacts (.vcf / .csv)
             </button>
@@ -740,7 +740,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
                 {showEmojiPicker && (
                   <div
                     ref={emojiPickerRef}
-                    className="absolute left-0 mb-2 w-[22rem] bg-white dark:bg-[#202c33] border-[3px] border-gray-800 dark:border-wa-dbdr rounded-xl shadow-2xl z-[80] p-3 overflow-hidden transition-all"
+                    className="absolute left-0 mb-2 w-[288px] min-[360px]:w-[320px] sm:w-[22rem] max-w-[92vw] bg-white dark:bg-[#202c33] border-[3px] border-gray-800 dark:border-wa-dbdr rounded-xl shadow-2xl z-[80] p-3 overflow-hidden transition-all"
                   >
                     <div className="flex overflow-x-auto custom-scroll border-b border-gray-100 dark:border-wa-dbdr/50 pb-2 mb-2 gap-1 justify-start text-lg">
                       {Object.entries(WHATSAPP_EMOJI_CATEGORIES).map(([cat, config]) => (
@@ -782,16 +782,21 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
           <label className="block text-sm font-medium text-gray-700 dark:text-wa-dtext mb-1.5">
             Scheduled Date & Time
           </label>
-          <div className="flex gap-2">
-            <input
-              type="datetime-local"
-              value={scheduledAt}
-              onChange={e => handleDateChange(e.target.value)}
-              min={minTime}
-              required
-              className={`flex-1 border rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white dark:bg-wa-dsurf text-gray-900 dark:text-wa-dtext focus:outline-none focus:ring-2 focus:ring-wa-teal/40 focus:border-wa-teal transition-colors
-                ${timeConfirmed ? 'border-green-400 dark:border-green-500/50 bg-green-50 dark:bg-green-950/20 text-green-800 dark:text-green-300' : 'border-slate-200 dark:border-wa-dbdr'}`}
-            />
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1 w-full">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-wa-dmuted pointer-events-none text-sm select-none">
+                📅
+              </span>
+              <input
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={e => handleDateChange(e.target.value)}
+                min={minTime}
+                required
+                className={`w-full border rounded-xl pl-9 pr-3 py-2.5 text-sm bg-slate-50 focus:bg-white dark:bg-wa-dsurf text-gray-900 dark:text-wa-dtext focus:outline-none focus:ring-2 focus:ring-wa-teal/40 focus:border-wa-teal transition-colors
+                  ${timeConfirmed ? 'border-green-400 dark:border-green-500/50 bg-green-50 dark:bg-green-950/20 text-green-800 dark:text-green-300' : 'border-slate-200 dark:border-wa-dbdr'}`}
+              />
+            </div>
             {/* Confirm / Done button */}
             <button
               type="button"
@@ -805,7 +810,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
                 setTimeConfirmed(true);
                 toast.success('Time confirmed!');
               }}
-              className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors
+              className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-1.5
                 ${timeConfirmed
                   ? 'bg-green-500 text-white cursor-default'
                   : 'bg-wa-teal hover:bg-wa-dark text-white'}`}
@@ -813,11 +818,24 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
               {timeConfirmed ? '✓ Done' : 'Confirm'}
             </button>
           </div>
-          <p className="text-xs text-gray-400 dark:text-wa-dmuted mt-1">
-            {timeConfirmed
-              ? `⏰ Scheduled for ${new Date(scheduledAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (IST)`
-              : 'Select a time at least 1 minute ahead, then click Confirm.'}
-          </p>
+          
+          {/* WhatsApp themed premium success block */}
+          {timeConfirmed ? (
+            <div className="mt-2.5 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-500/10 p-3 text-xs text-emerald-800 dark:text-emerald-300 animate-fade-in">
+              <span className="text-sm mt-0.5 select-none">⏰</span>
+              <div>
+                <p className="font-semibold text-emerald-950 dark:text-emerald-200">Time Lock Active</p>
+                <p className="mt-0.5 text-emerald-700/90 dark:text-emerald-300/80 leading-relaxed">
+                  Message will be dispatched at <span className="font-bold underline">{new Date(scheduledAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (IST)</span>.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 dark:text-wa-dmuted mt-1.5 flex items-center gap-1.5 pl-1 leading-normal">
+              <span className="select-none">💡</span>
+              Select a time at least 1 minute ahead, then click Confirm.
+            </p>
+          )}
         </div>
 
         {/* ── Submit ────────────────────────────────────────────────────── */}
