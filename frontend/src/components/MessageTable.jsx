@@ -50,8 +50,13 @@ export default function MessageTable({ messages, loading, onRefresh }) {
     return () => clearInterval(t);
   }, [messages, onRefresh]);
 
-  // Sort messages: newest first (highest ID first, so new schedules always appear at the top)
-  const sortedMessages = [...messages].sort((a, b) => b.id - a.id);
+  // Sort messages: newest first (highest ID or timestamp first, so new schedules always appear at the top)
+  const sortedMessages = [...messages].sort((a, b) => {
+    if (typeof a.id === 'string' && typeof b.id === 'string') {
+      return b.id.localeCompare(a.id);
+    }
+    return b.id - a.id;
+  });
 
   const filtered = filter === 'all'
     ? sortedMessages

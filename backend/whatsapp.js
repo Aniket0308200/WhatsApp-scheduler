@@ -54,45 +54,7 @@ function getPhoneFromSession(sessionId) {
   return null;
 }
 
-function getContactsFilePath(phoneOrSessionId) {
-  return path.join(__dirname, '..', 'data', `contacts_${phoneOrSessionId}.json`);
-}
-
-function loadContactCacheForUser(phone) {
-  try {
-    const file = getContactsFilePath(phone);
-    if (fs.existsSync(file)) {
-      const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    }
-  } catch (_) {}
-  return {};
-}
-
-function persistContactCacheForUser(phone, cache) {
-  try {
-    const file = getContactsFilePath(phone);
-    fs.writeFileSync(file, JSON.stringify(cache, null, 2));
-  } catch (err) {
-    console.error(`[WA] [${phone}] Could not persist contacts:`, err.message);
-  }
-}
-
-function migrateOldContacts(phone) {
-  const oldContactsFile = path.join(__dirname, '..', 'data', 'contacts.json');
-  const userContactsFile = getContactsFilePath(phone);
-  if (fs.existsSync(oldContactsFile) && !fs.existsSync(userContactsFile)) {
-    console.log(`[WA] Migrating old global contacts.json to user-specific contacts_${phone}.json`);
-    try {
-      fs.renameSync(oldContactsFile, userContactsFile);
-    } catch (e) {
-      console.error('[WA] Error migrating contacts file:', e.message);
-    }
-  }
-}
-
-function cacheContacts(phone, cache, contacts) {
-  const normalized = [];
+function cacheContacts(session, contacts) {
   let changed = 0;
   for (const c of contacts || []) {
     if (!c?.id) continue;
@@ -101,26 +63,17 @@ function cacheContacts(phone, cache, contacts) {
     if (!isUser && !isGroup) continue;
 
     const name = c.notify || c.name || c.verifiedName || c.pushName;
-    const phonePart = c.id.split('@')[0].split(':')[0];
-    const keyPhone = isGroup ? c.id : phonePart;
-
-    normalized.push({ phone: keyPhone, jid: c.id, name: name || '', source: isGroup ? 'group_sync' : 'whatsapp' });
-    if (name && cache[c.id] !== name) {
-      cache[c.id] = name;
+    if (name && session.contactCache[c.id] !== name) {
+      session.contactCache[c.id] = name;
       changed++;
     }
   }
   if (changed) {
-    persistContactCacheForUser(phone, cache);
-    console.log(`[WA] [${phone}] Contacts cache updated: ${Object.keys(cache).length} saved.`);
-  }
-  if (normalized.length) {
-    db.upsertContacts(phone, normalized).catch((err) => console.error(`[WA] [${phone}] Contact DB sync error:`, err.message));
+    console.log(`[WA] [${session.sessionId}] Contacts cache updated: ${Object.keys(session.contactCache).length} saved in memory.`);
   }
 }
 
-function processIncomingChats(phone, cache, chats) {
-  const normalized = [];
+function processIncomingChats(session, chats) {
   let changed = 0;
   for (const chat of chats || []) {
     if (!chat?.id) continue;
@@ -129,34 +82,20 @@ function processIncomingChats(phone, cache, chats) {
     if (!isUser && !isGroup) continue;
 
     const name = chat.name || chat.notify || chat.verifiedName || chat.pushName || '';
-    const phonePart = chat.id.split('@')[0].split(':')[0];
-    const keyPhone = isGroup ? chat.id : phonePart;
-
-    normalized.push({
-      phone: keyPhone,
-      jid: chat.id,
-      name: name ? name.trim() : '',
-      source: isGroup ? 'group_sync' : 'chat_sync'
-    });
-
     if (name) {
       const trimmed = name.trim();
-      if (cache[chat.id] !== trimmed) {
-        cache[chat.id] = trimmed;
+      if (session.contactCache[chat.id] !== trimmed) {
+        session.contactCache[chat.id] = trimmed;
         changed++;
       }
     }
   }
   if (changed) {
-    persistContactCacheForUser(phone, cache);
-    console.log(`[WA] [${phone}] Contacts cache updated from chats/groups: ${Object.keys(cache).length} saved.`);
-  }
-  if (normalized.length) {
-    db.upsertContacts(phone, normalized).catch((err) => console.error(`[WA] [${phone}] Contact DB sync error (chats/groups):`, err.message));
+    console.log(`[WA] [${session.sessionId}] Contacts cache updated from chats/groups: ${Object.keys(session.contactCache).length} saved in memory.`);
   }
 }
 
-function cacheMessages(phone, cache, messages) {
+function cacheMessages(session, messages) {
   const contacts = [];
   for (const message of messages || []) {
     if (message?.key?.fromMe || !message?.pushName) continue;
@@ -164,43 +103,10 @@ function cacheMessages(phone, cache, messages) {
     if (!jid || !jid.endsWith('@s.whatsapp.net')) continue;
     contacts.push({ id: jid, pushName: message.pushName });
   }
-  cacheContacts(phone, cache, contacts);
+  cacheContacts(session, contacts);
 }
 
-async function hydrateContactCacheForUser(phone, cache) {
-  const saved = await db.getAllContacts(phone);
-  const savedJids = new Set(saved.map(c => c.jid || (c.phone.includes('@') ? c.phone : `${c.phone}@s.whatsapp.net`)));
-  
-  const missingFromDb = [];
-  for (const [jid, name] of Object.entries(cache || {})) {
-    if (!savedJids.has(jid)) {
-      const isGroup = jid.endsWith('@g.us');
-      const phonePart = jid.split('@')[0].split(':')[0];
-      missingFromDb.push({
-        phone: isGroup ? jid : phonePart,
-        jid,
-        name: name || '',
-        source: isGroup ? 'group_sync' : 'whatsapp'
-      });
-    }
-  }
-
-  if (missingFromDb.length > 0) {
-    console.log(`[WA] [${phone}] Hydrating ${missingFromDb.length} missing contacts from JSON cache to SQLite...`);
-    await db.upsertContacts(phone, missingFromDb);
-  }
-
-  // Reload merged list from DB
-  const allContacts = await db.getAllContacts(phone);
-  for (const contact of allContacts) {
-    const jid = contact.jid || (contact.phone.includes('@') ? contact.phone : `${contact.phone}@s.whatsapp.net`);
-    cache[jid] = contact.name;
-  }
-  
-  console.log(`[WA] [${phone}] Restored ${allContacts.length} contacts from SQLite.`);
-}
-
-async function extractContactsFromChats(sessionId, phone) {
+async function extractContactsFromChats(sessionId) {
   const session = sessions.get(sessionId);
   if (!session || !session.sock) return;
 
@@ -209,32 +115,63 @@ async function extractContactsFromChats(sessionId, phone) {
     
     // Try to get recent chats for contact extraction
     const chats = await session.sock.getChats().catch(() => []);
-    const contacts = [];
     
     for (const chat of chats.slice(0, 50)) { // Limit to recent 50 chats
       if (chat.id && chat.id.endsWith('@s.whatsapp.net')) {
-        const phonePart = chat.id.split('@')[0].split(':')[0];
         const name = chat.name || chat.notify || chat.pushName;
-        if (name && phonePart) {
-          contacts.push({
-            phone: phonePart,
-            jid: chat.id,
-            name: name.trim(),
-            source: 'chat_history'
-          });
+        if (name) {
           session.contactCache[chat.id] = name.trim();
         }
       }
     }
-
-    if (contacts.length > 0) {
-      await db.upsertContacts(phone, contacts);
-      persistContactCacheForUser(phone, session.contactCache);
-      console.log(`[WA] [${sessionId}] Extracted ${contacts.length} contacts from chat history`);
-    }
+    console.log(`[WA] [${sessionId}] Extracted contacts from chat history. Cache size: ${Object.keys(session.contactCache).length}`);
   } catch (err) {
     console.log(`[WA] [${sessionId}] Chat history extraction error:`, err.message);
   }
+}
+
+function searchContactsSync(sessionId, query, limit = 10) {
+  const session = sessions.get(sessionId);
+  if (!session) return [];
+  const q = String(query || '').trim().toLowerCase();
+  if (q.length < 2) return [];
+
+  const results = [];
+  for (const [jid, name] of Object.entries(session.contactCache)) {
+    const isGroup = jid.endsWith('@g.us');
+    const phone = isGroup ? jid : jid.split('@')[0].split(':')[0];
+    
+    const nameMatch = name && name.toLowerCase().includes(q);
+    const phoneMatch = phone.includes(q);
+    
+    if (nameMatch || phoneMatch) {
+      results.push({ jid, phone, name });
+    }
+  }
+
+  return results
+    .sort((a, b) => {
+      const aName = a.name || '';
+      const bName = b.name || '';
+      return aName.localeCompare(bName);
+    })
+    .slice(0, limit);
+}
+
+function importContactsToCache(sessionId, contacts) {
+  const session = sessions.get(sessionId);
+  if (!session) return 0;
+  let imported = 0;
+  for (const c of contacts) {
+    const isGroup = c.phone.endsWith('@g.us');
+    const jid = isGroup ? c.phone : `${c.phone}@s.whatsapp.net`;
+    const name = c.name ? String(c.name).trim() : '';
+    if (session.contactCache[jid] !== name) {
+      session.contactCache[jid] = name;
+      imported++;
+    }
+  }
+  return imported;
 }
 
 // Active contact resolver for immediate name lookup
@@ -361,15 +298,10 @@ async function initWhatsApp(sessionId) {
   session.qrBase64 = null;
   session.pairingCode = null;
 
-  // Resolve phone number if already logged in previously
+  session.contactCache = {};
   const savedPhone = getPhoneFromSession(sessionId);
   if (savedPhone) {
-    migrateOldContacts(savedPhone);
     session.connectedProfile.phone = savedPhone;
-    session.contactCache = loadContactCacheForUser(savedPhone);
-    await hydrateContactCacheForUser(savedPhone, session.contactCache);
-  } else {
-    session.contactCache = {};
   }
 
   const sessionDir = path.join(SESSIONS_ROOT, sessionId);
@@ -448,13 +380,8 @@ async function initWhatsApp(sessionId) {
         console.log(`[WA] [${sessionId}] Connected as: ${session.connectedProfile.name || session.connectedProfile.phone} (+${currentPhone})`);
 
         if (currentPhone) {
-          migrateOldContacts(currentPhone);
-          // Reload contact cache for the user
-          session.contactCache = loadContactCacheForUser(currentPhone);
-          await hydrateContactCacheForUser(currentPhone, session.contactCache);
-          
           // Deep chat history parsing for personal contacts
-          await extractContactsFromChats(sessionId, currentPhone);
+          await extractContactsFromChats(sessionId);
         }
       } catch (err) {
         console.error(`[WA] [${sessionId}] Could not read connected profile:`, err.message);
@@ -493,41 +420,29 @@ async function initWhatsApp(sessionId) {
     }
   });
 
-  // Helper to get phone number from session/sock in event listeners to prevent I/O race conditions
-  const getPhone = () => {
-    return session.connectedProfile.phone || (sock.authState?.creds?.me?.id ? sock.authState.creds.me.id.split('@')[0].split(':')[0] : null) || getPhoneFromSession(sessionId);
-  };
-
   // ── Contacts update — populate name cache ────────────────────────────────
   sock.ev.on('contacts.update', (contacts) => {
-    const currentPhone = getPhone();
-    if (currentPhone) cacheContacts(currentPhone, session.contactCache, contacts);
+    cacheContacts(session, contacts);
   });
 
   sock.ev.on('contacts.upsert', (contacts) => {
-    const currentPhone = getPhone();
-    if (currentPhone) cacheContacts(currentPhone, session.contactCache, contacts);
+    cacheContacts(session, contacts);
   });
 
   sock.ev.on('chats.upsert', (chats) => {
-    const currentPhone = getPhone();
-    if (currentPhone) processIncomingChats(currentPhone, session.contactCache, chats);
+    processIncomingChats(session, chats);
   });
 
   sock.ev.on('messaging-history.set', ({ chats, contacts, messages }) => {
     session.isSyncing = false; // Syncing finished!
-    const currentPhone = getPhone();
-    if (currentPhone) {
-      if (chats) processIncomingChats(currentPhone, session.contactCache, chats);
-      if (contacts) cacheContacts(currentPhone, session.contactCache, contacts);
-      if (messages) cacheMessages(currentPhone, session.contactCache, messages);
-      console.log(`[WA] [${sessionId}] Initial history sync received: ${(chats || []).length} chats, ${(contacts || []).length} contacts, ${(messages || []).length} messages.`);
-    }
+    if (chats) processIncomingChats(session, chats);
+    if (contacts) cacheContacts(session, contacts);
+    if (messages) cacheMessages(session, messages);
+    console.log(`[WA] [${sessionId}] Initial history sync received: ${(chats || []).length} chats, ${(contacts || []).length} contacts, ${(messages || []).length} messages.`);
   });
 
   sock.ev.on('messages.upsert', ({ messages }) => {
-    const currentPhone = getPhone();
-    if (currentPhone) cacheMessages(currentPhone, session.contactCache, messages);
+    cacheMessages(session, messages);
   });
 
   return sock;
@@ -779,6 +694,9 @@ async function updateConnectedProfile(sessionId) {
         phone: phonePart,
         jid:   rawJid,
       };
+
+      db.upsertUser(sessionId, phonePart, session.connectedProfile.name)
+        .catch((err) => console.error(`[WA] [${sessionId}] Failed to sync connected profile to MongoDB:`, err.message));
       
       console.log(`[WA] [${sessionId}] Profile updated: ${session.connectedProfile.name} (+${phonePart})`);
     }
@@ -842,4 +760,6 @@ module.exports = {
   getSessionByPhone,
   getPhoneFromSession,
   getSyncStatus,
+  searchContactsSync,
+  importContactsToCache,
 };

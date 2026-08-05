@@ -41,14 +41,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Helper to retrieve the sender's phone number from session state or session credentials
-function getSenderPhoneFromSession(req) {
-  if (!req.sessionId) return null;
-  const profile = whatsapp.getConnectedProfile(req.sessionId);
-  if (profile?.phone) return profile.phone;
-  return whatsapp.getPhoneFromSession(req.sessionId);
-}
-
 // ─── WhatsApp status ──────────────────────────────────────────────────────────
 
 /**
@@ -115,12 +107,12 @@ app.get('/api/contacts/search', (req, res) => {
   const q = (req.query.q || '').trim().toLowerCase();
   if (!q || q.length < 2) return res.json([]);
 
-  const senderPhone = getSenderPhoneFromSession(req);
-  if (!senderPhone) return res.json([]);
-
-  db.searchContacts(senderPhone, q, 10)
-    .then(res.json.bind(res))
-    .catch((err) => res.status(500).json({ error: err.message }));
+  try {
+    const contacts = whatsapp.searchContactsSync(req.sessionId, q, 10);
+    res.json(contacts);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 /**
@@ -129,8 +121,7 @@ app.get('/api/contacts/search', (req, res) => {
  */
 app.post('/api/contacts/import', express.raw({ type: ['text/*', 'application/octet-stream'] }), async (req, res) => {
   try {
-    const senderPhone = getSenderPhoneFromSession(req);
-    if (!senderPhone) {
+    if (whatsapp.getStatus(req.sessionId) !== 'connected') {
       return res.status(400).json({ error: 'WhatsApp must be connected to import contacts.' });
     }
 
@@ -159,7 +150,7 @@ app.post('/api/contacts/import', express.raw({ type: ['text/*', 'application/oct
 
     const contacts = parseContactsFile(filename, content);
     if (!contacts.length) return res.status(400).json({ error: 'No valid phone numbers were found in this file.' });
-    const imported = await db.upsertContacts(senderPhone, contacts);
+    const imported = whatsapp.importContactsToCache(req.sessionId, contacts);
     res.json({ imported, parsed: contacts.length });
   } catch (err) {
     res.status(400).json({ error: err.message || 'Could not import contacts.' });
@@ -168,14 +159,11 @@ app.post('/api/contacts/import', express.raw({ type: ['text/*', 'application/oct
 
 /**
  * GET /api/contacts
- * Returns all contacts in SQLite DB for this user.
+ * Returns all contacts in memory for this session.
  */
 app.get('/api/contacts', async (req, res) => {
-  const senderPhone = getSenderPhoneFromSession(req);
-  if (!senderPhone) return res.json([]);
-
   try {
-    const contacts = await db.getAllContacts(senderPhone);
+    const contacts = whatsapp.getAllContacts(req.sessionId);
     res.json(contacts);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -220,12 +208,9 @@ app.get('/api/contact/:phone', async (req, res) => {
     return res.json({ name: null, exists: false });
   }
 
-  const senderPhone = getSenderPhoneFromSession(req);
-  if (!senderPhone) return res.json({ name: null, exists: false });
-
   try {
-    const cached = await db.getContactByPhone(senderPhone, phone);
-    if (cached?.name) return res.json({ name: cached.name, exists: true, source: 'cache' });
+    const cachedName = whatsapp.getContactNameSync(req.sessionId, phone);
+    if (cachedName) return res.json({ name: cachedName, exists: true, source: 'cache' });
 
     const verified = await whatsapp.verifyContact(req.sessionId, phone);
     res.json({ name: verified.name, exists: verified.exists, source: verified.exists ? 'whatsapp' : null });
@@ -237,12 +222,8 @@ app.get('/api/contact/:phone', async (req, res) => {
 // ─── Messages ─────────────────────────────────────────────────────────────────
 
 app.get('/api/messages', async (req, res) => {
-  const senderPhone = getSenderPhoneFromSession(req);
-  if (!senderPhone) {
-    return res.json([]);
-  }
   try {
-    res.json(await db.getAllMessages(senderPhone));
+    res.json(await db.getAllMessages(req.sessionId));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -255,8 +236,7 @@ app.get('/api/messages', async (req, res) => {
 app.post('/api/messages', async (req, res) => {
   const { phone, message, scheduledAt, recipientName } = req.body;
 
-  const senderPhone = getSenderPhoneFromSession(req);
-  if (!senderPhone) {
+  if (whatsapp.getStatus(req.sessionId) !== 'connected') {
     return res.status(400).json({ error: 'WhatsApp is not connected for this session.' });
   }
 
@@ -286,16 +266,15 @@ app.post('/api/messages', async (req, res) => {
     const cleanPhone = isGroup ? phone : phone.replace(/\D/g, '');
     let cleanName  = recipientName ? String(recipientName).trim().slice(0, 100) : null;
 
-    if (!cleanName && whatsapp.getStatus(req.sessionId) === 'connected') {
+    if (!cleanName) {
       try {
-        const contact = await db.getContactByPhone(senderPhone, cleanPhone);
-        cleanName = contact?.name || whatsapp.getContactNameSync(req.sessionId, cleanPhone) || await whatsapp.getContactName(req.sessionId, cleanPhone);
+        cleanName = whatsapp.getContactNameSync(req.sessionId, cleanPhone) || await whatsapp.getContactName(req.sessionId, cleanPhone);
       } catch (e) {
         console.error('[Server] Could not auto-resolve name:', e.message);
       }
     }
 
-    const id = await db.insertMessage(senderPhone, cleanPhone, message.trim(), schedDate, cleanName);
+    const id = await db.insertMessage(req.sessionId, cleanPhone, message.trim(), schedDate, cleanName);
 
     res.status(201).json({
       id,
@@ -315,21 +294,19 @@ app.post('/api/messages', async (req, res) => {
  * ?permanent=true → hard delete, otherwise cancels pending
  */
 app.delete('/api/messages/:id', async (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID.' });
-
-  const senderPhone = getSenderPhoneFromSession(req);
-  if (!senderPhone) {
-    return res.status(400).json({ error: 'WhatsApp is not connected.' });
-  }
+  const id = req.params.id;
+  if (!id) return res.status(400).json({ error: 'Invalid ID.' });
 
   try {
     if (req.query.permanent === 'true') {
-      await db.deleteMessage(senderPhone, id);
+      const deleted = await db.deleteMessage(req.sessionId, id);
+      if (!deleted) {
+        return res.status(404).json({ error: 'Message not found.' });
+      }
       res.json({ success: true, action: 'deleted' });
     } else {
-      const changes = await db.cancelMessage(senderPhone, id);
-      if (changes === 0) {
+      const changes = await db.cancelMessage(req.sessionId, id);
+      if (!changes) {
         return res.status(400).json({ error: 'Message not found or not pending.' });
       }
       res.json({ success: true, action: 'cancelled' });
@@ -363,20 +340,24 @@ async function performCleanSlate() {
     }
   }
 
-  // 2. Wipe the old global contacts.json and global scheduler.db if they still exist
-  const oldContactsFile = path.join(__dirname, '..', 'data', 'contacts.json');
-  if (fs.existsSync(oldContactsFile)) {
+  // 2. Wipe the old SQLite database files and JSON contacts files
+  const dataDir = path.join(__dirname, '..', 'data');
+  if (fs.existsSync(dataDir)) {
     try {
-      fs.unlinkSync(oldContactsFile);
-      console.log('[Clean Slate] Deleted old global contacts.json');
-    } catch (_) {}
-  }
-  const oldDbFile = path.join(__dirname, '..', 'data', 'scheduler.db');
-  if (fs.existsSync(oldDbFile)) {
-    try {
-      fs.unlinkSync(oldDbFile);
-      console.log('[Clean Slate] Deleted old global scheduler.db');
-    } catch (_) {}
+      const entries = fs.readdirSync(dataDir);
+      for (const name of entries) {
+        if (name === 'contacts.json' || name.startsWith('contacts_') || (name.startsWith('scheduler_') && name.endsWith('.db')) || name === 'scheduler.db') {
+          try {
+            fs.unlinkSync(path.join(dataDir, name));
+            console.log(`[Clean Slate] Deleted legacy SQLite database or contact file: ${name}`);
+          } catch (e) {
+            console.error(`[Clean Slate] Error deleting file ${name}:`, e.message);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Clean Slate] Error reading data directory:', err.message);
+    }
   }
 }
 

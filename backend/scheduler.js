@@ -1,56 +1,15 @@
 /**
- * scheduler.js — Cron-based message dispatcher (Multi-User support)
+ * scheduler.js — Cron-based message dispatcher (MongoDB support)
  *
- * Runs every minute. Scans data/ for all scheduler_*.db database files,
- * queries pending due messages for each user, and attempts delivery via Baileys.
+ * Runs every minute. Queries all pending due messages across all sessions
+ * from MongoDB Atlas and attempts delivery via Baileys.
  */
 
 const cron     = require('node-cron');
-const fs       = require('fs');
-const path     = require('path');
 const db       = require('./db');
 const whatsapp = require('./whatsapp');
 
 let isRunning = false;
-
-async function processDueMessagesForPhone(phone) {
-  try {
-    const due = await db.getPendingDueMessages(phone);
-
-    if (due.length === 0) {
-      return;
-    }
-
-    console.log(`[Scheduler] [${phone}] ── Processing ${due.length} due message(s) ──`);
-    const session = whatsapp.getSessionByPhone(phone);
-    const isConnected = session && session.status === 'connected';
-
-    await Promise.allSettled(
-      due.map(async (msg) => {
-        console.log(`[Scheduler] [${phone}] Attempting #${msg.id} → +${msg.phone} (scheduled: ${msg.scheduled_at})`);
-
-        if (!isConnected) {
-          const errMsg = `WhatsApp not connected for +${phone} (status: ${session ? session.status : 'disconnected'})`;
-          console.error(`[Scheduler] [${phone}] ✗ #${msg.id}: ${errMsg}`);
-          await db.updateMessageStatus(phone, msg.id, 'failed', errMsg);
-          return;
-        }
-
-        try {
-          const result = await whatsapp.sendMessage(session.sessionId, msg.phone, msg.message);
-          await db.markMessageSubmitted(phone, msg.id, result.id);
-          console.log(`[Scheduler] [${phone}] ✓ #${msg.id} sent to +${msg.phone}`);
-        } catch (err) {
-          const errMsg = err?.message || String(err) || 'Unknown send error';
-          console.error(`[Scheduler] [${phone}] ✗ #${msg.id} FAILED: ${errMsg}`);
-          await db.updateMessageStatus(phone, msg.id, 'failed', errMsg);
-        }
-      })
-    );
-  } catch (err) {
-    console.error(`[Scheduler] [${phone}] Error processing messages:`, err?.message || err);
-  }
-}
 
 async function processAllDueMessages() {
   if (isRunning) {
@@ -60,28 +19,49 @@ async function processAllDueMessages() {
   isRunning = true;
 
   try {
-    const dataDir = path.join(__dirname, '..', 'data');
-    if (!fs.existsSync(dataDir)) {
-      isRunning = false;
+    // Fetch all pending due messages across all sessions in a single query
+    const due = await db.getPendingDueMessages();
+
+    if (due.length === 0) {
       return;
     }
 
-    const files = fs.readdirSync(dataDir);
-    const dbFiles = files.filter(f => f.startsWith('scheduler_') && f.endsWith('.db'));
+    console.log(`[Scheduler] ── Processing ${due.length} due message(s) ──`);
 
-    if (dbFiles.length === 0) {
-      return;
-    }
+    await Promise.allSettled(
+      due.map(async (msg) => {
+        const phone = msg.recipientNumber;
+        const sessionId = msg.sessionId;
+        const msgId = msg._id;
 
-    for (const file of dbFiles) {
-      // scheduler_918000000000.db -> phone is 918000000000
-      const phone = file.replace('scheduler_', '').replace('.db', '');
-      if (phone) {
-        await processDueMessagesForPhone(phone);
-      }
-    }
+        console.log(`[Scheduler] [Session: ${sessionId}] Attempting #${msgId} → +${phone}`);
+
+        const sessionStatus = whatsapp.getStatus(sessionId);
+        const isConnected = sessionStatus === 'connected';
+
+        if (!isConnected) {
+          const errMsg = `WhatsApp not connected for session ${sessionId} (status: ${sessionStatus})`;
+          console.error(`[Scheduler] [Session: ${sessionId}] ✗ #${msgId}: ${errMsg}`);
+          await db.updateMessageStatus(msgId, 'failed', errMsg);
+          return;
+        }
+
+        try {
+          // Send message
+          await whatsapp.sendMessage(sessionId, phone, msg.messageText);
+          
+          // Delete scheduled messages from MongoDB upon successful dispatch to maintain end-to-end privacy
+          await db.deleteMessageById(msgId);
+          console.log(`[Scheduler] [Session: ${sessionId}] ✓ #${msgId} sent to +${phone} and deleted from MongoDB`);
+        } catch (err) {
+          const errMsg = err?.message || String(err) || 'Unknown send error';
+          console.error(`[Scheduler] [Session: ${sessionId}] ✗ #${msgId} FAILED: ${errMsg}`);
+          await db.updateMessageStatus(msgId, 'failed', errMsg);
+        }
+      })
+    );
   } catch (err) {
-    console.error('[Scheduler] Unexpected top-level error:', err?.message || err);
+    console.error('[Scheduler] Unexpected top-level error during message processing:', err?.message || err);
   } finally {
     isRunning = false;
   }
@@ -95,7 +75,7 @@ function startScheduler() {
     await processAllDueMessages();
   });
 
-  console.log('[Scheduler] Started — checking every minute.');
+  console.log('[Scheduler] Started — checking MongoDB every minute.');
 }
 
 module.exports = { startScheduler, processAllDueMessages };
