@@ -7,7 +7,11 @@ if (!sessionId) {
   localStorage.setItem('wa_session_id', sessionId);
 }
 
-export const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://whatsapp-scheduler-backend-ubkz.onrender.com';
+// In local development use Vite's /api proxy, so the UI and the backend being
+// edited in this workspace always talk to each other. Deployments can override
+// this with VITE_API_BASE_URL.
+export const BASE_URL = import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.DEV ? '/api' : 'https://whatsapp-scheduler-backend-ubkz.onrender.com');
 const API_BASE_URL = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
 
 export const api = axios.create({

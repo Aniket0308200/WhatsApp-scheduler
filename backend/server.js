@@ -19,6 +19,7 @@ const cors    = require('cors');
 
 const db       = require('./db');
 const whatsapp = require('./whatsapp');
+const { Contact } = db;
 const { startScheduler } = require('./scheduler');
 const { parseContactsFile } = require('./contacts-import');
 
@@ -66,6 +67,7 @@ app.get('/api/status', (req, res) => {
     qr:          whatsapp.getQR(req.sessionId),
     pairingCode: whatsapp.getPairingCode(req.sessionId),
     profile:     whatsapp.getConnectedProfile(req.sessionId),
+    isSyncing:   whatsapp.getSyncStatus(req.sessionId),
   });
 });
 
@@ -98,18 +100,42 @@ app.post('/api/logout', async (req, res) => {
   }
 });
 
+
 /**
  * GET /api/contacts/search?q=John
  * Search contacts by name or phone for autosuggest.
  * Returns array of { phone, name }
  */
-app.get('/api/contacts/search', (req, res) => {
-  const q = (req.query.q || '').trim().toLowerCase();
+app.get('/api/contacts/search', async (req, res) => {
+  const q = (req.query.q || '').trim();
   if (!q || q.length < 2) return res.json([]);
 
   try {
-    const contacts = whatsapp.searchContactsSync(req.sessionId, q, 10);
-    res.json(contacts);
+    const contacts = await Contact.find({ sessionId: req.sessionId }).lean();
+    
+    const decrypted = contacts.map(c => {
+      const decJid = db.decrypt(c.jid);
+      const decPhone = db.decrypt(c.encryptedNumberOrJid);
+      const decName = db.decrypt(c.encryptedName);
+      const isGroup = c.type === 'group';
+      
+      return {
+        phone: decPhone,
+        jid: decJid,
+        name: decName,
+        isGroup,
+        is_group: isGroup ? 1 : 0,
+        source: c.source || 'db'
+      };
+    });
+
+    const filtered = decrypted.filter(c => {
+      const matchesName = c.name && c.name.toLowerCase().includes(q.toLowerCase());
+      const matchesPhone = c.phone && c.phone.includes(q);
+      return matchesName || matchesPhone;
+    });
+
+    res.json(filtered.slice(0, 10));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -159,12 +185,42 @@ app.post('/api/contacts/import', express.raw({ type: ['text/*', 'application/oct
 
 /**
  * GET /api/contacts
- * Returns all contacts in memory for this session.
+ * Returns all contacts for the current user's phone number.
  */
 app.get('/api/contacts', async (req, res) => {
   try {
-    const contacts = whatsapp.getAllContacts(req.sessionId);
-    res.json(contacts);
+    const contacts = await Contact.find({ sessionId: req.sessionId }).lean();
+    
+    const decrypted = contacts.map(c => {
+      const decJid = db.decrypt(c.jid);
+      const decPhone = db.decrypt(c.encryptedNumberOrJid);
+      const decName = db.decrypt(c.encryptedName);
+      const isGroup = c.type === 'group';
+      
+      return {
+        phone: decPhone,
+        jid: decJid,
+        name: decName,
+        isGroup,
+        is_group: isGroup ? 1 : 0,
+        type: c.type,
+        source: c.source || 'db'
+      };
+    });
+
+    decrypted.sort((a, b) => {
+      const aName = a.name || '';
+      const bName = b.name || '';
+      return aName.localeCompare(bName);
+    });
+
+    const payload = {
+      all: decrypted,
+      personal: decrypted.filter(c => c.type === 'personal'),
+      groups: decrypted.filter(c => c.type === 'group')
+    };
+
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -222,8 +278,10 @@ app.get('/api/contact/:phone', async (req, res) => {
 // ─── Messages ─────────────────────────────────────────────────────────────────
 
 app.get('/api/messages', async (req, res) => {
+  const senderPhone = getSenderPhoneFromSession(req);
+  if (!senderPhone) return res.json([]);
   try {
-    res.json(await db.getAllMessages(req.sessionId));
+    res.json(await db.getAllMessages(senderPhone));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -263,6 +321,10 @@ app.post('/api/messages', async (req, res) => {
   }
 
   try {
+    const senderPhone = getSenderPhoneFromSession(req);
+    if (!senderPhone) {
+      return res.status(400).json({ error: 'Connected WhatsApp number could not be identified.' });
+    }
     const cleanPhone = isGroup ? phone : phone.replace(/\D/g, '');
     let cleanName  = recipientName ? String(recipientName).trim().slice(0, 100) : null;
 
@@ -274,7 +336,7 @@ app.post('/api/messages', async (req, res) => {
       }
     }
 
-    const id = await db.insertMessage(req.sessionId, cleanPhone, message.trim(), schedDate, cleanName);
+    const id = await db.insertMessage(senderPhone, cleanPhone, message.trim(), schedDate, cleanName);
 
     res.status(201).json({
       id,
@@ -296,16 +358,18 @@ app.post('/api/messages', async (req, res) => {
 app.delete('/api/messages/:id', async (req, res) => {
   const id = req.params.id;
   if (!id) return res.status(400).json({ error: 'Invalid ID.' });
+  const senderPhone = getSenderPhoneFromSession(req);
+  if (!senderPhone) return res.status(400).json({ error: 'WhatsApp number could not be identified.' });
 
   try {
     if (req.query.permanent === 'true') {
-      const deleted = await db.deleteMessage(req.sessionId, id);
+      const deleted = await db.deleteMessage(senderPhone, id);
       if (!deleted) {
         return res.status(404).json({ error: 'Message not found.' });
       }
       res.json({ success: true, action: 'deleted' });
     } else {
-      const changes = await db.cancelMessage(req.sessionId, id);
+      const changes = await db.cancelMessage(senderPhone, id);
       if (!changes) {
         return res.status(400).json({ error: 'Message not found or not pending.' });
       }
@@ -316,54 +380,20 @@ app.delete('/api/messages/:id', async (req, res) => {
   }
 });
 
-// ─── Boot ─────────────────────────────────────────────────────────────────────
+// ─── Helper Functions ─────────────────────────────────────────────────────────
 
-async function performCleanSlate() {
-  const fs = require('fs');
-  const path = require('path');
-  
-  console.log('[Clean Slate] Performing one-time cleanup...');
-
-  // 1. Delete files inside data/session/ (but keep subdirectories)
-  const sessionRoot = path.join(__dirname, '..', 'data', 'session');
-  if (fs.existsSync(sessionRoot)) {
-    const entries = fs.readdirSync(sessionRoot, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isFile()) {
-        try {
-          fs.unlinkSync(path.join(sessionRoot, entry.name));
-          console.log(`[Clean Slate] Deleted old unified session file: ${entry.name}`);
-        } catch (e) {
-          console.error(`[Clean Slate] Error deleting file ${entry.name}:`, e.message);
-        }
-      }
-    }
-  }
-
-  // 2. Wipe the old SQLite database files and JSON contacts files
-  const dataDir = path.join(__dirname, '..', 'data');
-  if (fs.existsSync(dataDir)) {
-    try {
-      const entries = fs.readdirSync(dataDir);
-      for (const name of entries) {
-        if (name === 'contacts.json' || name.startsWith('contacts_') || (name.startsWith('scheduler_') && name.endsWith('.db')) || name === 'scheduler.db') {
-          try {
-            fs.unlinkSync(path.join(dataDir, name));
-            console.log(`[Clean Slate] Deleted legacy SQLite database or contact file: ${name}`);
-          } catch (e) {
-            console.error(`[Clean Slate] Error deleting file ${name}:`, e.message);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('[Clean Slate] Error reading data directory:', err.message);
-    }
-  }
+function getSenderPhoneFromSession(req) {
+  const profile = whatsapp.getConnectedProfile(req.sessionId);
+  if (profile && profile.phone) return profile.phone;
+  return whatsapp.getPhoneFromSession(req.sessionId);
 }
 
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+
 async function bootstrap() {
-  await performCleanSlate();
-  console.log('[Boot] Initializing sessions and databases...');
+  // Never clear data at startup. SQLite files are the durable store for both
+  // contacts and scheduled messages and must survive a restart/reconnect.
+  console.log('[Boot] Initializing sessions and persistent databases...');
 
   whatsapp.setMessageStatusListener(async (senderPhone, waMessageId, status) => {
     try {

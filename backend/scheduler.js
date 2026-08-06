@@ -1,8 +1,8 @@
 /**
- * scheduler.js — Cron-based message dispatcher (MongoDB support)
+ * scheduler.js — Cron-based message dispatcher (Multi-User support via MongoDB)
  *
- * Runs every minute. Queries all pending due messages across all sessions
- * from MongoDB Atlas and attempts delivery via Baileys.
+ * Runs every minute. Queries pending due messages from MongoDB,
+ * and attempts delivery via Baileys.
  */
 
 const cron     = require('node-cron');
@@ -19,10 +19,10 @@ async function processAllDueMessages() {
   isRunning = true;
 
   try {
-    // Fetch all pending due messages across all sessions in a single query
     const due = await db.getPendingDueMessages();
 
     if (due.length === 0) {
+      isRunning = false;
       return;
     }
 
@@ -30,40 +30,38 @@ async function processAllDueMessages() {
 
     await Promise.allSettled(
       due.map(async (msg) => {
-        const phone = msg.recipientNumber;
         const sessionId = msg.sessionId;
-        const msgId = msg._id;
+        const activeSessions = whatsapp.getAllActiveSessions();
+        const sessionInfo = activeSessions.find(s => s.sessionId === sessionId);
+        const isConnected = sessionInfo && sessionInfo.status === 'connected';
 
-        console.log(`[Scheduler] [Session: ${sessionId}] Attempting #${msgId} → [Encrypted]`);
-
-        const sessionStatus = whatsapp.getStatus(sessionId);
-        const isConnected = sessionStatus === 'connected';
+        console.log(`[Scheduler] [${sessionId}] Attempting #${msg.id} → +${msg.phone} (scheduled: ${msg.scheduled_at})`);
 
         if (!isConnected) {
-          const errMsg = `WhatsApp not connected for session ${sessionId} (status: ${sessionStatus})`;
-          console.error(`[Scheduler] [Session: ${sessionId}] ✗ #${msgId}: ${errMsg}`);
-          await db.updateMessageStatus(msgId, 'failed', errMsg);
+          const errMsg = `WhatsApp not connected (status: ${sessionInfo ? sessionInfo.status : 'disconnected'})`;
+          console.error(`[Scheduler] [${sessionId}] ✗ #${msg.id}: ${errMsg}`);
+          await db.updateMessageStatus(sessionId, msg.id, 'failed', errMsg);
           return;
         }
 
         try {
-          // Decrypt both messageText and recipientNumber strictly in-memory right at the boundary of dispatch
-          const decryptedText = db.decryptMessage(msg.messageText);
-          const decryptedPhone = db.decryptMessage(phone);
-          await whatsapp.sendMessage(sessionId, decryptedPhone, decryptedText);
-          
-          // Delete scheduled messages from MongoDB upon successful dispatch to maintain end-to-end privacy
-          await db.deleteMessageById(msgId);
-          console.log(`[Scheduler] [Session: ${sessionId}] ✓ #${msgId} sent successfully and deleted from MongoDB`);
+          const result = await whatsapp.sendMessage(sessionId, msg.phone, msg.message);
+          // Set status to 'sent' and save waMessageId
+          await db.updateMessageStatus(sessionId, msg.id, 'sent');
+          await db.ScheduledMessage.updateOne(
+            { _id: msg.id },
+            { $set: { waMessageId: result.id } }
+          );
+          console.log(`[Scheduler] [${sessionId}] ✓ #${msg.id} sent to +${msg.phone}`);
         } catch (err) {
           const errMsg = err?.message || String(err) || 'Unknown send error';
-          console.error(`[Scheduler] [Session: ${sessionId}] ✗ #${msgId} FAILED: ${errMsg}`);
-          await db.updateMessageStatus(msgId, 'failed', errMsg);
+          console.error(`[Scheduler] [${sessionId}] ✗ #${msg.id} FAILED: ${errMsg}`);
+          await db.updateMessageStatus(sessionId, msg.id, 'failed', errMsg);
         }
       })
     );
   } catch (err) {
-    console.error('[Scheduler] Unexpected top-level error during message processing:', err?.message || err);
+    console.error('[Scheduler] Error processing due messages:', err?.message || err);
   } finally {
     isRunning = false;
   }
@@ -77,7 +75,7 @@ function startScheduler() {
     await processAllDueMessages();
   });
 
-  console.log('[Scheduler] Started — checking MongoDB every minute.');
+  console.log('[Scheduler] Started — checking every minute.');
 }
 
 module.exports = { startScheduler, processAllDueMessages };

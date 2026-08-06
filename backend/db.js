@@ -1,219 +1,204 @@
-/**
- * db.js — MongoDB Atlas integration via mongoose
- *
- * Isolated and structured for multi-user session management.
- */
-
 const mongoose = require('mongoose');
 const CryptoJS = require('crypto-js');
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'fallback-secret-key-123';
+const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/whatsapp_scheduler';
+const secretKey = process.env.ENCRYPTION_KEY || 'local-development-secret-key-123';
 
-function encryptMessage(text) {
+mongoose.connect(mongoUri)
+  .then(() => console.log('[MongoDB] Connected successfully.'))
+  .catch(err => console.error('[MongoDB] Connection error:', err.message));
+
+// ─── Cryptography Helpers (Deterministic & Decryptable AES) ────────────────────
+function encrypt(text) {
   if (!text) return '';
-  return CryptoJS.AES.encrypt(text, ENCRYPTION_KEY).toString();
+  const key = CryptoJS.enc.Utf8.parse(CryptoJS.SHA256(secretKey).toString().substring(0, 32));
+  const iv = CryptoJS.enc.Utf8.parse(CryptoJS.SHA256(secretKey).toString().substring(32, 48));
+  const encrypted = CryptoJS.AES.encrypt(String(text), key, {
+    iv: iv,
+    mode: CryptoJS.mode.CBC,
+    padding: CryptoJS.pad.Pkcs7
+  });
+  return encrypted.toString();
 }
 
-function decryptMessage(ciphertext) {
-  if (!ciphertext) return '';
+function decrypt(cipherText) {
+  if (!cipherText) return '';
   try {
-    const bytes = CryptoJS.AES.decrypt(ciphertext, ENCRYPTION_KEY);
-    return bytes.toString(CryptoJS.enc.Utf8);
+    const key = CryptoJS.enc.Utf8.parse(CryptoJS.SHA256(secretKey).toString().substring(0, 32));
+    const iv = CryptoJS.enc.Utf8.parse(CryptoJS.SHA256(secretKey).toString().substring(32, 48));
+    const decrypted = CryptoJS.AES.decrypt(cipherText, key, {
+      iv: iv,
+      mode: CryptoJS.mode.CBC,
+      padding: CryptoJS.pad.Pkcs7
+    });
+    return decrypted.toString(CryptoJS.enc.Utf8);
   } catch (e) {
-    console.error('[DB] Decryption failed, returning ciphertext:', e.message);
-    return ciphertext;
+    return '';
   }
 }
 
-
-const MONGODB_URI = process.env.MONGODB_URI;
-
-if (!MONGODB_URI) {
-  console.error('[DB] MONGODB_URI is not defined in environment variables. Please check your .env file.');
-} else {
-  mongoose.connect(MONGODB_URI)
-    .then(() => console.log('[DB] Connected to MongoDB Atlas successfully.'))
-    .catch((err) => console.error('[DB] MongoDB Atlas connection error:', err.message));
-}
-
-// ─── Schemas & Models ─────────────────────────────────────────────────────────
-
-// User Schema: Store ONLY name, phoneNumber, sessionId, and createdAt.
-const UserSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  phoneNumber: { type: String, required: true },
-  sessionId: { type: String, required: true, unique: true },
+// ─── Contact Model ───────────────────────────────────────────────────────────
+const ContactSchema = new mongoose.Schema({
+  sessionId: { type: String, required: true },
+  jid: { type: String, required: true }, // Encrypted JID
+  encryptedName: { type: String, default: '' },
+  encryptedNumberOrJid: { type: String, required: true },
+  type: { type: String, enum: ['personal', 'group'], required: true },
   createdAt: { type: Date, default: Date.now }
 });
 
-const User = mongoose.model('User', UserSchema);
+// Compound index for fast upserts per session
+ContactSchema.index({ sessionId: 1, jid: 1 }, { unique: true });
+ContactSchema.index({ sessionId: 1, encryptedName: 1 });
 
-// ScheduledMessage Schema: Store userId/sessionId, recipientName, recipientNumber, messageText, scheduleTime, and status.
+const Contact = mongoose.model('Contact', ContactSchema);
+
+// ─── Scheduled Message Model ──────────────────────────────────────────────────
 const ScheduledMessageSchema = new mongoose.Schema({
   sessionId: { type: String, required: true },
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-  recipientName: { type: String, default: null },
-  recipientNumber: { type: String, required: true },
-  messageText: { type: String, required: true },
-  scheduleTime: { type: Date, required: true },
-  status: { 
-    type: String, 
-    default: 'pending', 
-    enum: ['pending', 'submitted', 'delivered', 'read', 'failed', 'cancelled'] 
-  },
+  encryptedNumber: { type: String, required: true }, // Encrypted recipient
+  encryptedRecipientName: { type: String, default: '' }, // Encrypted display name
+  encryptedMessageText: { type: String, required: true }, // Encrypted message body
+  scheduledAt: { type: Date, required: true },
+  status: { type: String, default: 'pending' }, // 'pending' | 'submitted' | 'sent' | 'failed' | 'cancelled'
   error: { type: String, default: null },
   waMessageId: { type: String, default: null },
   createdAt: { type: Date, default: Date.now }
 });
 
+ScheduledMessageSchema.index({ sessionId: 1, scheduledAt: 1 });
+ScheduledMessageSchema.index({ status: 1, scheduledAt: 1 });
+
 const ScheduledMessage = mongoose.model('ScheduledMessage', ScheduledMessageSchema);
 
-// ─── Public API ───────────────────────────────────────────────────────────────
-
-/** Upsert user profile when they connect to WhatsApp. */
-async function upsertUser(sessionId, phoneNumber, name) {
+// ─── Rolling Cap Helper ───────────────────────────────────────────────────────
+async function enforceRollingCap(sessionId) {
   try {
-    return await User.findOneAndUpdate(
-      { sessionId },
-      { name, phoneNumber, sessionId },
-      { upsert: true, new: true }
-    );
+    const count = await ScheduledMessage.countDocuments({ sessionId });
+    if (count > 50) {
+      const keepList = await ScheduledMessage.find({ sessionId })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .select('_id')
+        .lean();
+      const keepIds = keepList.map(m => m._id);
+      await ScheduledMessage.deleteMany({
+        sessionId,
+        _id: { $nin: keepIds }
+      });
+    }
   } catch (err) {
-    console.error(`[DB] Error upserting user for session ${sessionId}:`, err.message);
-    throw err;
+    console.error('[DB] Error enforcing rolling cap:', err.message);
   }
 }
 
-/** Insert a new scheduled message. */
-async function insertMessage(sessionId, recipientNumber, messageText, scheduleTime, recipientName = null) {
-  const user = await User.findOne({ sessionId });
-  const encryptedText = encryptMessage(messageText);
-  const encryptedNumber = encryptMessage(recipientNumber);
-  const msg = new ScheduledMessage({
-    sessionId,
-    userId: user ? user._id : null,
-    recipientName,
-    recipientNumber: encryptedNumber,
-    messageText: encryptedText,
-    scheduleTime: new Date(scheduleTime),
-    status: 'pending'
-  });
-  const saved = await msg.save();
-  return saved._id.toString();
+// ─── Convert Date to UTC string for compatibility ────────────────────────────
+function toSqliteUtc(dateInput) {
+  const d = (dateInput instanceof Date) ? dateInput : new Date(dateInput);
+  return d.toISOString().replace('T', ' ').replace(/\.\d+Z$/, '');
 }
 
-/** All messages for a specific session ordered by scheduleTime. */
+// ─── Message Query Functions ──────────────────────────────────────────────────
+
+async function insertMessage(sessionId, phone, message, scheduledAt, recipientName = null) {
+  const schedDate = new Date(scheduledAt);
+  const msg = new ScheduledMessage({
+    sessionId,
+    encryptedNumber: encrypt(phone),
+    encryptedRecipientName: encrypt(recipientName),
+    encryptedMessageText: encrypt(message),
+    scheduledAt: schedDate,
+    status: 'pending'
+  });
+  await msg.save();
+  await enforceRollingCap(sessionId);
+  return msg._id.toString();
+}
+
 async function getAllMessages(sessionId) {
-  const raw = await ScheduledMessage.find({ sessionId }).sort({ scheduleTime: 1 });
-  return raw.map(msg => ({
-    id: msg._id.toString(),
-    phone: decryptMessage(msg.recipientNumber),
-    recipient_name: msg.recipientName,
-    message: decryptMessage(msg.messageText),
-    scheduled_at: msg.scheduleTime.toISOString(),
-    status: msg.status,
-    error: msg.error
+  const docs = await ScheduledMessage.find({ sessionId }).sort({ createdAt: -1 }).lean();
+  return docs.map(m => ({
+    id: m._id.toString(),
+    phone: decrypt(m.encryptedNumber),
+    recipient_name: decrypt(m.encryptedRecipientName) || null,
+    message: decrypt(m.encryptedMessageText),
+    scheduled_at: toSqliteUtc(m.scheduledAt),
+    status: m.status,
+    error: m.error,
+    wa_message_id: m.waMessageId,
+    created_at: toSqliteUtc(m.createdAt)
   }));
 }
 
-/** All pending messages across all sessions whose scheduleTime has arrived. */
 async function getPendingDueMessages() {
   const now = new Date();
-  return await ScheduledMessage.find({
+  const docs = await ScheduledMessage.find({
     status: 'pending',
-    scheduleTime: { $lte: now }
-  });
+    scheduledAt: { $lte: now }
+  }).lean();
+
+  return docs.map(m => ({
+    id: m._id.toString(),
+    sessionId: m.sessionId,
+    phone: decrypt(m.encryptedNumber),
+    recipient_name: decrypt(m.encryptedRecipientName) || null,
+    message: decrypt(m.encryptedMessageText),
+    scheduled_at: toSqliteUtc(m.scheduledAt),
+    status: m.status,
+    error: m.error,
+    wa_message_id: m.waMessageId,
+    created_at: toSqliteUtc(m.createdAt)
+  }));
 }
 
-/** Update status and optional error for a message. */
-async function updateMessageStatus(id, status, error = null) {
-  return await ScheduledMessage.findByIdAndUpdate(
-    id,
-    { status, error },
-    { new: true }
+async function updateMessageStatus(sessionId, id, status, error = null) {
+  await ScheduledMessage.updateOne(
+    { _id: id },
+    { $set: { status, error } }
   );
 }
 
-/** Delete a message record by sessionId and id (for API validation). */
-async function deleteMessage(sessionId, id) {
-  const result = await ScheduledMessage.deleteOne({ _id: id, sessionId });
-  return result.deletedCount > 0;
-}
-
-/** Delete a message record by ID directly (for scheduler). */
-async function deleteMessageById(id) {
-  const result = await ScheduledMessage.deleteOne({ _id: id });
-  return result.deletedCount > 0;
-}
-
-/** Cancel a pending message. Returns boolean. */
-async function cancelMessage(sessionId, id) {
-  const result = await ScheduledMessage.findOneAndUpdate(
-    { _id: id, sessionId, status: 'pending' },
-    { status: 'cancelled' },
-    { new: true }
-  );
-  return !!result;
-}
-
-/** Dummy contact persistence methods - contacts are kept in-memory to maintain privacy */
-async function upsertContacts(senderPhone, contacts) {
-  return 0;
-}
-
-async function getAllContacts(senderPhone) {
-  return [];
-}
-
-async function searchContacts(senderPhone, query, limit = 10) {
-  return [];
-}
-
-async function getContactByPhone(senderPhone, phone) {
-  return null;
-}
-
-async function resetContacts(phone) {
-  // no-op
-}
-
-async function markMessageSubmitted(senderPhone, id, waMessageId) {
-  return await ScheduledMessage.findByIdAndUpdate(
-    id,
-    { status: 'submitted', waMessageId },
-    { new: true }
+async function markMessageSubmitted(sessionId, id, waMessageId) {
+  await ScheduledMessage.updateOne(
+    { _id: id },
+    { $set: { status: 'submitted', error: null, waMessageId } }
   );
 }
 
 async function updateMessageStatusByWhatsAppId(senderPhone, waMessageId, status) {
-  const result = await ScheduledMessage.updateMany(
-    { waMessageId },
-    { status }
+  const permitted = status === 'read' ? ['submitted', 'delivered', 'read'] : ['submitted'];
+  const res = await ScheduledMessage.updateOne(
+    { waMessageId, status: { $in: permitted } },
+    { $set: { status } }
   );
-  return result.modifiedCount;
+  return res.modifiedCount;
 }
 
-function toSqliteUtc(dateInput) {
-  const d = (dateInput instanceof Date) ? dateInput : new Date(dateInput);
-  return d.toISOString();
+async function cancelMessage(sessionId, id) {
+  const res = await ScheduledMessage.updateOne(
+    { _id: id, status: 'pending' },
+    { $set: { status: 'cancelled' } }
+  );
+  return res.modifiedCount;
+}
+
+async function deleteMessage(sessionId, id) {
+  const res = await ScheduledMessage.deleteOne({ _id: id });
+  return res.deletedCount;
 }
 
 module.exports = {
-  upsertUser,
+  Contact,
+  ScheduledMessage,
+  encrypt,
+  decrypt,
   insertMessage,
   getAllMessages,
   getPendingDueMessages,
   updateMessageStatus,
-  deleteMessage,
-  deleteMessageById,
-  cancelMessage,
-  upsertContacts,
-  getAllContacts,
-  searchContacts,
-  getContactByPhone,
-  resetContacts,
   markMessageSubmitted,
   updateMessageStatusByWhatsAppId,
+  cancelMessage,
+  deleteMessage,
   toSqliteUtc,
-  decryptMessage,
 };

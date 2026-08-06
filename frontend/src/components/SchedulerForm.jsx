@@ -315,7 +315,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
 
   // Directory and Contacts list states
   const [showDirectory,   setShowDirectory]   = useState(false);
-  const [contactsList,    setContactsList]    = useState([]);
+  const [contactsList,    setContactsList]    = useState({ all: [], personal: [], groups: [] });
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [directorySearch, setDirectorySearch] = useState('');
   const [directoryTab,    setDirectoryTab]    = useState('all');
@@ -325,7 +325,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
     setLoadingContacts(true);
     try {
       const data = await fetchAllContacts();
-      setContactsList(data || []);
+      setContactsList(data || { all: [], personal: [], groups: [] });
     } catch (err) {
       console.error('Failed to load contacts directory:', err);
     } finally {
@@ -334,12 +334,17 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
   }, [isConnected]);
 
   useEffect(() => {
-    if (isConnected) {
-      loadContactsList();
-    } else {
-      setContactsList([]);
+    if (!isConnected) {
+      setContactsList({ all: [], personal: [], groups: [] });
+      return;
     }
-  }, [isConnected, loadContactsList]);
+
+    // Load contacts immediately if the directory modal is open,
+    // or when the backend reports that initial history sync is complete.
+    if (showDirectory || !isSyncing) {
+      loadContactsList();
+    }
+  }, [isConnected, isSyncing, showDirectory, loadContactsList]);
 
   // Emoji picker states & refs
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -577,12 +582,8 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
 
   const cleanDirSearch = directorySearch.trim().toLowerCase();
   const dirSearchDigits = cleanDirSearch.replace(/\D/g, '');
-  const filteredContacts = contactsList.filter(c => {
-    // Filter by tab
-    const isGroup = c.phone && c.phone.endsWith('@g.us');
-    if (directoryTab === 'personal' && isGroup) return false;
-    if (directoryTab === 'group' && !isGroup) return false;
-
+  const activeList = contactsList[directoryTab] || [];
+  const filteredContacts = activeList.filter(c => {
     if (!cleanDirSearch) return true;
     const matchesName = c.name ? String(c.name).toLowerCase().includes(cleanDirSearch) : false;
     const matchesPhone = dirSearchDigits ? (c.phone ? String(c.phone).includes(dirSearchDigits) : false) : false;
@@ -604,7 +605,10 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
         {isConnected ? (
           <button
             type="button"
-            onClick={() => setShowDirectory(true)}
+            onClick={() => {
+              setShowDirectory(true);
+              loadContactsList();
+            }}
             className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-wa-teal/30 bg-wa-teal/10 px-3 py-2 sm:py-1.5 text-xs font-semibold text-wa-teal hover:bg-wa-teal/20 backdrop-blur-xs transition-colors focus:outline-none w-full sm:w-auto"
           >
             👥 Contacts Directory
@@ -666,18 +670,25 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
               {/* Suggestions dropdown */}
               {showSuggestions && suggestions.length > 0 && (
                 <ul className="absolute left-0 right-0 mt-1 bg-white dark:bg-wa-dpanel border border-gray-200 dark:border-wa-dbdr rounded-xl shadow-xl max-h-52 overflow-y-auto z-50 divide-y divide-gray-100 dark:divide-wa-dbdr/50 custom-scroll">
-                  {suggestions.map((c) => (
-                    <li key={c.jid}>
-                      <button
-                        type="button"
-                        onClick={() => handleSelectSuggestion(c)}
-                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-teal-50 dark:hover:bg-wa-dsurf flex flex-col transition-colors"
-                      >
-                        <span className="font-semibold text-gray-800 dark:text-wa-dtext">{c.name || `+${c.phone}`}</span>
-                        <span className="text-xs text-gray-400 dark:text-wa-dmuted font-mono">+{c.phone}</span>
-                      </button>
-                    </li>
-                  ))}
+                  {suggestions.map((c) => {
+                    const isGroup = c.isGroup || c.is_group || (c.phone && c.phone.endsWith('@g.us')) || (c.jid && c.jid.endsWith('@g.us'));
+                    return (
+                      <li key={c.jid}>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectSuggestion(c)}
+                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-teal-50 dark:hover:bg-wa-dsurf flex flex-col transition-colors"
+                        >
+                          <span className="font-semibold text-gray-800 dark:text-wa-dtext flex items-center gap-1.5">
+                            {isGroup ? '👥 ' : ''}{c.name || (isGroup ? c.phone : `+${c.phone}`)}
+                          </span>
+                          <span className="text-xs text-gray-400 dark:text-wa-dmuted font-mono">
+                            {isGroup ? 'Group' : `+${c.phone}`}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
@@ -931,21 +942,21 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
                 onClick={() => setDirectoryTab('all')}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors ${directoryTab === 'all' ? 'bg-wa-teal text-white' : 'bg-slate-100 dark:bg-wa-dsurf text-gray-600 dark:text-wa-dmuted hover:bg-slate-200/70 dark:hover:bg-wa-dbdr/50'}`}
               >
-                All ({contactsList.length})
+                All ({contactsList.all?.length || 0})
               </button>
               <button
                 type="button"
                 onClick={() => setDirectoryTab('personal')}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors ${directoryTab === 'personal' ? 'bg-wa-teal text-white' : 'bg-slate-100 dark:bg-wa-dsurf text-gray-600 dark:text-wa-dmuted hover:bg-slate-200/70 dark:hover:bg-wa-dbdr/50'}`}
               >
-                Personal ({contactsList.filter(c => !c.phone?.endsWith('@g.us')).length})
+                Personal ({contactsList.personal?.length || 0})
               </button>
               <button
                 type="button"
                 onClick={() => setDirectoryTab('group')}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors ${directoryTab === 'group' ? 'bg-wa-teal text-white' : 'bg-slate-100 dark:bg-wa-dsurf text-gray-600 dark:text-wa-dmuted hover:bg-slate-200/70 dark:hover:bg-wa-dbdr/50'}`}
               >
-                Groups ({contactsList.filter(c => c.phone?.endsWith('@g.us')).length})
+                Groups ({contactsList.groups?.length || 0})
               </button>
             </div>
             
