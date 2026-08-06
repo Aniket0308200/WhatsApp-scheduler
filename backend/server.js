@@ -114,15 +114,12 @@ app.get('/api/contacts/search', async (req, res) => {
     const contacts = await Contact.find({ sessionId: req.sessionId }).lean();
     
     const decrypted = contacts.map(c => {
-      const decJid = db.decrypt(c.jid);
-      const decPhone = db.decrypt(c.encryptedNumberOrJid);
-      const decName = db.decrypt(c.encryptedName);
       const isGroup = c.type === 'group';
       
       return {
-        phone: decPhone,
-        jid: decJid,
-        name: decName || (isGroup ? decPhone : (decPhone.startsWith('+') ? decPhone : `+${decPhone}`)),
+        phone: c.phone,
+        jid: c.jid,
+        name: c.name || null,
         isGroup,
         is_group: isGroup ? 1 : 0,
         source: c.source || 'db'
@@ -192,15 +189,12 @@ app.get('/api/contacts', async (req, res) => {
     const contacts = await Contact.find({ sessionId: req.sessionId }).lean();
     
     const decrypted = contacts.map(c => {
-      const decJid = db.decrypt(c.jid);
-      const decPhone = db.decrypt(c.encryptedNumberOrJid);
-      const decName = db.decrypt(c.encryptedName);
       const isGroup = c.type === 'group';
       
       return {
-        phone: decPhone,
-        jid: decJid,
-        name: decName || (isGroup ? decPhone : (decPhone.startsWith('+') ? decPhone : `+${decPhone}`)),
+        phone: c.phone,
+        jid: c.jid,
+        name: c.name || null,
         isGroup,
         is_group: isGroup ? 1 : 0,
         type: c.type,

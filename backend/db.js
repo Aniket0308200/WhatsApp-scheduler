@@ -40,16 +40,16 @@ function decrypt(cipherText) {
 // ─── Contact Model ───────────────────────────────────────────────────────────
 const ContactSchema = new mongoose.Schema({
   sessionId: { type: String, required: true },
-  jid: { type: String, required: true }, // Encrypted JID
-  encryptedName: { type: String, default: '' },
-  encryptedNumberOrJid: { type: String, required: true },
+  jid: { type: String, required: true },
+  name: { type: String, default: null },
+  phone: { type: String, required: true },
   type: { type: String, enum: ['personal', 'group'], required: true },
   createdAt: { type: Date, default: Date.now }
 });
 
 // Compound index for fast upserts per session
 ContactSchema.index({ sessionId: 1, jid: 1 }, { unique: true });
-ContactSchema.index({ sessionId: 1, encryptedName: 1 });
+ContactSchema.index({ sessionId: 1, name: 1 });
 
 const Contact = mongoose.model('Contact', ContactSchema);
 

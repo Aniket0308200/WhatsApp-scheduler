@@ -89,14 +89,11 @@ function queueContactForSync(session, contact) {
   const phone = isGroup ? jid : jid.split('@')[0].split(':')[0];
   if (!isGroup && phone.length < 7) return;
 
+  // Strict mapping: contact.name || contact.notify || contact.pushName || contact.verifiedName
   const resolvedName = contact.name || contact.notify || contact.pushName || contact.verifiedName || contact.subject || '';
-  const trimmedName = resolvedName ? String(resolvedName).trim() : '';
+  const trimmedName = resolvedName ? String(resolvedName).trim() : null; // Strictly null/empty, no phone fallback
 
-  if (trimmedName) {
-    session.contactCache[jid] = trimmedName;
-  } else if (!session.contactCache[jid]) {
-    session.contactCache[jid] = '';
-  }
+  session.contactCache[jid] = trimmedName || '';
 
   session.contactsBuffer.set(phone, {
     phone,
@@ -130,33 +127,32 @@ async function flushContactsBuffer(session) {
   session.contactsBuffer.clear();
 
   const sessionId = session.sessionId;
-  console.log(`[WA] [${sessionId}] Encrypting and flushing ${contactsToSave.length} buffered contacts to MongoDB...`);
+  console.log(`[WA] [${sessionId}] Flushing ${contactsToSave.length} buffered contacts to MongoDB (Plain-Text)...`);
 
   const chunkSize = 10;
   for (let i = 0; i < contactsToSave.length; i += chunkSize) {
     const chunk = contactsToSave.slice(i, i + chunkSize);
     const operations = chunk.map(c => {
-      const encJid = db.encrypt(c.jid);
-      const encPhone = db.encrypt(c.phone);
-      
+      // Debug Sync: Saved name in DB
+      console.log(`[DEBUG Sync] Saved name in DB: ${c.name || 'null'} for JID: ${c.jid}`);
+
       const updateFields = {
-        encryptedNumberOrJid: encPhone,
+        phone: c.phone,
         type: c.isGroup ? 'group' : 'personal',
         createdAt: new Date()
       };
       
       const setOnInsertFields = {};
       
-      const hasRealName = c.name && c.name.trim() !== '' && c.name !== c.phone && c.name !== `+${c.phone}`;
-      if (hasRealName) {
-        updateFields.encryptedName = db.encrypt(c.name);
+      if (c.name) {
+        updateFields.name = c.name;
       } else {
-        setOnInsertFields.encryptedName = encPhone;
+        setOnInsertFields.name = null;
       }
 
       return {
         updateOne: {
-          filter: { sessionId, jid: encJid },
+          filter: { sessionId, jid: c.jid },
           update: {
             $set: updateFields,
             $setOnInsert: setOnInsertFields
@@ -228,16 +224,15 @@ async function handleNewMessageContact(session, message) {
     if (session.contactCache[jid]) continue;
 
     // Check MongoDB next
-    const encJid = db.encrypt(jid);
     try {
-      const dbContact = await Contact.findOne({ sessionId: session.sessionId, jid: encJid }).lean();
+      const dbContact = await Contact.findOne({ sessionId: session.sessionId, jid }).lean();
       if (dbContact) {
-        const decName = dbContact.encryptedName ? db.decrypt(dbContact.encryptedName) : '';
-        session.contactCache[jid] = decName || '';
+        const dbName = dbContact.name || '';
+        session.contactCache[jid] = dbName;
 
-        const isDbNamePhone = !decName || decName === phone || decName === `+${phone}`;
+        const isDbNameEmpty = !dbName;
         const hasRealName = item.name && item.name !== phone && item.name !== `+${phone}`;
-        if (isDbNamePhone && hasRealName) {
+        if (isDbNameEmpty && hasRealName) {
           console.log(`[WA] [${session.sessionId}] Live update contact name from message: ${item.name} (${phone})`);
           queueContactForSync(session, {
             id: jid,
@@ -247,10 +242,9 @@ async function handleNewMessageContact(session, message) {
           });
         }
       } else {
-        const phoneFormatted = `+${phone}`;
-        const name = item.name || phoneFormatted;
+        const name = item.name || null;
         
-        console.log(`[WA] [${session.sessionId}] Auto-adding contact from message stream: ${name} (${phoneFormatted})`);
+        console.log(`[WA] [${session.sessionId}] Auto-adding contact from message stream: ${name || 'unknown'} (${phone})`);
         queueContactForSync(session, {
           id: jid,
           jid,
@@ -339,13 +333,10 @@ async function resolveContactLive(sessionId, phone) {
     }
 
     // 2. Check MongoDB next
-    const encJid = db.encrypt(jid);
-    const dbContact = await Contact.findOne({ sessionId, jid: encJid }).lean();
-    if (dbContact && dbContact.encryptedName) {
-      const decName = db.decrypt(dbContact.encryptedName);
-      const decJid = db.decrypt(dbContact.jid);
-      session.contactCache[jid] = decName;
-      return { exists: true, name: decName, jid: decJid || jid, isGroup, source: 'database' };
+    const dbContact = await Contact.findOne({ sessionId, jid }).lean();
+    if (dbContact) {
+      session.contactCache[jid] = dbContact.name || '';
+      return { exists: true, name: dbContact.name || null, jid: dbContact.jid || jid, isGroup, source: 'database' };
     }
 
     if (isGroup) {
@@ -356,11 +347,11 @@ async function resolveContactLive(sessionId, phone) {
           const trimmedName = name.trim();
           session.contactCache[jid] = trimmedName;
           await Contact.updateOne(
-            { sessionId, jid: encJid },
+            { sessionId, jid },
             {
               $set: {
-                encryptedName: db.encrypt(trimmedName),
-                encryptedNumberOrJid: db.encrypt(cleaned),
+                name: trimmedName,
+                phone: cleaned,
                 type: 'group',
                 createdAt: new Date()
               }
@@ -409,14 +400,14 @@ async function resolveContactLive(sessionId, phone) {
     }
 
     // Cache the result (even if name is empty, record the verification)
-    const finalName = name ? name.trim() : '';
-    session.contactCache[jid] = finalName;
+    const finalName = name ? name.trim() : null;
+    session.contactCache[jid] = finalName || '';
     await Contact.updateOne(
-      { sessionId, jid: encJid },
+      { sessionId, jid },
       {
         $set: {
-          encryptedName: db.encrypt(finalName),
-          encryptedNumberOrJid: db.encrypt(cleaned),
+          name: finalName,
+          phone: cleaned,
           type: 'personal',
           createdAt: new Date()
         }
@@ -486,13 +477,11 @@ async function initWhatsApp(sessionId) {
   try {
     const dbContactsList = await Contact.find({ sessionId }).lean();
     for (const c of dbContactsList) {
-      const decJid = db.decrypt(c.jid);
-      const decName = db.decrypt(c.encryptedName);
-      if (decJid) {
-        session.contactCache[decJid] = decName || '';
+      if (c.jid) {
+        session.contactCache[c.jid] = c.name || '';
       }
     }
-    console.log(`[WA] [${sessionId}] Decrypted and loaded ${dbContactsList.length} contacts from MongoDB to memory cache.`);
+    console.log(`[WA] [${sessionId}] Loaded ${dbContactsList.length} contacts from MongoDB (Plain-Text) to memory cache.`);
   } catch (err) {
     console.error(`[WA] [${sessionId}] Failed to load contacts from MongoDB:`, err.message);
   }
@@ -651,18 +640,33 @@ async function initWhatsApp(sessionId) {
   sock.ev.on('contacts.update', (contacts) => {
     const contactsList = Array.isArray(contacts) ? contacts : (contacts?.contacts || []);
     console.log(`[WA] [${sessionId}] contacts.update event: ${contactsList.length} contacts`);
+    for (const c of contactsList) {
+      if (!c) continue;
+      const rawName = c.name || c.notify || c.pushName || c.verifiedName || '';
+      console.log(`[DEBUG Sync] Raw name from WhatsApp: ${rawName} for JID: ${c.id || c.jid}`);
+    }
     cacheContacts(session, contactsList);
   });
 
   sock.ev.on('contacts.upsert', (contacts) => {
     const contactsList = Array.isArray(contacts) ? contacts : (contacts?.contacts || []);
     console.log(`[WA] [${sessionId}] contacts.upsert event: ${contactsList.length} contacts`);
+    for (const c of contactsList) {
+      if (!c) continue;
+      const rawName = c.name || c.notify || c.pushName || c.verifiedName || '';
+      console.log(`[DEBUG Sync] Raw name from WhatsApp: ${rawName} for JID: ${c.id || c.jid}`);
+    }
     cacheContacts(session, contactsList);
   });
 
   sock.ev.on('contacts.set', (payload) => {
     const contactsList = Array.isArray(payload) ? payload : (payload?.contacts || []);
     console.log(`[WA] [${sessionId}] contacts.set event: ${contactsList.length} contacts`);
+    for (const c of contactsList) {
+      if (!c) continue;
+      const rawName = c.name || c.notify || c.pushName || c.verifiedName || '';
+      console.log(`[DEBUG Sync] Raw name from WhatsApp: ${rawName} for JID: ${c.id || c.jid}`);
+    }
     cacheContacts(session, contactsList);
   });
 

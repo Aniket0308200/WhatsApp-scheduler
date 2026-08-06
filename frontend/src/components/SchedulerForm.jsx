@@ -974,7 +974,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
                 </div>
               ) : (
                 filteredContacts.map((c) => {
-                  const contactNameDisplay = c.name || `+${c.phone}`;
+                  const contactNameDisplay = c.name || (c.phone?.startsWith('+') ? c.phone : `+${c.phone}`);
                   const hasName = Boolean(c.name);
                   
                   // Simple source pill styling
