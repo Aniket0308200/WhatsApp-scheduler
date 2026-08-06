@@ -187,6 +187,19 @@ async function deleteMessage(sessionId, id) {
   return res.deletedCount;
 }
 
+async function purgeSessionData(sessionId) {
+  try {
+    await Contact.deleteMany({ sessionId });
+    await ScheduledMessage.deleteMany({ sessionId });
+    if (mongoose.models.User) {
+      await mongoose.models.User.deleteMany({ sessionId });
+    }
+    console.log(`[DB] Purged session data for ${sessionId}.`);
+  } catch (err) {
+    console.error(`[DB] Error purging session data for ${sessionId}:`, err.message);
+  }
+}
+
 module.exports = {
   Contact,
   ScheduledMessage,
@@ -201,4 +214,5 @@ module.exports = {
   cancelMessage,
   deleteMessage,
   toSqliteUtc,
+  purgeSessionData,
 };

@@ -904,10 +904,10 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
               <div className="bg-blue-50 dark:bg-blue-950/20 px-5 py-3 border-b border-blue-100/50 dark:border-wa-dbdr/30 flex flex-col gap-1.5 text-xs text-blue-700 dark:text-blue-300 font-medium">
                 <div className="flex items-center gap-2 font-semibold text-blue-800 dark:text-blue-300 animate-pulse">
                   <span className="w-3.5 h-3.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                  <span>WhatsApp contacts are syncing in the background...</span>
+                  <span>Syncing contacts in progress...</span>
                 </div>
                 <p className="text-gray-500 dark:text-wa-dmuted pl-5">
-                  Names will populate as WhatsApp history loading completes. You can also click <strong>"Import Contacts"</strong> to upload all your contacts instantly.
+                  Loaded <strong>{contactsList.all?.length || 0}</strong> contacts in batches. Names are populating progressively.
                 </p>
               </div>
             ) : (

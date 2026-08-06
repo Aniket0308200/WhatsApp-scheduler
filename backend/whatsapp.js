@@ -106,7 +106,7 @@ function queueContactForSync(session, contact) {
     source: contact.source || (isGroup ? 'group_sync' : 'whatsapp_sync')
   });
 
-  if (session.contactsBuffer.size >= 100) {
+  if (session.contactsBuffer.size >= 10) {
     flushContactsBuffer(session);
   } else {
     if (session.bufferTimeout) {
@@ -132,7 +132,7 @@ async function flushContactsBuffer(session) {
   const sessionId = session.sessionId;
   console.log(`[WA] [${sessionId}] Encrypting and flushing ${contactsToSave.length} buffered contacts to MongoDB...`);
 
-  const chunkSize = 100;
+  const chunkSize = 10;
   for (let i = 0; i < contactsToSave.length; i += chunkSize) {
     const chunk = contactsToSave.slice(i, i + chunkSize);
     const operations = chunk.map(c => {
@@ -147,7 +147,8 @@ async function flushContactsBuffer(session) {
       
       const setOnInsertFields = {};
       
-      if (c.name) {
+      const hasRealName = c.name && c.name.trim() !== '' && c.name !== c.phone && c.name !== `+${c.phone}`;
+      if (hasRealName) {
         updateFields.encryptedName = db.encrypt(c.name);
       } else {
         setOnInsertFields.encryptedName = encPhone;
@@ -229,8 +230,23 @@ async function handleNewMessageContact(session, message) {
     // Check MongoDB next
     const encJid = db.encrypt(jid);
     try {
-      const exists = await Contact.exists({ sessionId: session.sessionId, jid: encJid });
-      if (!exists) {
+      const dbContact = await Contact.findOne({ sessionId: session.sessionId, jid: encJid }).lean();
+      if (dbContact) {
+        const decName = dbContact.encryptedName ? db.decrypt(dbContact.encryptedName) : '';
+        session.contactCache[jid] = decName || '';
+
+        const isDbNamePhone = !decName || decName === phone || decName === `+${phone}`;
+        const hasRealName = item.name && item.name !== phone && item.name !== `+${phone}`;
+        if (isDbNamePhone && hasRealName) {
+          console.log(`[WA] [${session.sessionId}] Live update contact name from message: ${item.name} (${phone})`);
+          queueContactForSync(session, {
+            id: jid,
+            jid,
+            name: item.name,
+            source: 'live_message_update'
+          });
+        }
+      } else {
         const phoneFormatted = `+${phone}`;
         const name = item.name || phoneFormatted;
         
@@ -241,8 +257,6 @@ async function handleNewMessageContact(session, message) {
           name: name,
           source: 'live_message'
         });
-      } else {
-        session.contactCache[jid] = ''; 
       }
     } catch (err) {
       console.error(`[WA] [${session.sessionId}] DB query failed in handleNewMessageContact:`, err.message);
@@ -325,10 +339,13 @@ async function resolveContactLive(sessionId, phone) {
     }
 
     // 2. Check MongoDB next
-    const dbContact = await Contact.findOne({ sessionId, phone: cleaned }).lean();
-    if (dbContact && dbContact.name) {
-      session.contactCache[jid] = dbContact.name;
-      return { exists: true, name: dbContact.name, jid: dbContact.jid || jid, isGroup, source: 'database' };
+    const encJid = db.encrypt(jid);
+    const dbContact = await Contact.findOne({ sessionId, jid: encJid }).lean();
+    if (dbContact && dbContact.encryptedName) {
+      const decName = db.decrypt(dbContact.encryptedName);
+      const decJid = db.decrypt(dbContact.jid);
+      session.contactCache[jid] = decName;
+      return { exists: true, name: decName, jid: decJid || jid, isGroup, source: 'database' };
     }
 
     if (isGroup) {
@@ -339,14 +356,13 @@ async function resolveContactLive(sessionId, phone) {
           const trimmedName = name.trim();
           session.contactCache[jid] = trimmedName;
           await Contact.updateOne(
-            { sessionId, phone: cleaned },
+            { sessionId, jid: encJid },
             {
               $set: {
-                jid,
-                name: trimmedName,
-                isGroup: true,
-                source: 'live_lookup',
-                updatedAt: new Date()
+                encryptedName: db.encrypt(trimmedName),
+                encryptedNumberOrJid: db.encrypt(cleaned),
+                type: 'group',
+                createdAt: new Date()
               }
             },
             { upsert: true }
@@ -396,14 +412,13 @@ async function resolveContactLive(sessionId, phone) {
     const finalName = name ? name.trim() : '';
     session.contactCache[jid] = finalName;
     await Contact.updateOne(
-      { sessionId, phone: cleaned },
+      { sessionId, jid: encJid },
       {
         $set: {
-          jid: result.jid || jid,
-          name: finalName,
-          isGroup: false,
-          source: 'live_lookup',
-          updatedAt: new Date()
+          encryptedName: db.encrypt(finalName),
+          encryptedNumberOrJid: db.encrypt(cleaned),
+          type: 'personal',
+          createdAt: new Date()
         }
       },
       { upsert: true }
@@ -548,6 +563,9 @@ async function initWhatsApp(sessionId) {
       session.qrBase64 = null;
       session.pairingCode = null;
       session.isSyncing = true;
+
+      // Purge data for clean slate re-test
+      await db.purgeSessionData(sessionId);
 
       // Reset sync status after 60s max to prevent showing "Syncing" forever
       setTimeout(() => {

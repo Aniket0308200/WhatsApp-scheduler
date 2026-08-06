@@ -40,6 +40,19 @@ const LogoutIcon = () => (
 
 export default function Header({ status, profile, onLogout, isSyncing }) {
   const [loggingOut, setLoggingOut] = useState(false);
+  const [syncTimerExceeded, setSyncTimerExceeded] = React.useState(false);
+  
+  React.useEffect(() => {
+    if (status === 'connected' && isSyncing) {
+      const t = setTimeout(() => {
+        setSyncTimerExceeded(true);
+      }, 15_000);
+      return () => clearTimeout(t);
+    } else {
+      setSyncTimerExceeded(false);
+    }
+  }, [status, isSyncing]);
+
   const { dark, toggle } = useTheme();
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.disconnected;
   const isConnected = status === 'connected';
@@ -126,7 +139,7 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
         {/* ── Right side: status + theme toggle + disconnect ────────────── */}
         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           {/* Syncing Indicator */}
-          {isConnected && isSyncing && (
+          {isConnected && isSyncing && !syncTimerExceeded && (
             <span className="flex items-center gap-1 text-[10px] sm:text-xs font-semibold px-2 py-1 rounded-full bg-blue-500/25 text-blue-200 border border-blue-400/30 animate-pulse">
               <span className="w-2.5 h-2.5 border-2 border-blue-200 border-t-transparent rounded-full animate-spin flex-shrink-0" />
               <span className="hidden sm:inline">Syncing Contacts…</span>
