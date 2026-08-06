@@ -278,10 +278,8 @@ app.get('/api/contact/:phone', async (req, res) => {
 // ─── Messages ─────────────────────────────────────────────────────────────────
 
 app.get('/api/messages', async (req, res) => {
-  const senderPhone = getSenderPhoneFromSession(req);
-  if (!senderPhone) return res.json([]);
   try {
-    res.json(await db.getAllMessages(senderPhone));
+    res.json(await db.getAllMessages(req.sessionId));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -336,7 +334,7 @@ app.post('/api/messages', async (req, res) => {
       }
     }
 
-    const id = await db.insertMessage(senderPhone, cleanPhone, message.trim(), schedDate, cleanName);
+    const id = await db.insertMessage(req.sessionId, cleanPhone, message.trim(), schedDate, cleanName);
 
     res.status(201).json({
       id,
@@ -363,13 +361,13 @@ app.delete('/api/messages/:id', async (req, res) => {
 
   try {
     if (req.query.permanent === 'true') {
-      const deleted = await db.deleteMessage(senderPhone, id);
+      const deleted = await db.deleteMessage(req.sessionId, id);
       if (!deleted) {
         return res.status(404).json({ error: 'Message not found.' });
       }
       res.json({ success: true, action: 'deleted' });
     } else {
-      const changes = await db.cancelMessage(senderPhone, id);
+      const changes = await db.cancelMessage(req.sessionId, id);
       if (!changes) {
         return res.status(400).json({ error: 'Message not found or not pending.' });
       }
