@@ -89,11 +89,14 @@ function queueContactForSync(session, contact) {
   const phone = isGroup ? jid : jid.split('@')[0].split(':')[0];
   if (!isGroup && phone.length < 7) return;
 
-  const phoneFormatted = `+${phone}`;
-  const resolvedName = contact.name || contact.notify || contact.pushName || contact.verifiedName || contact.subject || phoneFormatted;
-  const trimmedName = resolvedName ? String(resolvedName).trim() : phoneFormatted;
+  const resolvedName = contact.name || contact.notify || contact.pushName || contact.verifiedName || contact.subject || '';
+  const trimmedName = resolvedName ? String(resolvedName).trim() : '';
 
-  session.contactCache[jid] = trimmedName;
+  if (trimmedName) {
+    session.contactCache[jid] = trimmedName;
+  } else if (!session.contactCache[jid]) {
+    session.contactCache[jid] = '';
+  }
 
   session.contactsBuffer.set(phone, {
     phone,
@@ -135,18 +138,27 @@ async function flushContactsBuffer(session) {
     const operations = chunk.map(c => {
       const encJid = db.encrypt(c.jid);
       const encPhone = db.encrypt(c.phone);
-      const encName = db.encrypt(c.name);
+      
+      const updateFields = {
+        encryptedNumberOrJid: encPhone,
+        type: c.isGroup ? 'group' : 'personal',
+        createdAt: new Date()
+      };
+      
+      const setOnInsertFields = {};
+      
+      if (c.name) {
+        updateFields.encryptedName = db.encrypt(c.name);
+      } else {
+        setOnInsertFields.encryptedName = encPhone;
+      }
 
       return {
         updateOne: {
           filter: { sessionId, jid: encJid },
           update: {
-            $set: {
-              encryptedName: encName,
-              encryptedNumberOrJid: encPhone,
-              type: c.isGroup ? 'group' : 'personal',
-              createdAt: new Date()
-            }
+            $set: updateFields,
+            $setOnInsert: setOnInsertFields
           },
           upsert: true
         }

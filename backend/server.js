@@ -122,7 +122,7 @@ app.get('/api/contacts/search', async (req, res) => {
       return {
         phone: decPhone,
         jid: decJid,
-        name: decName,
+        name: decName || (isGroup ? decPhone : (decPhone.startsWith('+') ? decPhone : `+${decPhone}`)),
         isGroup,
         is_group: isGroup ? 1 : 0,
         source: c.source || 'db'
@@ -200,7 +200,7 @@ app.get('/api/contacts', async (req, res) => {
       return {
         phone: decPhone,
         jid: decJid,
-        name: decName,
+        name: decName || (isGroup ? decPhone : (decPhone.startsWith('+') ? decPhone : `+${decPhone}`)),
         isGroup,
         is_group: isGroup ? 1 : 0,
         type: c.type,

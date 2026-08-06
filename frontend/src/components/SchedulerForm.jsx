@@ -582,7 +582,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
 
   const cleanDirSearch = directorySearch.trim().toLowerCase();
   const dirSearchDigits = cleanDirSearch.replace(/\D/g, '');
-  const activeList = contactsList[directoryTab] || [];
+  const activeList = directoryTab === 'group' ? (contactsList.groups || []) : (directoryTab === 'personal' ? (contactsList.personal || []) : (contactsList.all || []));
   const filteredContacts = activeList.filter(c => {
     if (!cleanDirSearch) return true;
     const matchesName = c.name ? String(c.name).toLowerCase().includes(cleanDirSearch) : false;
