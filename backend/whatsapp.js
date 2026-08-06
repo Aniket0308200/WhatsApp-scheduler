@@ -89,8 +89,9 @@ function queueContactForSync(session, contact) {
   const phone = isGroup ? jid : jid.split('@')[0].split(':')[0];
   if (!isGroup && phone.length < 7) return;
 
-  const name = contact.notify || contact.name || contact.verifiedName || contact.pushName || contact.subject || '';
-  const trimmedName = name ? String(name).trim() : '';
+  const phoneFormatted = `+${phone}`;
+  const resolvedName = contact.name || contact.notify || contact.pushName || contact.verifiedName || contact.subject || phoneFormatted;
+  const trimmedName = resolvedName ? String(resolvedName).trim() : phoneFormatted;
 
   session.contactCache[jid] = trimmedName;
 
@@ -192,15 +193,58 @@ function processIncomingChats(session, chats) {
   }
 }
 
-function cacheMessages(session, messages) {
-  const contacts = [];
-  for (const message of messages || []) {
-    if (message?.key?.fromMe || !message?.pushName) continue;
-    const jid = message.key.participant || message.key.remoteJid;
-    if (!jid || !jid.endsWith('@s.whatsapp.net')) continue;
-    contacts.push({ id: jid, pushName: message.pushName });
+async function handleNewMessageContact(session, message) {
+  const remoteJid = message.key.remoteJid;
+  if (!remoteJid || typeof remoteJid !== 'string') return;
+
+  const jids = [];
+  if (remoteJid.endsWith('@s.whatsapp.net')) {
+    jids.push({ jid: remoteJid, name: message.pushName || '' });
   }
-  cacheContacts(session, contacts);
+  const participant = message.key.participant;
+  if (participant && typeof participant === 'string' && participant.endsWith('@s.whatsapp.net')) {
+    jids.push({ jid: participant, name: message.pushName || '' });
+  }
+
+  for (const item of jids) {
+    const jid = item.jid;
+    const phone = jid.split('@')[0].split(':')[0];
+    if (phone.length < 7) continue;
+
+    // Check memory cache first to avoid DB queries
+    if (session.contactCache[jid]) continue;
+
+    // Check MongoDB next
+    const encJid = db.encrypt(jid);
+    try {
+      const exists = await Contact.exists({ sessionId: session.sessionId, jid: encJid });
+      if (!exists) {
+        const phoneFormatted = `+${phone}`;
+        const name = item.name || phoneFormatted;
+        
+        console.log(`[WA] [${session.sessionId}] Auto-adding contact from message stream: ${name} (${phoneFormatted})`);
+        queueContactForSync(session, {
+          id: jid,
+          jid,
+          name: name,
+          source: 'live_message'
+        });
+      } else {
+        session.contactCache[jid] = ''; 
+      }
+    } catch (err) {
+      console.error(`[WA] [${session.sessionId}] DB query failed in handleNewMessageContact:`, err.message);
+    }
+  }
+}
+
+function cacheMessages(session, messages) {
+  for (const message of messages || []) {
+    if (!message?.key) continue;
+    handleNewMessageContact(session, message).catch(err => {
+      console.error(`[WA] [${session.sessionId}] handleNewMessageContact error:`, err.message);
+    });
+  }
 }
 
 function searchContactsSync(sessionId, query, limit = 10) {
