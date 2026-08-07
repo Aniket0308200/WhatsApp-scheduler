@@ -306,7 +306,7 @@ app.post('/api/messages', async (req, res) => {
   }
 
   try {
-    const senderPhone = getSenderPhoneFromSession(req);
+    const senderPhone = await getSenderPhoneFromSession(req);
     if (!senderPhone) {
       return res.status(400).json({ error: 'Connected WhatsApp number could not be identified.' });
     }
@@ -343,7 +343,7 @@ app.post('/api/messages', async (req, res) => {
 app.delete('/api/messages/:id', async (req, res) => {
   const id = req.params.id;
   if (!id) return res.status(400).json({ error: 'Invalid ID.' });
-  const senderPhone = getSenderPhoneFromSession(req);
+  const senderPhone = await getSenderPhoneFromSession(req);
   if (!senderPhone) return res.status(400).json({ error: 'WhatsApp number could not be identified.' });
 
   try {
@@ -367,10 +367,10 @@ app.delete('/api/messages/:id', async (req, res) => {
 
 // ─── Helper Functions ─────────────────────────────────────────────────────────
 
-function getSenderPhoneFromSession(req) {
+async function getSenderPhoneFromSession(req) {
   const profile = whatsapp.getConnectedProfile(req.sessionId);
   if (profile && profile.phone) return profile.phone;
-  return whatsapp.getPhoneFromSession(req.sessionId);
+  return await whatsapp.getPhoneFromSession(req.sessionId);
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────

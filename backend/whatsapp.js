@@ -10,11 +10,13 @@
 
 const {
   default: makeWASocket,
-  useMultiFileAuthState,
   DisconnectReason,
   Browsers,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
+  BufferJSON,
+  initAuthCreds,
+  proto,
 } = require('@whiskeysockets/baileys');
 
 const QRCode = require('qrcode');
@@ -42,12 +44,83 @@ function hasSession(sessionId) {
   return sessions.has(sessionId);
 }
 
+async function useMongoDBAuthState(sessionId) {
+  const readData = async (key) => {
+    try {
+      const doc = await db.AuthSession.findOne({ sessionId, key }).lean();
+      if (!doc) return null;
+      return JSON.parse(doc.value, BufferJSON.reviver);
+    } catch (err) {
+      console.error(`[Auth] [${sessionId}] Error reading key ${key}:`, err.message);
+      return null;
+    }
+  };
+
+  const writeData = async (key, value) => {
+    try {
+      if (value === null || value === undefined) {
+        await db.AuthSession.deleteOne({ sessionId, key });
+      } else {
+        const jsonStr = JSON.stringify(value, BufferJSON.replacer);
+        await db.AuthSession.updateOne(
+          { sessionId, key },
+          { $set: { value: jsonStr } },
+          { upsert: true }
+        );
+      }
+    } catch (err) {
+      console.error(`[Auth] [${sessionId}] Error writing key ${key}:`, err.message);
+    }
+  };
+
+  let creds = await readData('creds');
+  if (!creds) {
+    creds = initAuthCreds();
+    await writeData('creds', creds);
+  }
+
+  return {
+    state: {
+      creds,
+      keys: {
+        get: async (type, ids) => {
+          const data = {};
+          await Promise.all(
+            ids.map(async (id) => {
+              let value = await readData(`${type}:${id}`);
+              if (type === 'app-state-sync-key' && value) {
+                value = proto.Message.AppStateSyncKeyData.fromObject(value);
+              }
+              data[id] = value;
+            })
+          );
+          return data;
+        },
+        set: async (data) => {
+          const tasks = [];
+          for (const category in data) {
+            for (const id in data[category]) {
+              const value = data[category][id];
+              const key = `${category}:${id}`;
+              tasks.push(writeData(key, value));
+            }
+          }
+          await Promise.all(tasks);
+        }
+      }
+    },
+    saveCreds: async () => {
+      await writeData('creds', creds);
+    }
+  };
+}
+
 /** Check if session has saved credentials and extract the phone number from them. */
-function getPhoneFromSession(sessionId) {
+async function getPhoneFromSession(sessionId) {
   try {
-    const credsPath = path.join(SESSIONS_ROOT, sessionId, 'creds.json');
-    if (fs.existsSync(credsPath)) {
-      const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+    const doc = await db.AuthSession.findOne({ sessionId, key: 'creds' }).lean();
+    if (doc) {
+      const creds = JSON.parse(doc.value, BufferJSON.reviver);
       if (creds?.me?.id) {
         return creds.me.id.split('@')[0].split(':')[0];
       }
@@ -92,7 +165,21 @@ function queueContactForSync(session, contact) {
   const phone = isGroup ? jid : jid.split('@')[0].split(':')[0];
   if (!isGroup && phone.length < 7) return;
 
-  const resolvedName = contact.name || contact.notify || contact.pushName || contact.verifiedName || contact.subject || '';
+  let resolvedName = '';
+  if (!isGroup) {
+    if (contact.name && db.isValidPersonalContactName(contact.name, phone)) {
+      resolvedName = contact.name;
+    }
+    if (!resolvedName) {
+      const pushNameCandidate = contact.notify || contact.pushName || contact.verifiedName;
+      if (pushNameCandidate && db.isValidPersonalContactName(pushNameCandidate, phone)) {
+        resolvedName = pushNameCandidate;
+      }
+    }
+  } else {
+    resolvedName = contact.subject || contact.name || '';
+  }
+
   const cleanName = db.getCleanContactName(resolvedName);
   const hasValidName = cleanName && (isGroup || db.isValidPersonalContactName(cleanName, phone));
 
@@ -479,23 +566,28 @@ async function resolveContactLive(sessionId, phone) {
 
     // Cache the result (even if name is empty, record the verification)
     const finalName = name ? name.trim() : null;
-    session.contactCache[jid] = finalName || '';
-    await Contact.updateOne(
-      { sessionId, jid },
-      {
-        $set: {
-          encryptedNumberOrJid: db.encrypt(cleaned),
-          encryptedName: db.encrypt(finalName),
-          type: 'personal',
-          source: 'live_lookup',
-          createdAt: new Date()
-        }
-      },
-      { upsert: true }
-    );
+    const isValid = db.isValidPersonalContactName(finalName, cleaned);
+    if (isValid) {
+      session.contactCache[jid] = finalName;
+      await Contact.updateOne(
+        { sessionId, jid },
+        {
+          $set: {
+            encryptedNumberOrJid: db.encrypt(cleaned),
+            encryptedName: db.encrypt(finalName),
+            type: 'personal',
+            source: 'live_lookup',
+            createdAt: new Date()
+          }
+        },
+        { upsert: true }
+      );
+    } else {
+      session.contactCache[jid] = '';
+    }
     saveContactsCacheToFile(session);
 
-    return { exists: true, name: finalName || null, jid: result.jid || jid, isGroup: false, source: 'live_lookup' };
+    return { exists: true, name: isValid ? finalName : null, jid: result.jid || jid, isGroup: false, source: 'live_lookup' };
   } catch (err) {
     console.error(`[WA] [${sessionId}] Live contact resolve error for ${cleaned}:`, err.message);
     return { exists: false, name: null, jid: null, isGroup };
@@ -565,12 +657,10 @@ async function initWhatsApp(sessionId) {
     console.error(`[WA] [${sessionId}] Failed to load contacts from MongoDB:`, err.message);
   }
 
-  const sessionDir = path.join(SESSIONS_ROOT, sessionId);
-  if (!fs.existsSync(sessionDir)) {
-    fs.mkdirSync(sessionDir, { recursive: true });
+  const { state, saveCreds } = await useMongoDBAuthState(sessionId);
+  if (state.creds?.me?.id) {
+    session.connectedProfile.phone = state.creds.me.id.split('@')[0].split(':')[0];
   }
-
-  const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
   const { version } = await fetchLatestBaileysVersion();
 
   const sock = makeWASocket({
@@ -690,7 +780,7 @@ async function initWhatsApp(sessionId) {
 
       if (code === loggedOut) {
         console.log(`[WA] [${sessionId}] Logged out — clearing session.`);
-        clearSession(sessionId);
+        await clearSession(sessionId);
         session.status = 'disconnected';
         session.reconnectTimer = setTimeout(() => initWhatsApp(sessionId), 3_000);
       } else if (code === connectionReplaced) {
@@ -705,7 +795,7 @@ async function initWhatsApp(sessionId) {
         // This is a genuine credential mismatch; data remains in the
         // phone-keyed database even though a new pairing will be required.
         console.log(`[WA] [${sessionId}] Multi-device mismatch — resetting credentials.`);
-        clearSession(sessionId);
+        await clearSession(sessionId);
         session.status = 'disconnected';
         session.isSyncing = false;
         session.reconnectTimer = setTimeout(() => initWhatsApp(sessionId), 3_000);
@@ -830,19 +920,16 @@ async function initWhatsApp(sessionId) {
 // ─── Bootstrap Saved Sessions ─────────────────────────────────────────────────
 
 async function bootstrapSessions() {
-  if (!fs.existsSync(SESSIONS_ROOT)) {
-    fs.mkdirSync(SESSIONS_ROOT, { recursive: true });
-    return;
-  }
-  const entries = fs.readdirSync(SESSIONS_ROOT, { withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      const sessionId = entry.name;
+  try {
+    const sessionIds = await db.AuthSession.distinct('sessionId');
+    for (const sessionId of sessionIds) {
       console.log(`[WA] Bootstrapping saved session: ${sessionId}`);
       initWhatsApp(sessionId).catch((err) => {
         console.error(`[WA] Error bootstrapping session ${sessionId}:`, err.message);
       });
     }
+  } catch (err) {
+    console.error(`[WA] Error bootstrapping sessions from MongoDB:`, err.message);
   }
 }
 
@@ -868,7 +955,7 @@ async function requestPairingCode(sessionId, phoneNumber) {
     }
   }
 
-  clearSession(sessionId);
+  await clearSession(sessionId);
 
   await initWhatsApp(sessionId);
   await new Promise((r) => setTimeout(r, 3_000));
@@ -971,7 +1058,7 @@ async function logout(sessionId) {
         session.sock.end();
       } catch (_) { }
     }
-    clearSession(sessionId);
+    await clearSession(sessionId);
     session.status = 'disconnected';
     session.sock = null;
     session.connectedProfile = { name: null, phone: null, jid: null };
@@ -980,11 +1067,14 @@ async function logout(sessionId) {
   }
 }
 
-function clearSession(sessionId) {
+async function clearSession(sessionId) {
   try {
+    await db.AuthSession.deleteMany({ sessionId });
     const sessionDir = path.join(SESSIONS_ROOT, sessionId);
-    fs.rmSync(sessionDir, { recursive: true, force: true });
-    fs.mkdirSync(sessionDir, { recursive: true });
+    if (fs.existsSync(sessionDir)) {
+      fs.rmSync(sessionDir, { recursive: true, force: true });
+    }
+    console.log(`[WA] [${sessionId}] Cleared persistent session from MongoDB and disk.`);
   } catch (err) {
     console.error(`[WA] [${sessionId}] clearSession error:`, err.message);
   }

@@ -1,11 +1,22 @@
 const mongoose = require('mongoose');
 const CryptoJS = require('crypto-js');
+const dns = require('dns');
+
+// Override DNS servers to Google & Cloudflare public DNS to bypass querySrv ECONNREFUSED issues on local network
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (err) {
+  console.warn('[DNS Warning] Failed to set custom DNS servers:', err.message);
+}
 
 const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/whatsapp_scheduler';
 const secretKey = process.env.ENCRYPTION_KEY || 'local-development-secret-key-123';
 
 mongoose.connect(mongoUri)
-  .then(() => console.log('[MongoDB] Connected successfully.'))
+  .then(async () => {
+    console.log('[MongoDB] Connected successfully.');
+    await cleanInvalidContactsFromDb();
+  })
   .catch(err => console.error('[MongoDB] Connection error:', err.message));
 
 // ─── Cryptography Helpers (Deterministic & Decryptable AES) ────────────────────
@@ -54,6 +65,17 @@ ContactSchema.index({ sessionId: 1, type: 1 });
 
 const Contact = mongoose.model('Contact', ContactSchema);
 
+// ─── AuthSession Model ───────────────────────────────────────────────────────
+const AuthSessionSchema = new mongoose.Schema({
+  sessionId: { type: String, required: true },
+  key: { type: String, required: true },
+  value: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+AuthSessionSchema.index({ sessionId: 1, key: 1 }, { unique: true });
+
+const AuthSession = mongoose.model('AuthSession', AuthSessionSchema);
+
 function cleanContactName(name) {
   if (!name) return null;
   const trimmed = String(name).trim();
@@ -70,12 +92,47 @@ function isPhoneMatchName(name, phone) {
 function isValidPersonalContactName(name, phone) {
   const cleaned = cleanContactName(name);
   if (!cleaned) return false;
+
+  const lower = cleaned.toLowerCase();
+  if (lower === 'null' || lower === 'undefined' || lower === 'unknown') return false;
+
   const plainPhone = String(phone).replace(/\D/g, '');
   if (!plainPhone) return false;
+
   if (cleaned.length < 2) return false;
-  if (/^\d+$/.test(cleaned)) return false;
+
+  // If the name consists ONLY of digits, spaces, and phone symbols (+, -, (, ), etc.)
+  if (/^\+?[\d\s\-()]+$/.test(cleaned)) return false;
+
+  // If the name contains the phone number digits
+  const nameDigits = cleaned.replace(/\D/g, '');
+  if (plainPhone && nameDigits === plainPhone) return false;
+
   if (isPhoneMatchName(cleaned, plainPhone)) return false;
+
   return true;
+}
+
+async function cleanInvalidContactsFromDb() {
+  try {
+    const personalContacts = await Contact.find({ type: 'personal' }).lean();
+    const idsToDelete = [];
+    for (const c of personalContacts) {
+      const name = decrypt(c.encryptedName);
+      const phone = decrypt(c.encryptedNumberOrJid);
+      if (!isValidPersonalContactName(name, phone)) {
+        idsToDelete.push(c._id);
+      }
+    }
+    if (idsToDelete.length > 0) {
+      const res = await Contact.deleteMany({ _id: { $in: idsToDelete } });
+      console.log(`[DB Cleanup] Deleted ${res.deletedCount} invalid personal contacts (null/empty/only-number names).`);
+    } else {
+      console.log('[DB Cleanup] No invalid personal contacts found in database.');
+    }
+  } catch (err) {
+    console.error('[DB Cleanup] Error cleaning invalid contacts:', err.message);
+  }
 }
 
 function getCleanContactName(name) {
@@ -232,6 +289,7 @@ async function purgeSessionData(sessionId) {
 module.exports = {
   Contact,
   ScheduledMessage,
+  AuthSession,
   encrypt,
   decrypt,
   insertMessage,
@@ -246,4 +304,5 @@ module.exports = {
   purgeSessionData,
   isValidPersonalContactName,
   getCleanContactName,
+  cleanInvalidContactsFromDb,
 };
