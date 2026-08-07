@@ -41,17 +41,46 @@ function decrypt(cipherText) {
 const ContactSchema = new mongoose.Schema({
   sessionId: { type: String, required: true },
   jid: { type: String, required: true },
-  name: { type: String, default: null },
-  phone: { type: String, required: true },
+  encryptedNumberOrJid: { type: String, required: true },
+  encryptedName: { type: String, default: '' },
   type: { type: String, enum: ['personal', 'group'], required: true },
+  source: { type: String, default: 'whatsapp_sync' },
   createdAt: { type: Date, default: Date.now }
 });
 
 // Compound index for fast upserts per session
 ContactSchema.index({ sessionId: 1, jid: 1 }, { unique: true });
-ContactSchema.index({ sessionId: 1, name: 1 });
+ContactSchema.index({ sessionId: 1, type: 1 });
 
 const Contact = mongoose.model('Contact', ContactSchema);
+
+function cleanContactName(name) {
+  if (!name) return null;
+  const trimmed = String(name).trim();
+  return trimmed || null;
+}
+
+function isPhoneMatchName(name, phone) {
+  if (!name || !phone) return false;
+  const normalizedName = String(name).trim();
+  const normalizedPhone = String(phone).replace(/\D/g, '');
+  return normalizedName === normalizedPhone || normalizedName === `+${normalizedPhone}`;
+}
+
+function isValidPersonalContactName(name, phone) {
+  const cleaned = cleanContactName(name);
+  if (!cleaned) return false;
+  const plainPhone = String(phone).replace(/\D/g, '');
+  if (!plainPhone) return false;
+  if (cleaned.length < 2) return false;
+  if (/^\d+$/.test(cleaned)) return false;
+  if (isPhoneMatchName(cleaned, plainPhone)) return false;
+  return true;
+}
+
+function getCleanContactName(name) {
+  return cleanContactName(name);
+}
 
 // ─── Scheduled Message Model ──────────────────────────────────────────────────
 const ScheduledMessageSchema = new mongoose.Schema({
@@ -215,4 +244,6 @@ module.exports = {
   deleteMessage,
   toSqliteUtc,
   purgeSessionData,
+  isValidPersonalContactName,
+  getCleanContactName,
 };

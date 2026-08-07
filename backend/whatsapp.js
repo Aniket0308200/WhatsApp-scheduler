@@ -18,10 +18,10 @@ const {
 } = require('@whiskeysockets/baileys');
 
 const QRCode = require('qrcode');
-const pino   = require('pino');
-const path   = require('path');
-const fs     = require('fs');
-const db     = require('./db');
+const pino = require('pino');
+const path = require('path');
+const fs = require('fs');
+const db = require('./db');
 const { Contact } = db;
 
 const SESSIONS_ROOT = path.join(__dirname, '..', 'data', 'session');
@@ -52,7 +52,7 @@ function getPhoneFromSession(sessionId) {
         return creds.me.id.split('@')[0].split(':')[0];
       }
     }
-  } catch (_) {}
+  } catch (_) { }
   return null;
 }
 
@@ -78,6 +78,9 @@ function queueContactForSync(session, contact) {
   if (!session.contactsBuffer) {
     session.contactsBuffer = new Map();
   }
+  if (!session.pendingContactResolutions) {
+    session.pendingContactResolutions = new Set();
+  }
 
   const jid = contact.jid || contact.id;
   if (!jid || typeof jid !== 'string') return;
@@ -89,19 +92,92 @@ function queueContactForSync(session, contact) {
   const phone = isGroup ? jid : jid.split('@')[0].split(':')[0];
   if (!isGroup && phone.length < 7) return;
 
-  // Strict mapping: contact.name || contact.notify || contact.pushName || contact.verifiedName
   const resolvedName = contact.name || contact.notify || contact.pushName || contact.verifiedName || contact.subject || '';
-  const trimmedName = resolvedName ? String(resolvedName).trim() : null; // Strictly null/empty, no phone fallback
+  const cleanName = db.getCleanContactName(resolvedName);
+  const hasValidName = cleanName && (isGroup || db.isValidPersonalContactName(cleanName, phone));
 
-  session.contactCache[jid] = trimmedName || '';
+  if (!hasValidName) {
+    session.contactCache[jid] = session.contactCache[jid] || '';
+    if (!isGroup) {
+      schedulePersonalNameResolution(session, jid, phone);
+    }
+    return;
+  }
 
-  session.contactsBuffer.set(phone, {
+  session.contactCache[jid] = cleanName;
+  session.contactsBuffer.set(jid, {
     phone,
     jid,
-    name: trimmedName,
-    isGroup,
+    name: cleanName,
+    type: isGroup ? 'group' : 'personal',
     source: contact.source || (isGroup ? 'group_sync' : 'whatsapp_sync')
   });
+
+  if (session.contactsBuffer.size >= 10) {
+    flushContactsBuffer(session);
+  } else {
+    if (session.bufferTimeout) {
+      clearTimeout(session.bufferTimeout);
+    }
+    session.bufferTimeout = setTimeout(() => {
+      flushContactsBuffer(session);
+    }, 2000);
+  }
+}
+
+async function schedulePersonalNameResolution(session, jid, phone) {
+  if (!session || !session.sock || session.pendingContactResolutions.has(jid)) return;
+  session.pendingContactResolutions.add(jid);
+
+  try {
+    const results = await session.sock.onWhatsApp(jid).catch(() => []);
+    const found = Array.isArray(results) ? results.find(r => r.exists && r.jid) : results;
+    if (!found) return;
+
+    let name = null;
+    const businessProfile = await session.sock.getBusinessProfile(jid).catch(() => null);
+    if (businessProfile) {
+      name = businessProfile.name || businessProfile.verifiedName || businessProfile.description || null;
+    }
+
+    if (!name) {
+      const presence = await session.sock.presenceSubscribe(jid).catch(() => null);
+      if (presence?.name) {
+        name = presence.name;
+      }
+    }
+
+    if (!name && found.pushName) {
+      name = found.pushName;
+    }
+
+    const cleanName = db.getCleanContactName(name);
+    if (!db.isValidPersonalContactName(cleanName, phone)) return;
+
+    queueVerifiedContact(session, {
+      phone,
+      jid,
+      name: cleanName,
+      type: 'personal',
+      source: 'live_resolution'
+    });
+  } catch (err) {
+    console.error(`[WA] [${session.sessionId}] Personal name resolution failed for ${jid}:`, err.message);
+  } finally {
+    session.pendingContactResolutions.delete(jid);
+  }
+}
+
+function queueVerifiedContact(session, contact) {
+  if (!session.contactsBuffer) {
+    session.contactsBuffer = new Map();
+  }
+
+  const { jid, phone, name, type, source } = contact;
+  if (!jid || !name) return;
+
+  session.contactCache[jid] = name;
+  session.contactsBuffer.set(jid, { phone, jid, name, type, source });
 
   if (session.contactsBuffer.size >= 10) {
     flushContactsBuffer(session);
@@ -127,35 +203,26 @@ async function flushContactsBuffer(session) {
   session.contactsBuffer.clear();
 
   const sessionId = session.sessionId;
-  console.log(`[WA] [${sessionId}] Flushing ${contactsToSave.length} buffered contacts to MongoDB (Plain-Text)...`);
+  console.log(`[WA] [${sessionId}] Flushing ${contactsToSave.length} buffered contacts to MongoDB (Encrypted)...`);
 
   const chunkSize = 10;
   for (let i = 0; i < contactsToSave.length; i += chunkSize) {
     const chunk = contactsToSave.slice(i, i + chunkSize);
     const operations = chunk.map(c => {
-      // Debug Sync: Saved name in DB
-      console.log(`[DEBUG Sync] Saved name in DB: ${c.name || 'null'} for JID: ${c.jid}`);
-
-      const updateFields = {
-        phone: c.phone,
-        type: c.isGroup ? 'group' : 'personal',
-        createdAt: new Date()
-      };
-      
-      const setOnInsertFields = {};
-      
-      if (c.name) {
-        updateFields.name = c.name;
-      } else {
-        setOnInsertFields.name = null;
-      }
-
+      const encryptedNumberOrJid = db.encrypt(c.type === 'group' ? c.jid : c.phone);
+      const encryptedName = db.encrypt(c.name);
+      console.log(`[DEBUG Sync] Saved contact in DB: ${c.name || 'null'} for JID: ${c.jid}`);
       return {
         updateOne: {
           filter: { sessionId, jid: c.jid },
           update: {
-            $set: updateFields,
-            $setOnInsert: setOnInsertFields
+            $set: {
+              encryptedNumberOrJid,
+              encryptedName,
+              type: c.type,
+              source: c.source || 'whatsapp_sync',
+              createdAt: new Date()
+            }
           },
           upsert: true
         }
@@ -168,6 +235,8 @@ async function flushContactsBuffer(session) {
       console.error(`[WA] [${sessionId}] MongoDB bulkWrite error:`, err.message);
     }
   }
+
+  saveContactsCacheToFile(session);
 }
 
 function cacheContacts(session, contacts) {
@@ -243,7 +312,7 @@ async function handleNewMessageContact(session, message) {
         }
       } else {
         const name = item.name || null;
-        
+
         console.log(`[WA] [${session.sessionId}] Auto-adding contact from message stream: ${name || 'unknown'} (${phone})`);
         queueContactForSync(session, {
           id: jid,
@@ -277,10 +346,10 @@ function searchContactsSync(sessionId, query, limit = 10) {
   for (const [jid, name] of Object.entries(session.contactCache)) {
     const isGroup = jid.endsWith('@g.us');
     const phone = isGroup ? jid : jid.split('@')[0].split(':')[0];
-    
+
     const nameMatch = name && name.toLowerCase().includes(q);
     const phoneMatch = phone.includes(q);
-    
+
     if (nameMatch || phoneMatch) {
       results.push({ jid, phone, name, isGroup, is_group: isGroup ? 1 : 0 });
     }
@@ -303,7 +372,7 @@ function importContactsToCache(sessionId, contacts) {
     const isGroup = c.phone.endsWith('@g.us');
     const jid = isGroup ? c.phone : `${c.phone}@s.whatsapp.net`;
     const name = c.name ? String(c.name).trim() : '';
-    
+
     queueContactForSync(session, {
       id: jid,
       jid,
@@ -335,8 +404,16 @@ async function resolveContactLive(sessionId, phone) {
     // 2. Check MongoDB next
     const dbContact = await Contact.findOne({ sessionId, jid }).lean();
     if (dbContact) {
-      session.contactCache[jid] = dbContact.name || '';
-      return { exists: true, name: dbContact.name || null, jid: dbContact.jid || jid, isGroup, source: 'database' };
+      const storedName = db.decrypt(dbContact.encryptedName) || '';
+      session.contactCache[jid] = storedName;
+      const valid = isGroup || db.isValidPersonalContactName(storedName, cleaned);
+      if (!valid) {
+        if (!isGroup) {
+          schedulePersonalNameResolution(session, jid, cleaned);
+        }
+        return { exists: false, name: null, jid, isGroup, source: 'database' };
+      }
+      return { exists: true, name: storedName, jid: dbContact.jid || jid, isGroup, source: 'database' };
     }
 
     if (isGroup) {
@@ -350,9 +427,10 @@ async function resolveContactLive(sessionId, phone) {
             { sessionId, jid },
             {
               $set: {
-                name: trimmedName,
-                phone: cleaned,
+                encryptedNumberOrJid: db.encrypt(jid),
+                encryptedName: db.encrypt(trimmedName),
                 type: 'group',
+                source: 'live_lookup',
                 createdAt: new Date()
               }
             },
@@ -382,7 +460,7 @@ async function resolveContactLive(sessionId, phone) {
       if (businessProfile) {
         name = businessProfile.name || businessProfile.verifiedName || businessProfile.description || null;
       }
-    } catch {}
+    } catch { }
 
     // Method 2: Check if it's in recent presence updates
     if (!name) {
@@ -391,7 +469,7 @@ async function resolveContactLive(sessionId, phone) {
         if (presence?.name) {
           name = presence.name;
         }
-      } catch {}
+      } catch { }
     }
 
     // Method 3: Use result pushName if available
@@ -406,9 +484,10 @@ async function resolveContactLive(sessionId, phone) {
       { sessionId, jid },
       {
         $set: {
-          name: finalName,
-          phone: cleaned,
+          encryptedNumberOrJid: db.encrypt(cleaned),
+          encryptedName: db.encrypt(finalName),
           type: 'personal',
+          source: 'live_lookup',
           createdAt: new Date()
         }
       },
@@ -478,10 +557,10 @@ async function initWhatsApp(sessionId) {
     const dbContactsList = await Contact.find({ sessionId }).lean();
     for (const c of dbContactsList) {
       if (c.jid) {
-        session.contactCache[c.jid] = c.name || '';
+        session.contactCache[c.jid] = db.decrypt(c.encryptedName) || '';
       }
     }
-    console.log(`[WA] [${sessionId}] Loaded ${dbContactsList.length} contacts from MongoDB (Plain-Text) to memory cache.`);
+    console.log(`[WA] [${sessionId}] Loaded ${dbContactsList.length} contacts from MongoDB (encrypted) to memory cache.`);
   } catch (err) {
     console.error(`[WA] [${sessionId}] Failed to load contacts from MongoDB:`, err.message);
   }
@@ -492,25 +571,25 @@ async function initWhatsApp(sessionId) {
   }
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-  const { version }          = await fetchLatestBaileysVersion();
+  const { version } = await fetchLatestBaileysVersion();
 
   const sock = makeWASocket({
     version,
     logger,
     auth: {
       creds: state.creds,
-      keys:  makeCacheableSignalKeyStore(state.keys, logger),
+      keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
-    printQRInTerminal:            false,
+    printQRInTerminal: false,
     // Desktop identity is required by WhatsApp to deliver the largest history
     // sync available to a linked device.
-    browser:                      Browsers.ubuntu('Chrome'),
-    syncFullHistory:              true,
+    browser: Browsers.ubuntu('Chrome'),
+    syncFullHistory: true,
     generateHighQualityLinkPreview: false,
-    keepAliveIntervalMs:          60_000,
-    retryRequestDelayMs:          5_000,
-    connectTimeoutMs:             60_000,
-    defaultQueryTimeoutMs:        0,
+    keepAliveIntervalMs: 60_000,
+    retryRequestDelayMs: 5_000,
+    connectTimeoutMs: 60_000,
+    defaultQueryTimeoutMs: 0,
   });
 
   session.sock = sock;
@@ -540,7 +619,7 @@ async function initWhatsApp(sessionId) {
     if (qr) {
       try {
         session.qrBase64 = await QRCode.toDataURL(qr, { margin: 2, scale: 6 });
-        session.status   = 'qr_ready';
+        session.status = 'qr_ready';
         console.log(`[WA] [${sessionId}] QR code generated — waiting for scan.`);
       } catch (err) {
         console.error(`[WA] [${sessionId}] QR generation error:`, err.message);
@@ -548,13 +627,20 @@ async function initWhatsApp(sessionId) {
     }
 
     if (connection === 'open') {
-      session.status   = 'connected';
+      session.status = 'connected';
       session.qrBase64 = null;
       session.pairingCode = null;
       session.isSyncing = true;
 
-      // Purge data for clean slate re-test
+      // Clean-slate fresh sync for the current session
       await db.purgeSessionData(sessionId);
+      session.contactCache = {};
+      if (session.contactsBuffer) {
+        session.contactsBuffer.clear();
+      }
+      if (session.pendingContactResolutions) {
+        session.pendingContactResolutions.clear();
+      }
 
       // Reset sync status after 60s max to prevent showing "Syncing" forever
       setTimeout(() => {
@@ -764,7 +850,7 @@ async function bootstrapSessions() {
 
 async function requestPairingCode(sessionId, phoneNumber) {
   console.log(`[WA] [${sessionId}] Stopping existing socket and clearing old credentials before requesting pairing code`);
-  
+
   let session = sessions.get(sessionId);
   if (session) {
     if (session.sock) {
@@ -794,9 +880,9 @@ async function requestPairingCode(sessionId, phoneNumber) {
   if (!cleaned) throw new Error('Invalid phone number.');
 
   try {
-    const code  = await session.sock.requestPairingCode(cleaned);
+    const code = await session.sock.requestPairingCode(cleaned);
     session.pairingCode = code;
-    session.status      = 'qr_ready';
+    session.status = 'qr_ready';
     console.log(`[WA] [${sessionId}] Pairing code for ${cleaned}: ${code}`);
     return code;
   } catch (err) {
@@ -841,7 +927,7 @@ async function sendMessage(sessionId, phone, text) {
   }
 
   const isGroup = phone.endsWith('@g.us');
-  const jid     = isGroup ? phone : await resolveRecipientJid(sessionId, phone.replace(/\D/g, ''));
+  const jid = isGroup ? phone : await resolveRecipientJid(sessionId, phone.replace(/\D/g, ''));
 
   try {
     const result = await session.sock.sendMessage(jid, { text });
@@ -879,15 +965,15 @@ async function logout(sessionId) {
   const session = sessions.get(sessionId);
   if (session) {
     if (session.sock) {
-      try { await session.sock.logout(); } catch (_) {}
+      try { await session.sock.logout(); } catch (_) { }
       try {
         session.sock.ev.removeAllListeners();
         session.sock.end();
-      } catch (_) {}
+      } catch (_) { }
     }
     clearSession(sessionId);
     session.status = 'disconnected';
-    session.sock   = null;
+    session.sock = null;
     session.connectedProfile = { name: null, phone: null, jid: null };
     session.contactCache = {};
     sessions.delete(sessionId);
@@ -926,22 +1012,22 @@ async function updateConnectedProfile(sessionId) {
   if (session && session.status === 'connected' && session.sock) {
     const user = session.sock.user || session.sock.authState?.creds?.me;
     if (user) {
-      const rawJid    = user.id || '';
+      const rawJid = user.id || '';
       const phonePart = rawJid.split('@')[0].split(':')[0];
-      const selfJid   = `${phonePart}@s.whatsapp.net`;
-      
+      const selfJid = `${phonePart}@s.whatsapp.net`;
+
       // Enhanced profile name fallback chain
       let displayName = user.name || user.notify || user.verifiedName || user.pushName;
-      
+
       if (!displayName && session.sock.authState?.creds?.me?.name) {
         displayName = session.sock.authState.creds.me.name;
       }
-      
+
       // Try cached contacts
       if (!displayName) {
         displayName = session.contactCache[selfJid] || session.contactCache[rawJid];
       }
-      
+
       // Try to fetch self profile if still no name
       if (!displayName && session.sock) {
         try {
@@ -955,9 +1041,9 @@ async function updateConnectedProfile(sessionId) {
       }
 
       session.connectedProfile = {
-        name:  displayName || `User +${phonePart}`,
+        name: displayName || `User +${phonePart}`,
         phone: phonePart,
-        jid:   rawJid,
+        jid: rawJid,
       };
 
       console.log(`[WA] [${sessionId}] Profile updated: ${session.connectedProfile.name} (+${phonePart})`);

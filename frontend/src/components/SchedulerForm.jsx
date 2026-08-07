@@ -889,7 +889,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
                 <h3 className="font-semibold text-white dark:text-wa-dtext flex items-center gap-1.5 text-base">
                   👥 Contacts Directory
                   <span className="text-xs px-2 py-0.5 bg-white/20 text-white dark:bg-wa-green/20 dark:text-wa-green rounded-full font-bold">
-                    {contactsList.length}
+                    {contactsList.all?.length || 0}
                   </span>
                 </h3>
                 <p className="text-[11px] text-emerald-100/90 dark:text-wa-dmuted mt-0.5">Click a contact to fill the scheduler form</p>
@@ -974,8 +974,9 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
                 </div>
               ) : (
                 filteredContacts.map((c) => {
-                  const contactNameDisplay = c.name || (c.phone?.startsWith('+') ? c.phone : `+${c.phone}`);
-                  const hasName = Boolean(c.name);
+                  // /api/contacts supplies verified name + number pairs only.
+                  const contactNameDisplay = c.name;
+                  const hasName = true;
                   
                   // Simple source pill styling
                   const isVcf = c.source === 'import_vcf';

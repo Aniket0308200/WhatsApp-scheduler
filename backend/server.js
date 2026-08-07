@@ -29,6 +29,24 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+function toVerifiedContact(document) {
+  const jid = document.jid;
+  const phone = db.decrypt(document.encryptedNumberOrJid);
+  const name = db.decrypt(document.encryptedName);
+  const isGroup = document.type === 'group';
+  if (!jid || !phone || !name) return null;
+  if (!isGroup && !db.isValidPersonalContactName(name, phone)) return null;
+  return {
+    phone,
+    jid,
+    name,
+    isGroup,
+    is_group: isGroup ? 1 : 0,
+    type: document.type,
+    source: document.source || 'db'
+  };
+}
+
 // ─── Session ID Validation Middleware ─────────────────────────────────────────
 app.use((req, res, next) => {
   const sessionId = req.headers['x-session-id'] || req.query.sessionId;
@@ -112,23 +130,11 @@ app.get('/api/contacts/search', async (req, res) => {
 
   try {
     const contacts = await Contact.find({ sessionId: req.sessionId }).lean();
-    
-    const decrypted = contacts.map(c => {
-      const isGroup = c.type === 'group';
-      
-      return {
-        phone: c.phone,
-        jid: c.jid,
-        name: c.name || null,
-        isGroup,
-        is_group: isGroup ? 1 : 0,
-        source: c.source || 'db'
-      };
-    });
+    const decrypted = contacts.map(toVerifiedContact).filter(Boolean);
 
     const filtered = decrypted.filter(c => {
       const matchesName = c.name && c.name.toLowerCase().includes(q.toLowerCase());
-      const matchesPhone = c.phone && c.phone.includes(q);
+      const matchesPhone = c.phone && c.phone.includes(q.replace(/\D/g, ''));
       return matchesName || matchesPhone;
     });
 
@@ -187,20 +193,7 @@ app.post('/api/contacts/import', express.raw({ type: ['text/*', 'application/oct
 app.get('/api/contacts', async (req, res) => {
   try {
     const contacts = await Contact.find({ sessionId: req.sessionId }).lean();
-    
-    const decrypted = contacts.map(c => {
-      const isGroup = c.type === 'group';
-      
-      return {
-        phone: c.phone,
-        jid: c.jid,
-        name: c.name || null,
-        isGroup,
-        is_group: isGroup ? 1 : 0,
-        type: c.type,
-        source: c.source || 'db'
-      };
-    });
+    const decrypted = contacts.map(toVerifiedContact).filter(Boolean);
 
     decrypted.sort((a, b) => {
       const aName = a.name || '';
