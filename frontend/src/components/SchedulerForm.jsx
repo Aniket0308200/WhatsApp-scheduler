@@ -974,22 +974,22 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
                 </div>
               ) : (
                 filteredContacts.map((c) => {
-                  // /api/contacts supplies verified name + number pairs only.
-                  const contactNameDisplay = c.name;
-                  const hasName = true;
+                  const isGroup = Boolean(c.type === 'group' || c.isGroup || c.is_group || String(c.phone || '').endsWith('@g.us'));
+                  const contactNameDisplay = c.name || (isGroup ? c.phone : `+${c.phone}`);
+                  const hasName = Boolean(c.name);
                   
                   // Simple source pill styling
                   const isVcf = c.source === 'import_vcf';
                   const isCsv = c.source === 'import_csv';
-                  const isLive = c.source === 'live_lookup';
-                  const isGroup = c.source === 'group_sync';
+                  const isLive = c.source === 'live_lookup' || c.source === 'whatsapp';
+                  const isGroupSource = c.source === 'group_sync' || isGroup;
                   const badgeCls = isVcf
                     ? 'bg-blue-50 dark:bg-blue-950/20 text-blue-600 border border-blue-100/50'
                     : isCsv
                     ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 border border-indigo-100/50'
                     : isLive
                     ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 border border-emerald-100/50'
-                    : isGroup
+                    : isGroupSource
                     ? 'bg-purple-50 dark:bg-purple-950/20 text-purple-600 border border-purple-100/50'
                     : 'bg-slate-50 dark:bg-wa-dsurf text-gray-600';
                   
@@ -999,7 +999,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
                     ? 'CSV Import'
                     : isLive
                     ? 'WhatsApp Live'
-                    : isGroup
+                    : isGroupSource
                     ? 'Group Sync'
                     : c.source || 'WhatsApp';
                   
@@ -1020,7 +1020,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
                             {contactNameDisplay}
                           </p>
                           <p className="text-xs text-gray-400 dark:text-wa-dmuted font-mono truncate">
-                            {c.phone.endsWith('@g.us') ? c.phone : `+${c.phone}`}
+                            {String(c.phone || '').endsWith('@g.us') ? c.phone : `+${c.phone}`}
                           </p>
                         </div>
                       </div>
