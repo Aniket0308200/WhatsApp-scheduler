@@ -56,6 +56,7 @@ const ContactSchema = new mongoose.Schema({
   encryptedName: { type: String, default: '' },
   type: { type: String, enum: ['personal', 'group'], required: true },
   source: { type: String, default: 'whatsapp_sync' },
+  linkedEmail: { type: String, default: null },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -64,6 +65,16 @@ ContactSchema.index({ sessionId: 1, jid: 1 }, { unique: true });
 ContactSchema.index({ sessionId: 1, type: 1 });
 
 const Contact = mongoose.model('Contact', ContactSchema);
+
+// ─── LinkedGoogleAccount Model ────────────────────────────────────────────────
+const LinkedGoogleAccountSchema = new mongoose.Schema({
+  sessionId: { type: String, required: true },
+  email: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+LinkedGoogleAccountSchema.index({ sessionId: 1, email: 1 }, { unique: true });
+
+const LinkedGoogleAccount = mongoose.model('LinkedGoogleAccount', LinkedGoogleAccountSchema);
 
 // ─── AuthSession Model ───────────────────────────────────────────────────────
 const AuthSessionSchema = new mongoose.Schema({
@@ -290,6 +301,7 @@ module.exports = {
   Contact,
   ScheduledMessage,
   AuthSession,
+  LinkedGoogleAccount,
   encrypt,
   decrypt,
   insertMessage,

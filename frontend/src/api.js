@@ -25,6 +25,7 @@ export const api = axios.create({
 export const fetchStatus        = ()       => api.get('/status').then(r => r.data);
 export const requestPairingCode = (phone)  => api.post('/pairing-code', { phone }).then(r => r.data);
 export const logout             = ()       => api.post('/logout').then(r => r.data);
+export const syncGroups         = ()       => api.post('/contacts/sync-groups').then(r => r.data);
 
 /** Look up a contact's display name. Returns { name, exists } */
 export const fetchContactName = (phone) =>
@@ -46,6 +47,13 @@ export const importContacts = (file) =>
   api.post('/contacts/import', file, {
     headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-File-Name': file.name },
   }).then(r => r.data);
+
+// ─── Google Contacts ─────────────────────────────────────────────────────────
+export const fetchGoogleAuthUrl = () =>
+  api.get(`/auth/google/url?sessionId=${sessionId}`).then(r => r.data);
+
+export const fetchLinkedGoogleAccounts = () =>
+  api.get('/auth/google/linked').then(r => r.data);
 
 // ─── Messages ────────────────────────────────────────────────────────────────
 export const fetchMessages   = ()        => api.get('/messages').then(r => r.data);

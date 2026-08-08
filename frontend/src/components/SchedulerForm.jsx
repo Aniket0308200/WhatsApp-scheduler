@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { format, addMinutes } from 'date-fns';
-import { scheduleMessage, fetchContactName, resolveContactLive, searchContacts, importContacts, fetchAllContacts } from '../api';
+import { scheduleMessage, fetchContactName, resolveContactLive, searchContacts, importContacts, fetchAllContacts, fetchGoogleAuthUrl, fetchLinkedGoogleAccounts, syncGroups } from '../api';
 
 // ─── Complete country-code list ───────────────────────────────────────────────
 // ─── Complete country-code list ───────────────────────────────────────────────
@@ -317,8 +317,10 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
   const [showDirectory,   setShowDirectory]   = useState(false);
   const [contactsList,    setContactsList]    = useState({ all: [], personal: [], groups: [] });
   const [loadingContacts, setLoadingContacts] = useState(false);
+  const [manualSyncing,   setManualSyncing]   = useState(false);
   const [directorySearch, setDirectorySearch] = useState('');
   const [directoryTab,    setDirectoryTab]    = useState('all');
+  const [linkedEmails,    setLinkedEmails]    = useState([]);
 
   const loadContactsList = useCallback(async () => {
     if (!isConnected) return;
@@ -333,9 +335,65 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
     }
   }, [isConnected]);
 
+  const loadLinkedGoogleAccounts = useCallback(async () => {
+    if (!isConnected) return;
+    try {
+      const data = await fetchLinkedGoogleAccounts();
+      setLinkedEmails(data.linkedEmails || []);
+    } catch (err) {
+      console.error('Failed to load linked Google accounts:', err);
+    }
+  }, [isConnected]);
+
+  const handleGoogleSync = async () => {
+    try {
+      const data = await fetchGoogleAuthUrl();
+      const width = 500;
+      const height = 600;
+      const left = window.screen.width / 2 - width / 2;
+      const top = window.screen.height / 2 - height / 2;
+      window.open(
+        data.url,
+        'Google OAuth',
+        `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes,scrollbars=yes`
+      );
+    } catch (err) {
+      toast.error('Failed to initiate Google sync: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const handleSyncGroups = async () => {
+    setManualSyncing(true);
+    const toastId = toast.loading('Syncing groups...');
+    try {
+      await syncGroups();
+      toast.success('Group sync triggered successfully!', { id: toastId });
+      await loadContactsList();
+    } catch (err) {
+      toast.error('Failed to sync groups: ' + (err.response?.data?.error || err.message), { id: toastId });
+    } finally {
+      setManualSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleMessage = (e) => {
+      if (e.data?.type === 'GOOGLE_SYNC_SUCCESS') {
+        toast.success(`Successfully synced ${e.data.count} contacts from ${e.data.email}!`);
+        loadContactsList();
+        loadLinkedGoogleAccounts();
+      } else if (e.data?.type === 'GOOGLE_SYNC_ERROR') {
+        toast.error(`Google Sync Failed: ${e.data.error}`);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [loadContactsList, loadLinkedGoogleAccounts]);
+
   useEffect(() => {
     if (!isConnected) {
       setContactsList({ all: [], personal: [], groups: [] });
+      setLinkedEmails([]);
       return;
     }
 
@@ -343,8 +401,9 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
     // or when the backend reports that initial history sync is complete.
     if (showDirectory || !isSyncing) {
       loadContactsList();
+      loadLinkedGoogleAccounts();
     }
-  }, [isConnected, isSyncing, showDirectory, loadContactsList]);
+  }, [isConnected, isSyncing, showDirectory, loadContactsList, loadLinkedGoogleAccounts]);
 
   // Emoji picker states & refs
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -624,15 +683,10 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
 
         {/* ── Recipient ─────────────────────────────────────────────────── */}
         <div>
-          <div className="mb-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+          <div className="mb-2.5">
             <label className="block text-sm font-medium text-gray-700 dark:text-wa-dtext">
               Recipient Phone Number or Contact Name
             </label>
-            <button type="button" onClick={() => setShowImportModal(true)}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 sm:py-1 text-xs font-semibold text-emerald-500 backdrop-blur-sm transition-colors hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 w-full sm:w-auto shrink-0">
-              <span aria-hidden="true">↑</span>
-              Import Contacts (.vcf / .csv)
-            </button>
           </div>
           <div className="flex gap-2">
             <CountryPicker value={countryCode} onChange={setCountryCode} disabled={phone && phone.endsWith('@g.us')} />
@@ -912,9 +966,86 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
               </div>
             ) : (
               <div className="bg-slate-50 dark:bg-wa-dsurf/30 px-5 py-2.5 border-b border-slate-100 dark:border-wa-dbdr/30 text-xs text-gray-500 dark:text-wa-dmuted">
-                💡 Missing contact names? Syncing depends on your active chat history. Use the <strong>"Import Contacts"</strong> button to upload all names instantly.
+                💡 Missing contact names? Syncing depends on your active chat history. Use the sync buttons below or import a file.
               </div>
             )}
+
+            {/* Google Sync & Import Action Bar */}
+            <div className="p-4 bg-slate-50 dark:bg-wa-dsurf/10 border-b border-slate-100 dark:border-wa-dbdr/30 flex flex-col gap-3">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleGoogleSync}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-white dark:bg-wa-dsurf hover:bg-slate-50 dark:hover:bg-wa-dbdr/50 border border-slate-200 dark:border-wa-dbdr px-2 py-2 rounded-xl text-xs font-semibold text-gray-700 dark:text-wa-dtext shadow-sm transition-all"
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+                    <path
+                      fill="#EA4335"
+                      d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.355 0 3.39 2.673 1.473 6.564l3.793 3.201z"
+                    />
+                    <path
+                      fill="#4285F4"
+                      d="M23.49 12.275c0-.827-.074-1.624-.21-2.395H12v4.51h6.46c-.279 1.481-1.116 2.733-2.37 3.582l3.69 2.861c2.16-1.993 3.71-4.916 3.71-8.558z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.266 14.235L1.473 17.44C3.39 21.327 7.355 24 12 24c3.055 0 5.782-1.01 7.782-2.736l-3.69-2.861c-1.108.74-2.527 1.182-4.092 1.182-4.136 0-7.627-2.79-8.877-6.545-.078-.235-.138-.477-.184-.725l.027.02z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 4.909c2.455 0 4.218 1.055 5.164 1.945l3.855-3.855C18.673 1.018 15.655 0 12 0 7.355 0 3.39 2.673 1.473 6.564l3.793 3.201C6.518 6.018 9.073 4.909 12 4.909z"
+                    />
+                  </svg>
+                  Sync Google
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowImportModal(true)}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-wa-teal hover:bg-wa-teal/90 text-white px-2 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all"
+                >
+                  <span>📥</span> Import CSV/VCF
+                </button>
+              </div>
+
+              <div className="group relative w-full">
+                <button
+                  type="button"
+                  disabled={manualSyncing || isSyncing}
+                  onClick={handleSyncGroups}
+                  className="w-full flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/50 text-white px-3 py-2.5 rounded-xl text-xs font-semibold shadow-sm transition-all focus:outline-none"
+                >
+                  {manualSyncing ? (
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                  ) : (
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                    </svg>
+                  )}
+                  {manualSyncing ? 'Syncing Groups...' : 'Sync Groups'}
+                </button>
+                {/* Tooltip */}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-64 p-2 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl text-center z-50 pointer-events-none border border-slate-700">
+                  Note: Group sync takes up to 30 seconds. Screen may briefly refresh during sync.
+                </div>
+              </div>
+
+              {/* Linked Accounts List */}
+              {linkedEmails.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  <span className="text-[10px] text-gray-500 dark:text-wa-dmuted font-semibold">Linked:</span>
+                  {linkedEmails.map(email => (
+                    <span key={email} className="inline-flex items-center gap-1 text-[10px] bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 font-semibold px-2 py-0.5 rounded-full border border-emerald-100/50">
+                      <span>📧</span> {email}
+                    </span>
+                  ))}
+                  <span className="text-[9px] text-gray-400 dark:text-wa-dmuted font-normal">({linkedEmails.length}/2 Max)</span>
+                </div>
+              ) : (
+                <div className="text-[10px] text-gray-400 dark:text-wa-dmuted font-medium italic">
+                  No Gmail account linked yet (Max 2).
+                </div>
+              )}
+            </div>
             
             {/* Search Input */}
             <div className="p-4 pb-2 bg-slate-50/20 dark:bg-transparent">

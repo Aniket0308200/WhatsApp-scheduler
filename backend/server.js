@@ -51,7 +51,7 @@ function toVerifiedContact(document) {
 app.use((req, res, next) => {
   const sessionId = req.headers['x-session-id'] || req.query.sessionId;
   if (!sessionId && req.path.startsWith('/api')) {
-    if (req.path === '/api/status') {
+    if (req.path === '/api/status' || req.path === '/api/auth/google/callback') {
       return next();
     }
     return res.status(400).json({ error: 'X-Session-ID header is required.' });
@@ -59,6 +59,10 @@ app.use((req, res, next) => {
   req.sessionId = sessionId;
   next();
 });
+
+// ─── Google OAuth & Contacts Sync Routes ──────────────────────────────────────
+const googleContactsRouter = require('./routes/googleContacts');
+app.use('/api/auth/google', googleContactsRouter);
 
 // ─── WhatsApp status ──────────────────────────────────────────────────────────
 
@@ -193,7 +197,7 @@ app.post('/api/contacts/import', express.raw({ type: ['text/*', 'application/oct
 app.get('/api/contacts', async (req, res) => {
   try {
     const contacts = await Contact.find({ sessionId: req.sessionId }).lean();
-    const decrypted = contacts.map(toVerifiedContact).filter(Boolean);
+    const decrypted = (contacts || []).map(toVerifiedContact).filter(Boolean);
 
     decrypted.sort((a, b) => {
       const aName = a.name || '';
@@ -212,6 +216,23 @@ app.get('/api/contacts', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+/**
+ * POST /api/contacts/sync-groups
+ * Triggers a one-time manually initiated group sync.
+ */
+app.post('/api/contacts/sync-groups', async (req, res) => {
+  try {
+    if (whatsapp.getStatus(req.sessionId) !== 'connected') {
+      return res.status(400).json({ error: 'WhatsApp must be connected to sync groups.' });
+    }
+    await whatsapp.syncGroups(req.sessionId);
+    res.json({ success: true, isSyncing: whatsapp.getSyncStatus(req.sessionId) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 /**
  * POST /api/contacts/resolve

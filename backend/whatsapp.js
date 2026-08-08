@@ -34,6 +34,10 @@ if (!fs.existsSync(SESSIONS_ROOT)) {
 // In-memory sessions store: sessionId -> SessionObject
 const sessions = new Map();
 
+// Temporary toggle flag to disable personal contact sync.
+// Set to true to re-enable syncing of personal contacts (@s.whatsapp.net).
+const ENABLE_PERSONAL_CONTACT_SYNC = false;
+
 let messageStatusListener = null;
 const logger = pino({ level: 'silent' });
 
@@ -185,9 +189,6 @@ function queueContactForSync(session, contact) {
 
   if (!hasValidName) {
     session.contactCache[jid] = session.contactCache[jid] || '';
-    if (!isGroup) {
-      schedulePersonalNameResolution(session, jid, phone);
-    }
     return;
   }
 
@@ -212,48 +213,6 @@ function queueContactForSync(session, contact) {
   }
 }
 
-async function schedulePersonalNameResolution(session, jid, phone) {
-  if (!session || !session.sock || session.pendingContactResolutions.has(jid)) return;
-  session.pendingContactResolutions.add(jid);
-
-  try {
-    const results = await session.sock.onWhatsApp(jid).catch(() => []);
-    const found = Array.isArray(results) ? results.find(r => r.exists && r.jid) : results;
-    if (!found) return;
-
-    let name = null;
-    const businessProfile = await session.sock.getBusinessProfile(jid).catch(() => null);
-    if (businessProfile) {
-      name = businessProfile.name || businessProfile.verifiedName || businessProfile.description || null;
-    }
-
-    if (!name) {
-      const presence = await session.sock.presenceSubscribe(jid).catch(() => null);
-      if (presence?.name) {
-        name = presence.name;
-      }
-    }
-
-    if (!name && found.pushName) {
-      name = found.pushName;
-    }
-
-    const cleanName = db.getCleanContactName(name);
-    if (!db.isValidPersonalContactName(cleanName, phone)) return;
-
-    queueVerifiedContact(session, {
-      phone,
-      jid,
-      name: cleanName,
-      type: 'personal',
-      source: 'live_resolution'
-    });
-  } catch (err) {
-    console.error(`[WA] [${session.sessionId}] Personal name resolution failed for ${jid}:`, err.message);
-  } finally {
-    session.pendingContactResolutions.delete(jid);
-  }
-}
 
 function queueVerifiedContact(session, contact) {
   if (!session.contactsBuffer) {
@@ -495,9 +454,6 @@ async function resolveContactLive(sessionId, phone) {
       session.contactCache[jid] = storedName;
       const valid = isGroup || db.isValidPersonalContactName(storedName, cleaned);
       if (!valid) {
-        if (!isGroup) {
-          schedulePersonalNameResolution(session, jid, cleaned);
-        }
         return { exists: false, name: null, jid, isGroup, source: 'database' };
       }
       return { exists: true, name: storedName, jid: dbContact.jid || jid, isGroup, source: 'database' };
@@ -722,9 +678,6 @@ async function initWhatsApp(sessionId) {
       session.pairingCode = null;
       session.isSyncing = true;
 
-      // Clean-slate fresh sync for the current session
-      await db.purgeSessionData(sessionId);
-      session.contactCache = {};
       if (session.contactsBuffer) {
         session.contactsBuffer.clear();
       }
@@ -732,18 +685,9 @@ async function initWhatsApp(sessionId) {
         session.pendingContactResolutions.clear();
       }
 
-      // Reset sync status after 60s max to prevent showing "Syncing" forever
-      setTimeout(() => {
-        if (session) session.isSyncing = false;
-      }, 60000);
-
-      try {
-        await updateConnectedProfile(sessionId);
-        const currentPhone = session.connectedProfile.phone;
-        console.log(`[WA] [${sessionId}] Connected as: ${session.connectedProfile.name || session.connectedProfile.phone} (+${currentPhone})`);
-
-        // Fetch all participating groups upon connection
+      const groupSyncPromise = (async () => {
         try {
+          console.log(`[WA] [${sessionId}] Fetching groups for single-pass sync...`);
           const groups = await sock.groupFetchAllParticipating().catch(() => ({}));
           const groupContacts = [];
           for (const [id, metadata] of Object.entries(groups)) {
@@ -752,18 +696,37 @@ async function initWhatsApp(sessionId) {
               groupContacts.push({
                 id,
                 name: subject.trim(),
-                isGroup: true
+                isGroup: true,
+                source: 'group_sync'
               });
             }
           }
           if (groupContacts.length > 0) {
             console.log(`[WA] [${sessionId}] Syncing ${groupContacts.length} groups on connection.`);
             cacheContacts(session, groupContacts);
+            await flushContactsBuffer(session);
           }
         } catch (groupErr) {
           console.error(`[WA] [${sessionId}] Failed to sync groups on connection:`, groupErr.message);
         }
+      })();
 
+      const timeoutPromise = new Promise((resolve) => {
+        setTimeout(() => {
+          console.warn(`[WA] [${sessionId}] Group sync timed out after 30s safety abort.`);
+          resolve();
+        }, 30000);
+      });
+
+      Promise.race([groupSyncPromise, timeoutPromise]).finally(() => {
+        console.log(`[WA] [${sessionId}] Group sync finished or aborted. Halting background sync.`);
+        session.isSyncing = false;
+      });
+
+      try {
+        await updateConnectedProfile(sessionId);
+        const currentPhone = session.connectedProfile.phone;
+        console.log(`[WA] [${sessionId}] Connected as: ${session.connectedProfile.name || session.connectedProfile.phone} (+${currentPhone})`);
       } catch (err) {
         console.error(`[WA] [${sessionId}] Could not read connected profile:`, err.message);
       }
@@ -779,10 +742,9 @@ async function initWhatsApp(sessionId) {
       const { loggedOut, connectionReplaced, multideviceMismatch, timedOut } = DisconnectReason;
 
       if (code === loggedOut) {
-        console.log(`[WA] [${sessionId}] Logged out — clearing session.`);
-        await clearSession(sessionId);
+        console.log(`[WA] [${sessionId}] Disconnected (loggedOut) — preserving credentials and retrying in 5 seconds.`);
         session.status = 'disconnected';
-        session.reconnectTimer = setTimeout(() => initWhatsApp(sessionId), 3_000);
+        session.reconnectTimer = setTimeout(() => initWhatsApp(sessionId), 5_000);
       } else if (code === connectionReplaced) {
         // A 440 means another process/device has temporarily taken over this
         // exact linked-device session. Do not delete auth/contact files here:
@@ -794,11 +756,10 @@ async function initWhatsApp(sessionId) {
       } else if (code === multideviceMismatch) {
         // This is a genuine credential mismatch; data remains in the
         // phone-keyed database even though a new pairing will be required.
-        console.log(`[WA] [${sessionId}] Multi-device mismatch — resetting credentials.`);
-        await clearSession(sessionId);
+        console.log(`[WA] [${sessionId}] Connection closed with multideviceMismatch. Preserving session for retry.`);
         session.status = 'disconnected';
         session.isSyncing = false;
-        session.reconnectTimer = setTimeout(() => initWhatsApp(sessionId), 3_000);
+        session.reconnectTimer = setTimeout(() => initWhatsApp(sessionId), 5_000);
       } else if (code === timedOut || code === 408) {
         // Handle timeout more gracefully - don't reconnect too aggressively
         session.status = 'disconnected';
@@ -814,7 +775,13 @@ async function initWhatsApp(sessionId) {
 
   // ── Contacts update — populate name cache ────────────────────────────────
   sock.ev.on('contacts.update', (contacts) => {
-    const contactsList = Array.isArray(contacts) ? contacts : (contacts?.contacts || []);
+    let contactsList = Array.isArray(contacts) ? contacts : (contacts?.contacts || []);
+    if (!ENABLE_PERSONAL_CONTACT_SYNC) {
+      contactsList = contactsList.filter(c => {
+        const jid = c?.id || c?.jid;
+        return !jid || !jid.endsWith('@s.whatsapp.net');
+      });
+    }
     console.log(`[WA] [${sessionId}] contacts.update event: ${contactsList.length} contacts`);
     for (const c of contactsList) {
       if (!c) continue;
@@ -825,7 +792,13 @@ async function initWhatsApp(sessionId) {
   });
 
   sock.ev.on('contacts.upsert', (contacts) => {
-    const contactsList = Array.isArray(contacts) ? contacts : (contacts?.contacts || []);
+    let contactsList = Array.isArray(contacts) ? contacts : (contacts?.contacts || []);
+    if (!ENABLE_PERSONAL_CONTACT_SYNC) {
+      contactsList = contactsList.filter(c => {
+        const jid = c?.id || c?.jid;
+        return !jid || !jid.endsWith('@s.whatsapp.net');
+      });
+    }
     console.log(`[WA] [${sessionId}] contacts.upsert event: ${contactsList.length} contacts`);
     for (const c of contactsList) {
       if (!c) continue;
@@ -836,7 +809,13 @@ async function initWhatsApp(sessionId) {
   });
 
   sock.ev.on('contacts.set', (payload) => {
-    const contactsList = Array.isArray(payload) ? payload : (payload?.contacts || []);
+    let contactsList = Array.isArray(payload) ? payload : (payload?.contacts || []);
+    if (!ENABLE_PERSONAL_CONTACT_SYNC) {
+      contactsList = contactsList.filter(c => {
+        const jid = c?.id || c?.jid;
+        return !jid || !jid.endsWith('@s.whatsapp.net');
+      });
+    }
     console.log(`[WA] [${sessionId}] contacts.set event: ${contactsList.length} contacts`);
     for (const c of contactsList) {
       if (!c) continue;
@@ -866,8 +845,20 @@ async function initWhatsApp(sessionId) {
 
   sock.ev.on('messaging-history.set', (payload) => {
     const chats = payload?.chats || [];
-    const contacts = payload?.contacts || [];
-    const messages = payload?.messages || [];
+    let contacts = payload?.contacts || [];
+    let messages = payload?.messages || [];
+    
+    if (!ENABLE_PERSONAL_CONTACT_SYNC) {
+      contacts = contacts.filter(c => {
+        const jid = c?.id || c?.jid;
+        return !jid || !jid.endsWith('@s.whatsapp.net');
+      });
+      messages = messages.filter(m => {
+        const remoteJid = m?.key?.remoteJid;
+        return !remoteJid || !remoteJid.endsWith('@s.whatsapp.net');
+      });
+    }
+
     console.log(`[WA] [${sessionId}] messaging-history.set: ${chats.length} chats, ${contacts.length} contacts, ${messages.length} messages`);
     session.isSyncing = false; // Syncing finished!
     if (chats.length > 0) processIncomingChats(session, chats);
@@ -877,7 +868,14 @@ async function initWhatsApp(sessionId) {
   });
 
   sock.ev.on('messages.upsert', ({ messages }) => {
-    cacheMessages(session, messages);
+    let filteredMessages = messages || [];
+    if (!ENABLE_PERSONAL_CONTACT_SYNC) {
+      filteredMessages = filteredMessages.filter(m => {
+        const remoteJid = m?.key?.remoteJid;
+        return !remoteJid || !remoteJid.endsWith('@s.whatsapp.net');
+      });
+    }
+    cacheMessages(session, filteredMessages);
   });
 
   sock.ev.on('groups.upsert', (groups) => {
@@ -1174,6 +1172,54 @@ function getAllActiveSessions() {
 
 function setMessageStatusListener(listener) { messageStatusListener = listener; }
 
+async function syncGroups(sessionId) {
+  const session = sessions.get(sessionId);
+  if (!session || session.status !== 'connected' || !session.sock) {
+    throw new Error('WhatsApp is not connected.');
+  }
+
+  session.isSyncing = true;
+  
+  const groupSyncPromise = (async () => {
+    try {
+      console.log(`[WA] [${sessionId}] Starting manual group sync...`);
+      const groups = await session.sock.groupFetchAllParticipating();
+      const groupContacts = [];
+      for (const [id, metadata] of Object.entries(groups)) {
+        const subject = metadata.subject || metadata.name || '';
+        if (subject) {
+          groupContacts.push({
+            id,
+            name: subject.trim(),
+            isGroup: true,
+            source: 'manual_group_sync'
+          });
+        }
+      }
+      if (groupContacts.length > 0) {
+        console.log(`[WA] [${sessionId}] Manually syncing ${groupContacts.length} groups.`);
+        cacheContacts(session, groupContacts);
+        await flushContactsBuffer(session);
+      }
+    } catch (err) {
+      console.error(`[WA] [${sessionId}] Manual group sync error:`, err.message);
+      throw err;
+    }
+  })();
+
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error('Group sync timed out after 30 seconds.'));
+    }, 30000);
+  });
+
+  try {
+    await Promise.race([groupSyncPromise, timeoutPromise]);
+  } finally {
+    session.isSyncing = false;
+  }
+}
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -1200,4 +1246,5 @@ module.exports = {
   getSyncStatus,
   searchContactsSync,
   importContactsToCache,
+  syncGroups,
 };
