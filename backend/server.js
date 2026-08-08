@@ -47,11 +47,16 @@ function toVerifiedContact(document) {
   };
 }
 
+// ─── Keep-alive health route ──────────────────────────────────────────────────
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', message: 'Server is awake' });
+});
+
 // ─── Session ID Validation Middleware ─────────────────────────────────────────
 app.use((req, res, next) => {
   const sessionId = req.headers['x-session-id'] || req.query.sessionId;
   if (!sessionId && req.path.startsWith('/api')) {
-    if (req.path === '/api/status' || req.path === '/api/auth/google/callback') {
+    if (req.path === '/api/status' || req.path === '/api/auth/google/callback' || req.path === '/api/health') {
       return next();
     }
     return res.status(400).json({ error: 'X-Session-ID header is required.' });

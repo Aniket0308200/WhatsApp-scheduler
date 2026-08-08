@@ -632,7 +632,7 @@ async function initWhatsApp(sessionId) {
     browser: Browsers.ubuntu('Chrome'),
     syncFullHistory: true,
     generateHighQualityLinkPreview: false,
-    keepAliveIntervalMs: 60_000,
+    keepAliveIntervalMs: 25_000,
     retryRequestDelayMs: 5_000,
     connectTimeoutMs: 60_000,
     defaultQueryTimeoutMs: 0,
