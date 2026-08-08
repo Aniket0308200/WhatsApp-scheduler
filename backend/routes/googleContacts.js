@@ -73,8 +73,9 @@ router.get('/callback', async (req, res) => {
     }
 
     // Check linked accounts limit (max 2 per session)
+    const encryptedEmail = db.encrypt(email);
     const count = await db.LinkedGoogleAccount.countDocuments({ sessionId });
-    const exists = await db.LinkedGoogleAccount.findOne({ sessionId, email });
+    const exists = await db.LinkedGoogleAccount.findOne({ sessionId, email: encryptedEmail });
 
     if (!exists && count >= 2) {
       return res.send(`
@@ -93,7 +94,7 @@ router.get('/callback', async (req, res) => {
 
     // Save linked email if it is new
     if (!exists) {
-      await db.LinkedGoogleAccount.create({ sessionId, email });
+      await db.LinkedGoogleAccount.create({ sessionId, email: encryptedEmail });
     }
 
     // Fetch contacts using People API
@@ -143,7 +144,7 @@ router.get('/callback', async (req, res) => {
                 encryptedName,
                 type: 'personal',
                 source: 'google_contacts',
-                linkedEmail: email,
+                linkedEmail: encryptedEmail,
                 createdAt: new Date()
               }
             },
@@ -196,7 +197,34 @@ router.get('/linked', async (req, res) => {
 
   try {
     const accounts = await db.LinkedGoogleAccount.find({ sessionId }).lean();
-    res.json({ linkedEmails: accounts.map(a => a.email) });
+    res.json({ linkedEmails: accounts.map(a => db.decrypt(a.email)) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/auth/google/account
+router.delete('/account', async (req, res) => {
+  const sessionId = req.sessionId;
+  const { email } = req.body;
+
+  if (!sessionId) {
+    return res.status(400).json({ error: 'sessionId is required.' });
+  }
+  if (!email) {
+    return res.status(400).json({ error: 'email is required.' });
+  }
+
+  try {
+    const encryptedEmail = db.encrypt(email);
+    // 1. Delete linked email metadata
+    await db.LinkedGoogleAccount.deleteOne({ sessionId, email: encryptedEmail });
+
+    // 2. Remove unsynced contacts from this Google account
+    const result = await db.Contact.deleteMany({ sessionId, linkedEmail: encryptedEmail });
+    
+    console.log(`[Google Disconnect] [${sessionId}] Disconnected ${email}. Removed ${result.deletedCount} contacts.`);
+    res.json({ success: true, removedCount: result.deletedCount });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

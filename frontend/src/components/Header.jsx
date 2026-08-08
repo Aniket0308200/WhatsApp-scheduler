@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
-import { logout } from '../api';
+import { logout, updateProfileName } from '../api';
 import { useTheme } from '../ThemeContext';
 
 const STATUS_CONFIG = {
@@ -41,6 +41,28 @@ const LogoutIcon = () => (
 export default function Header({ status, profile, onLogout, isSyncing }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [syncTimerExceeded, setSyncTimerExceeded] = React.useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editedName, setEditedName] = useState(profile?.name || '');
+
+  React.useEffect(() => {
+    setEditedName(profile?.name || '');
+  }, [profile]);
+
+  const handleSaveName = async () => {
+    const clean = editedName.trim();
+    if (!clean) {
+      toast.error('Name cannot be empty.');
+      return;
+    }
+    try {
+      await updateProfileName(clean);
+      toast.success('Profile name updated!');
+      setEditing(false);
+      onLogout?.();
+    } catch (err) {
+      toast.error('Failed to update name: ' + (err.response?.data?.error || err.message));
+    }
+  };
   
   React.useEffect(() => {
     if (status === 'connected' && isSyncing) {
@@ -110,20 +132,50 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
         </div>
 
         {/* ── Connected profile pill (desktop) ─────────────────────────── */}
-        {isConnected && displayName && (
+        {/* ── Connected profile pill (desktop) ─────────────────────────── */}
+        {isConnected && (
           <div className="hidden sm:flex items-center gap-2.5 bg-white/10 dark:bg-wa-dsurf border border-white/10 dark:border-wa-dbdr rounded-xl px-3 py-1.5 min-w-0 flex-1 max-w-[260px]">
             {/* Avatar */}
             <div className="w-8 h-8 rounded-full bg-wa-green flex-shrink-0 flex items-center justify-center text-slate-100 font-bold text-sm shadow-sm">
               {avatarLetter}
             </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-100 truncate leading-tight">
-                {displayName}
-              </p>
-              {showPhoneSubtitle && (
-                <p className="text-[11px] text-green-300 dark:text-wa-dmuted leading-tight font-mono">
-                  +{cleanPhone}
-                </p>
+            <div className="min-w-0 flex-1 flex items-center gap-1.5">
+              {editing ? (
+                <div className="flex items-center gap-1 w-full min-w-0">
+                  <input
+                    type="text"
+                    value={editedName}
+                    onChange={(e) => setEditedName(e.target.value)}
+                    className="w-full text-xs bg-slate-800 dark:bg-wa-dsurf border border-wa-teal rounded-md px-1.5 py-0.5 text-slate-100 focus:outline-none"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveName();
+                      if (e.key === 'Escape') setEditing(false);
+                    }}
+                    autoFocus
+                  />
+                  <button onClick={handleSaveName} className="text-green-400 hover:text-green-300 text-xs font-semibold px-1 shrink-0">✓</button>
+                  <button onClick={() => setEditing(false)} className="text-red-400 hover:text-red-300 text-xs font-semibold px-1 shrink-0">✕</button>
+                </div>
+              ) : (
+                <div className="min-w-0 flex-1 group/name flex items-center gap-1">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-100 truncate leading-tight">
+                      {displayName || 'No Name'}
+                    </p>
+                    {showPhoneSubtitle && (
+                      <p className="text-[11px] text-green-300 dark:text-wa-dmuted leading-tight font-mono">
+                        +{cleanPhone}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => { setEditing(true); setEditedName(displayName || ''); }}
+                    className="p-1 text-slate-300 hover:text-slate-100 opacity-0 group-hover/name:opacity-100 transition-opacity shrink-0 text-xs"
+                    title="Edit profile name"
+                  >
+                    ✏️
+                  </button>
+                </div>
               )}
             </div>
             {/* Online indicator */}
@@ -185,15 +237,44 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
       </div>
 
       {/* ── Mobile profile strip ─────────────────────────────────────────── */}
-      {isConnected && displayName && (
+      {isConnected && (
         <div className="sm:hidden bg-black/20 dark:bg-wa-dsurf/60 px-4 py-1.5 flex items-center gap-2 border-t border-black/10 dark:border-wa-dbdr">
           <div className="w-5 h-5 rounded-full bg-wa-green flex items-center justify-center text-slate-100 font-bold text-[10px] flex-shrink-0">
             {avatarLetter}
           </div>
-          <span className="text-xs text-green-200 dark:text-wa-dmuted truncate">
-            {displayName}{showPhoneSubtitle ? ` · +${cleanPhone}` : ''}
-          </span>
-          <span className="ml-auto flex items-center gap-1 text-[10px] text-green-300 dark:text-green-400">
+          <div className="flex-1 min-w-0 flex items-center gap-1.5">
+            {editing ? (
+              <div className="flex items-center gap-1 w-full min-w-0">
+                <input
+                  type="text"
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value)}
+                  className="w-full text-xs bg-slate-800 dark:bg-wa-dsurf border border-wa-teal rounded-md px-1.5 py-0.5 text-slate-100 focus:outline-none"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveName();
+                    if (e.key === 'Escape') setEditing(false);
+                  }}
+                  autoFocus
+                />
+                <button onClick={handleSaveName} className="text-green-400 hover:text-green-300 text-xs font-semibold px-1 shrink-0 animate-fade-in">✓</button>
+                <button onClick={() => setEditing(false)} className="text-red-400 hover:text-red-300 text-xs font-semibold px-1 shrink-0 animate-fade-in">✕</button>
+              </div>
+            ) : (
+              <div className="min-w-0 flex-1 flex items-center gap-1.5 group/mobname">
+                <span className="text-xs text-green-200 dark:text-wa-dmuted truncate">
+                  {displayName || 'No Name'}{showPhoneSubtitle ? ` · +${cleanPhone}` : ''}
+                </span>
+                <button
+                  onClick={() => { setEditing(true); setEditedName(displayName || ''); }}
+                  className="text-[10px] text-slate-300 opacity-60 hover:opacity-100 shrink-0"
+                  title="Edit profile name"
+                >
+                  ✏️
+                </button>
+              </div>
+            )}
+          </div>
+          <span className="ml-auto flex items-center gap-1 text-[10px] text-green-300 dark:text-green-400 flex-shrink-0">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
             online
           </span>

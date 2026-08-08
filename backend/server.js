@@ -84,11 +84,19 @@ app.get('/api/status', (req, res) => {
     });
   }
 
+  const profile = whatsapp.getConnectedProfile(req.sessionId);
+
   res.json({
     status:      whatsapp.getStatus(req.sessionId),
     qr:          whatsapp.getQR(req.sessionId),
     pairingCode: whatsapp.getPairingCode(req.sessionId),
-    profile:     whatsapp.getConnectedProfile(req.sessionId),
+    profile: {
+      id: req.sessionId,
+      phoneNumber: profile.phone,
+      name: profile.name,
+      phone: profile.phone,
+      jid: profile.jid
+    },
     isSyncing:   whatsapp.getSyncStatus(req.sessionId),
   });
 });
@@ -105,6 +113,37 @@ app.post('/api/pairing-code', async (req, res) => {
   try {
     const code = await whatsapp.requestPairingCode(req.sessionId, phone);
     res.json({ code });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PUT /api/user/profile-name
+ * Updates user's profile name in MongoDB and WhatsApp memory cache.
+ */
+app.put('/api/user/profile-name', async (req, res) => {
+  const { name } = req.body;
+  if (name === undefined || name === null) {
+    return res.status(400).json({ error: 'Name is required.' });
+  }
+  const cleanName = name.trim();
+
+  try {
+    const profile = whatsapp.getConnectedProfile(req.sessionId);
+    const phoneNumber = profile ? (profile.phone || 'unknown') : 'unknown';
+
+    // Update in MongoDB
+    await db.User.updateOne(
+      { sessionId: req.sessionId },
+      { $set: { phoneNumber, name: cleanName } },
+      { upsert: true }
+    );
+
+    // Update memory cache
+    whatsapp.updateProfileName(req.sessionId, cleanName);
+
+    res.json({ success: true, name: cleanName });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

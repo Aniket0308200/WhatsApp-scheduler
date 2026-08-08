@@ -76,6 +76,17 @@ LinkedGoogleAccountSchema.index({ sessionId: 1, email: 1 }, { unique: true });
 
 const LinkedGoogleAccount = mongoose.model('LinkedGoogleAccount', LinkedGoogleAccountSchema);
 
+// ─── User Model ──────────────────────────────────────────────────────────────
+const UserSchema = new mongoose.Schema({
+  sessionId: { type: String, required: true },
+  phoneNumber: { type: String, required: true },
+  name: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now }
+});
+UserSchema.index({ sessionId: 1 }, { unique: true });
+
+const User = mongoose.model('User', UserSchema);
+
 // ─── AuthSession Model ───────────────────────────────────────────────────────
 const AuthSessionSchema = new mongoose.Schema({
   sessionId: { type: String, required: true },
@@ -214,17 +225,36 @@ async function insertMessage(sessionId, phone, message, scheduledAt, recipientNa
 
 async function getAllMessages(sessionId) {
   const docs = await ScheduledMessage.find({ sessionId }).sort({ createdAt: -1 }).lean();
-  return docs.map(m => ({
-    id: m._id.toString(),
-    phone: decrypt(m.encryptedNumber),
-    recipient_name: decrypt(m.encryptedRecipientName) || null,
-    message: decrypt(m.encryptedMessageText),
-    scheduled_at: toSqliteUtc(m.scheduledAt),
-    status: m.status,
-    error: m.error,
-    wa_message_id: m.waMessageId,
-    created_at: toSqliteUtc(m.createdAt)
-  }));
+  
+  // Fetch contacts for the session to resolve names dynamically
+  const contacts = await Contact.find({ sessionId }).lean();
+  const contactMap = {};
+  for (const c of contacts) {
+    const decName = decrypt(c.encryptedName);
+    const decPhone = decrypt(c.encryptedNumberOrJid);
+    if (decName && decName !== decPhone && decName !== `+${decPhone}`) {
+      contactMap[decPhone] = decName;
+    }
+  }
+
+  return docs.map(m => {
+    const phone = decrypt(m.encryptedNumber);
+    let name = decrypt(m.encryptedRecipientName) || null;
+    if (!name || name === phone || name === `+${phone}`) {
+      name = contactMap[phone] || null;
+    }
+    return {
+      id: m._id.toString(),
+      phone,
+      recipient_name: name,
+      message: decrypt(m.encryptedMessageText),
+      scheduled_at: toSqliteUtc(m.scheduledAt),
+      status: m.status,
+      error: m.error,
+      wa_message_id: m.waMessageId,
+      created_at: toSqliteUtc(m.createdAt)
+    };
+  });
 }
 
 async function getPendingDueMessages() {
@@ -288,9 +318,7 @@ async function purgeSessionData(sessionId) {
   try {
     await Contact.deleteMany({ sessionId });
     await ScheduledMessage.deleteMany({ sessionId });
-    if (mongoose.models.User) {
-      await mongoose.models.User.deleteMany({ sessionId });
-    }
+    await User.deleteMany({ sessionId });
     console.log(`[DB] Purged session data for ${sessionId}.`);
   } catch (err) {
     console.error(`[DB] Error purging session data for ${sessionId}:`, err.message);
@@ -298,6 +326,7 @@ async function purgeSessionData(sessionId) {
 }
 
 module.exports = {
+  User,
   Contact,
   ScheduledMessage,
   AuthSession,

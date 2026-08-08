@@ -26,6 +26,8 @@ export const fetchStatus        = ()       => api.get('/status').then(r => r.dat
 export const requestPairingCode = (phone)  => api.post('/pairing-code', { phone }).then(r => r.data);
 export const logout             = ()       => api.post('/logout').then(r => r.data);
 export const syncGroups         = ()       => api.post('/contacts/sync-groups').then(r => r.data);
+export const updateProfileName  = (name)   => api.put('/user/profile-name', { name }).then(r => r.data);
+export const deleteGoogleAccount = (email) => api.delete('/auth/google/account', { data: { email } }).then(r => r.data);
 
 /** Look up a contact's display name. Returns { name, exists } */
 export const fetchContactName = (phone) =>

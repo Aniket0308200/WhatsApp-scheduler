@@ -1128,6 +1128,22 @@ async function updateConnectedProfile(sessionId) {
         }
       }
 
+      // Load/save from MongoDB User document
+      try {
+        const userDoc = await db.User.findOne({ sessionId });
+        if (userDoc && userDoc.name) {
+          displayName = userDoc.name;
+        } else if (displayName) {
+          await db.User.updateOne(
+            { sessionId },
+            { $set: { phoneNumber: phonePart, name: displayName } },
+            { upsert: true }
+          );
+        }
+      } catch (dbErr) {
+        console.error(`[WA] [${sessionId}] User DB load/save error:`, dbErr.message);
+      }
+
       session.connectedProfile = {
         name: displayName || `User +${phonePart}`,
         phone: phonePart,
@@ -1220,6 +1236,13 @@ async function syncGroups(sessionId) {
   }
 }
 
+function updateProfileName(sessionId, name) {
+  const session = sessions.get(sessionId);
+  if (session) {
+    session.connectedProfile.name = name;
+  }
+}
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -1247,4 +1270,5 @@ module.exports = {
   searchContactsSync,
   importContactsToCache,
   syncGroups,
+  updateProfileName,
 };

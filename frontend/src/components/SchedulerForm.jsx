@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { format, addMinutes } from 'date-fns';
-import { scheduleMessage, fetchContactName, resolveContactLive, searchContacts, importContacts, fetchAllContacts, fetchGoogleAuthUrl, fetchLinkedGoogleAccounts, syncGroups } from '../api';
+import { scheduleMessage, fetchContactName, resolveContactLive, importContacts, fetchAllContacts, fetchGoogleAuthUrl, fetchLinkedGoogleAccounts, syncGroups, deleteGoogleAccount } from '../api';
 
 // ─── Complete country-code list ───────────────────────────────────────────────
 // ─── Complete country-code list ───────────────────────────────────────────────
@@ -274,10 +274,27 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
     }
     const cleanedInput = ph.replace(/\D/g, '');
     if (!cleanedInput) return '';
+
+    // If selected country is India (91)
+    if (cc === '91') {
+      if (cleanedInput.length === 10) {
+        return '91' + cleanedInput;
+      }
+      if (cleanedInput.length === 12 && cleanedInput.startsWith('91')) {
+        return cleanedInput;
+      }
+      if (cleanedInput.length === 11 && cleanedInput.startsWith('0')) {
+        return '91' + cleanedInput.slice(1);
+      }
+    }
+
     if (cleanedInput.startsWith(cc) && cleanedInput.length > cc.length + 5) {
       return cleanedInput;
     }
     for (const c of ALL_COUNTRIES) {
+      if (cc === '91' && cleanedInput.length === 10) {
+        continue;
+      }
       if (cleanedInput.startsWith(c.code) && cleanedInput.length > c.code.length + 5) {
         return cleanedInput;
       }
@@ -308,10 +325,11 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
   const [loading,       setLoading]       = useState(false);
 
   // Auto-suggest states
-  const [suggestions, setSuggestions] = useState([]);
+  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const formRef = useRef(null);
+  const dropdownRef = useRef(null);
 
   // Directory and Contacts list states
   const [showDirectory,   setShowDirectory]   = useState(false);
@@ -321,6 +339,33 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
   const [directorySearch, setDirectorySearch] = useState('');
   const [directoryTab,    setDirectoryTab]    = useState('all');
   const [linkedEmails,    setLinkedEmails]    = useState([]);
+
+  // Click-outside listener for Settings Dropdown
+  useEffect(() => {
+    const handler = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowSettingsDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // One-time settings visual discovery hint
+  useEffect(() => {
+    if (isConnected && showDirectory) {
+      const hintKey = 'hasSeenDirectorySettingsHint';
+      const hasSeen = localStorage.getItem(hintKey);
+      if (!hasSeen) {
+        setShowSettingsDropdown(true);
+        const timer = setTimeout(() => {
+          setShowSettingsDropdown(false);
+          localStorage.setItem(hintKey, 'true');
+        }, 1500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [isConnected, showDirectory]);
 
   const loadContactsList = useCallback(async () => {
     if (!isConnected) return;
@@ -344,6 +389,21 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
       console.error('Failed to load linked Google accounts:', err);
     }
   }, [isConnected]);
+
+  const handleDisconnectGmail = async (email) => {
+    if (!window.confirm(`Are you sure you want to disconnect this Gmail account (${email})? Unsynced contacts will be removed.`)) {
+      return;
+    }
+    const toastId = toast.loading('Disconnecting Google account...');
+    try {
+      await deleteGoogleAccount(email);
+      toast.success('Gmail account disconnected successfully!', { id: toastId });
+      loadLinkedGoogleAccounts();
+      loadContactsList();
+    } catch (err) {
+      toast.error('Failed to disconnect account: ' + (err.response?.data?.error || err.message), { id: toastId });
+    }
+  };
 
   const handleGoogleSync = async () => {
     try {
@@ -397,13 +457,9 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
       return;
     }
 
-    // Load contacts immediately if the directory modal is open,
-    // or when the backend reports that initial history sync is complete.
-    if (showDirectory || !isSyncing) {
-      loadContactsList();
-      loadLinkedGoogleAccounts();
-    }
-  }, [isConnected, isSyncing, showDirectory, loadContactsList, loadLinkedGoogleAccounts]);
+    loadContactsList();
+    loadLinkedGoogleAccounts();
+  }, [isConnected, isSyncing, loadContactsList, loadLinkedGoogleAccounts]);
 
   // Emoji picker states & refs
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -442,10 +498,25 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
 
   // Parse full phone number into countryCode and local phone number
   const parseFullPhone = (fullPhone) => {
-    const digits = fullPhone.replace(/\D/g, '');
+    let digits = fullPhone.replace(/\D/g, '');
+    if (digits.length === 11 && digits.startsWith('0')) {
+      digits = digits.slice(1);
+    }
+    if (digits.length === 10) {
+      return {
+        countryCode: '91',
+        phone: digits
+      };
+    }
+    if (digits.length === 12 && digits.startsWith('91')) {
+      return {
+        countryCode: '91',
+        phone: digits.slice(2)
+      };
+    }
     let bestMatch = null;
     for (const c of ALL_COUNTRIES) {
-      if (digits.startsWith(c.code)) {
+      if (digits.startsWith(c.code) && digits.length > c.code.length) {
         if (!bestMatch || c.code.length > bestMatch.code.length) {
           bestMatch = c;
         }
@@ -499,7 +570,6 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
       setContactName(contact.name || null);
       setContactExists(true);
     }
-    setSuggestions([]);
     setShowSuggestions(false);
     toast.success(`Selected: ${contact.name || `+${contact.phone}`}`);
   };
@@ -515,23 +585,6 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // ── Debounced Contact Search Suggestions ──────────────────────────────────
-  useEffect(() => {
-    if (!phone || phone.trim().length < 2) {
-      setSuggestions([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      try {
-        const res = await searchContacts(phone);
-        setSuggestions(res || []);
-      } catch (err) {
-        console.error('Failed to search contacts:', err);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [phone]);
-
   // ── Auto-fetch contact name on phone change (if numeric) ──────────────────
   const nameTimer = useRef(null);
 
@@ -544,6 +597,18 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
       setContactName(null); 
       setContactExists(false); 
       return; 
+    }
+
+    // Look up locally first!
+    const found = (contactsList.all || []).find(c => {
+      const cPhoneClean = c.phone ? c.phone.replace(/\D/g, '') : '';
+      return cPhoneClean === full;
+    });
+
+    if (found && found.name) {
+      setContactName(found.name);
+      setContactExists(true);
+      return;
     }
     
     setFetchingName(true);
@@ -567,7 +632,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
     } finally { 
       setFetchingName(false); 
     }
-  }, [isConnected]);
+  }, [isConnected, contactsList]);
 
   useEffect(() => {
     clearTimeout(nameTimer.current);
@@ -617,7 +682,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
       setTimeConfirmed(false);
       setContactName(null);
       setContactExists(false);
-      setSuggestions([]);
+      // setSuggestions([]);
       
       // Trigger instant refresh
       onScheduled?.();
@@ -638,6 +703,16 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
   };
 
   const minTime = getMinTime();
+
+  const cleanPhoneSearch = phone.trim().toLowerCase();
+  const phoneSearchDigits = cleanPhoneSearch.replace(/\D/g, '');
+  const suggestions = cleanPhoneSearch.length >= 2
+    ? (contactsList.all || []).filter(c => {
+        const nameMatch = c.name && c.name.toLowerCase().includes(cleanPhoneSearch);
+        const phoneMatch = c.phone && (c.phone.includes(cleanPhoneSearch) || (phoneSearchDigits && c.phone.replace(/\D/g, '').includes(phoneSearchDigits)));
+        return nameMatch || phoneMatch;
+      }).slice(0, 10)
+    : [];
 
   const cleanDirSearch = directorySearch.trim().toLowerCase();
   const dirSearchDigits = cleanDirSearch.replace(/\D/g, '');
@@ -727,7 +802,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
                   {suggestions.map((c) => {
                     const isGroup = c.isGroup || c.is_group || (c.phone && c.phone.endsWith('@g.us')) || (c.jid && c.jid.endsWith('@g.us'));
                     return (
-                      <li key={c.jid}>
+                      <li key={c.jid || c.phone || c.name}>
                         <button
                           type="button"
                           onClick={() => handleSelectSuggestion(c)}
@@ -922,7 +997,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
         <ContactsImportModal
           onClose={() => setShowImportModal(false)}
           onImported={() => {
-            setSuggestions([]);
+            // setSuggestions([]);
             setShowSuggestions(false);
             loadContactsList();
           }}
@@ -965,86 +1040,117 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
                 </p>
               </div>
             ) : (
-              <div className="bg-slate-50 dark:bg-wa-dsurf/30 px-5 py-2.5 border-b border-slate-100 dark:border-wa-dbdr/30 text-xs text-gray-500 dark:text-wa-dmuted">
-                💡 Missing contact names? Syncing depends on your active chat history. Use the sync buttons below or import a file.
+              <div className="bg-slate-50 dark:bg-wa-dsurf/30 px-1 py-2.5 border-b border-slate-100 dark:border-wa-dbdr/30 text-xs text-gray-500 dark:text-wa-dmuted">
+                💡 Missing contacts? Sync via Google or [import a CSV/VCF file (optional)] below.
               </div>
             )}
 
             {/* Google Sync & Import Action Bar */}
-            <div className="p-4 bg-slate-50 dark:bg-wa-dsurf/10 border-b border-slate-100 dark:border-wa-dbdr/30 flex flex-col gap-3">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleGoogleSync}
-                  className="flex-1 flex items-center justify-center gap-1.5 bg-white dark:bg-wa-dsurf hover:bg-slate-50 dark:hover:bg-wa-dbdr/50 border border-slate-200 dark:border-wa-dbdr px-2 py-2 rounded-xl text-xs font-semibold text-gray-700 dark:text-wa-dtext shadow-sm transition-all"
-                >
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
-                    <path
-                      fill="#EA4335"
-                      d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.355 0 3.39 2.673 1.473 6.564l3.793 3.201z"
-                    />
-                    <path
-                      fill="#4285F4"
-                      d="M23.49 12.275c0-.827-.074-1.624-.21-2.395H12v4.51h6.46c-.279 1.481-1.116 2.733-2.37 3.582l3.69 2.861c2.16-1.993 3.71-4.916 3.71-8.558z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.266 14.235L1.473 17.44C3.39 21.327 7.355 24 12 24c3.055 0 5.782-1.01 7.782-2.736l-3.69-2.861c-1.108.74-2.527 1.182-4.092 1.182-4.136 0-7.627-2.79-8.877-6.545-.078-.235-.138-.477-.184-.725l.027.02z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 4.909c2.455 0 4.218 1.055 5.164 1.945l3.855-3.855C18.673 1.018 15.655 0 12 0 7.355 0 3.39 2.673 1.473 6.564l3.793 3.201C6.518 6.018 9.073 4.909 12 4.909z"
-                    />
-                  </svg>
-                  Sync Google
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowImportModal(true)}
-                  className="flex-1 flex items-center justify-center gap-1.5 bg-wa-teal hover:bg-wa-teal/90 text-white px-2 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all"
-                >
-                  <span>📥</span> Import CSV/VCF
-                </button>
-              </div>
-
-              <div className="group relative w-full">
-                <button
-                  type="button"
-                  disabled={manualSyncing || isSyncing}
-                  onClick={handleSyncGroups}
-                  className="w-full flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/50 text-white px-3 py-2.5 rounded-xl text-xs font-semibold shadow-sm transition-all focus:outline-none"
-                >
-                  {manualSyncing ? (
-                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
-                  ) : (
-                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                    </svg>
-                  )}
-                  {manualSyncing ? 'Syncing Groups...' : 'Sync Groups'}
-                </button>
-                {/* Tooltip */}
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-64 p-2 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl text-center z-50 pointer-events-none border border-slate-700">
-                  Note: Group sync takes up to 30 seconds. Screen may briefly refresh during sync.
-                </div>
-              </div>
-
+            <div className="px-4 py-2 border-b border-slate-100 dark:border-wa-dbdr/30 bg-slate-50 dark:bg-wa-dsurf/10 flex items-center justify-between">
               {/* Linked Accounts List */}
-              {linkedEmails.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5 items-center">
-                  <span className="text-[10px] text-gray-500 dark:text-wa-dmuted font-semibold">Linked:</span>
-                  {linkedEmails.map(email => (
-                    <span key={email} className="inline-flex items-center gap-1 text-[10px] bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 font-semibold px-2 py-0.5 rounded-full border border-emerald-100/50">
-                      <span>📧</span> {email}
-                    </span>
-                  ))}
-                  <span className="text-[9px] text-gray-400 dark:text-wa-dmuted font-normal">({linkedEmails.length}/2 Max)</span>
-                </div>
-              ) : (
-                <div className="text-[10px] text-gray-400 dark:text-wa-dmuted font-medium italic">
-                  No Gmail account linked yet (Max 2).
-                </div>
-              )}
+              <div className="flex-1 min-w-0">
+                {linkedEmails.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 items-center">
+                    {linkedEmails.map(email => (
+                      <span key={email} className="inline-flex items-center gap-1 text-[9px] bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 font-semibold px-2 py-0.5 rounded-full border border-emerald-100/50 shrink-0">
+                        <span>📧</span> {email}
+                        <button
+                          type="button"
+                          onClick={() => handleDisconnectGmail(email)}
+                          className="hover:text-red-500 text-[9px] font-bold ml-0.5 focus:outline-none shrink-0"
+                          title="Disconnect Gmail Account"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-gray-400 dark:text-wa-dmuted font-medium italic">
+                    No Gmail linked (Max 2).
+                  </div>
+                )}
+              </div>
+
+              {/* Settings Dropdown Wrapper */}
+              <div className="relative shrink-0 ml-2" ref={dropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowSettingsDropdown(prev => !prev)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center bg-white dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr hover:bg-slate-50 dark:hover:bg-wa-dbdr/50 text-gray-600 dark:text-wa-dtext shadow-xs transition-all focus:outline-none"
+                  title="Directory Settings & Sync"
+                >
+                  ⚙️
+                </button>
+
+                {showSettingsDropdown && (
+                  <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-wa-dpanel border border-gray-200 dark:border-wa-dbdr rounded-xl shadow-xl z-50 p-2 space-y-1.5 animate-fade-in">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSettingsDropdown(false);
+                        handleGoogleSync();
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-wa-dtext hover:bg-slate-50 dark:hover:bg-wa-dsurf rounded-lg transition-colors"
+                    >
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                        <path
+                          fill="#EA4335"
+                          d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.355 0 3.39 2.673 1.473 6.564l3.793 3.201z"
+                        />
+                        <path
+                          fill="#4285F4"
+                          d="M23.49 12.275c0-.827-.074-1.624-.21-2.395H12v4.51h6.46c-.279 1.481-1.116 2.733-2.37 3.582l3.69 2.861c2.16-1.993 3.71-4.916 3.71-8.558z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.266 14.235L1.473 17.44C3.39 21.327 7.355 24 12 24c3.055 0 5.782-1.01 7.782-2.736l-3.69-2.861c-1.108.74-2.527 1.182-4.092 1.182-4.136 0-7.627-2.79-8.877-6.545-.078-.235-.138-.477-.184-.725l.027.02z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 4.909c2.455 0 4.218 1.055 5.164 1.945l3.855-3.855C18.673 1.018 15.655 0 12 0 7.355 0 3.39 2.673 1.473 6.564l3.793 3.201C6.518 6.018 9.073 4.909 12 4.909z"
+                        />
+                      </svg>
+                      Sync Google Contacts
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSettingsDropdown(false);
+                        setShowImportModal(true);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-wa-dtext hover:bg-slate-50 dark:hover:bg-wa-dsurf rounded-lg transition-colors"
+                    >
+                      <span className="text-sm shrink-0">📥</span>
+                      Import CSV / VCF File
+                    </button>
+
+                    <div className="border-t border-gray-100 dark:border-wa-dbdr my-1"></div>
+
+                    <div className="group/syncbtn relative w-full">
+                      <button
+                        type="button"
+                        disabled={manualSyncing || isSyncing}
+                        onClick={handleSyncGroups}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-emerald-600 dark:text-wa-green hover:bg-emerald-50 dark:hover:bg-wa-dsurf disabled:opacity-50 rounded-lg transition-colors"
+                      >
+                        {manualSyncing ? (
+                          <span className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                        ) : (
+                          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                          </svg>
+                        )}
+                        {manualSyncing ? 'Syncing Groups...' : 'Sync Groups'}
+                      </button>
+                      <div className="absolute left-3 top-6 mr-2 hidden group-hover/syncbtn:block px-2 py-1 bg-white text-black text-[10px] rounded-sm shadow-xl text-center z-50 pointer-events-none border-2 border-slate-500">
+                        Group sync takes up to 30 seconds.
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             
             {/* Search Input */}
