@@ -49,7 +49,7 @@ export default function App() {
   const isConnected = waStatus === 'connected';
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden bg-white dark:bg-[#0b141a] transition-colors duration-200">
+    <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#f1f1f1] dark:bg-[#0b141a] transition-colors duration-200">
       {/* Background Wallpaper Doodle with overlay opacity */}
       <div className="fixed inset-0 z-0 pointer-events-none opacity-[0.12] dark:opacity-[0.06] wp-custom-bg" />
 

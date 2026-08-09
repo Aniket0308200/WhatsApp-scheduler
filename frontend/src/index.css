@@ -4,7 +4,7 @@
 
 /* ── Base ──────────────────────────────────────────────────────────────────── */
 body {
-  @apply bg-white text-slate-800 antialiased font-sans;
+  @apply bg-[#f1f1f1] text-slate-800 antialiased font-sans;
   transition: background-color 0.2s, color 0.2s;
 }
 
