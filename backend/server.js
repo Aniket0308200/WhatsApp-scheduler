@@ -61,13 +61,17 @@ app.use((req, res, next) => {
     }
     return res.status(400).json({ error: 'X-Session-ID header is required.' });
   }
-  req.sessionId = sessionId;
+  req.sessionId = sessionId; 
   next();
 });
 
 // ─── Google OAuth & Contacts Sync Routes ──────────────────────────────────────
 const googleContactsRouter = require('./routes/googleContacts');
 app.use('/api/auth/google', googleContactsRouter);
+
+// ─── Feedback & Support Routes ────────────────────────────────────────────────
+const feedbackRouter = require('./routes/feedback');
+app.use('/api/feedback', feedbackRouter);
 
 // ─── WhatsApp status ──────────────────────────────────────────────────────────
 
@@ -465,6 +469,10 @@ async function bootstrap() {
   }
 
   startScheduler();
+
+  // Seed initial feedbacks
+  const { seedFeedbackData } = require('./seedFeedback');
+  seedFeedbackData().catch(err => console.error('[Seed Error] Feedback seeding failed:', err.message));
 
   // Find available port starting from 3001
   const findAvailablePort = (port) => {

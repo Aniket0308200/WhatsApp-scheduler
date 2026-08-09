@@ -42,9 +42,13 @@ function decrypt(cipherText) {
       mode: CryptoJS.mode.CBC,
       padding: CryptoJS.pad.Pkcs7
     });
-    return decrypted.toString(CryptoJS.enc.Utf8);
+    const result = decrypted.toString(CryptoJS.enc.Utf8);
+    if (!result && cipherText) {
+      return cipherText;
+    }
+    return result;
   } catch (e) {
-    return '';
+    return cipherText;
   }
 }
 
@@ -97,6 +101,20 @@ const AuthSessionSchema = new mongoose.Schema({
 AuthSessionSchema.index({ sessionId: 1, key: 1 }, { unique: true });
 
 const AuthSession = mongoose.model('AuthSession', AuthSessionSchema);
+
+// ─── Feedback Model ──────────────────────────────────────────────────────────
+const FeedbackSchema = new mongoose.Schema({
+  userId: { type: String, required: true },
+  userName: { type: String, required: true },
+  message: { type: String, required: true },
+  type: { type: String, enum: ['public', 'personal'], default: 'public' },
+  likes: { type: [String], default: [] }, // Array of userIds/sessionIds
+  adminReply: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now }
+});
+FeedbackSchema.index({ type: 1, createdAt: -1 });
+
+const Feedback = mongoose.model('Feedback', FeedbackSchema);
 
 function cleanContactName(name) {
   if (!name) return null;
@@ -342,6 +360,7 @@ module.exports = {
   cancelMessage,
   deleteMessage,
   toSqliteUtc,
+  Feedback,
   purgeSessionData,
   isValidPersonalContactName,
   getCleanContactName,

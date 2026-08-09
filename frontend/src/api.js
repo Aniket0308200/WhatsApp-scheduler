@@ -62,3 +62,10 @@ export const fetchMessages   = ()        => api.get('/messages').then(r => r.dat
 export const scheduleMessage = (payload) => api.post('/messages', payload).then(r => r.data);
 export const cancelMessage   = (id)      => api.delete(`/messages/${id}`).then(r => r.data);
 export const deleteMessage   = (id)      => api.delete(`/messages/${id}?permanent=true`).then(r => r.data);
+
+// ─── Feedback & Support ──────────────────────────────────────────────────────
+export const fetchPublicFeedback   = ()        => api.get('/feedback/public').then(r => r.data);
+export const fetchPersonalFeedback = ()        => api.get('/feedback/personal').then(r => r.data);
+export const submitFeedback        = (payload) => api.post('/feedback', payload).then(r => r.data);
+export const toggleFeedbackLike    = (id)      => api.post(`/feedback/${id}/like`).then(r => r.data);
+export const submitAdminReply      = (id, reply) => api.post(`/feedback/${id}/admin-reply`, { reply }).then(r => r.data);

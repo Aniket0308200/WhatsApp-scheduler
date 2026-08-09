@@ -5,6 +5,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    watch: {
+      ignored: ['**/data/**', '**/backend/**', '**/node_modules/**'],
+    },
     proxy: {
       // Proxy all /api requests to the Express backend during development
       '/api': {

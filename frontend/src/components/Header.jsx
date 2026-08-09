@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { logout, updateProfileName } from '../api';
 import { useTheme } from '../ThemeContext';
+import FeedbackModal from './FeedbackModal';
 
 const STATUS_CONFIG = {
   connected:    { label: 'Connected',     bg: 'bg-green-100 dark:bg-green-900/40',   text: 'text-green-700 dark:text-green-400',  dot: 'bg-green-500',  pulse: false },
@@ -43,6 +44,7 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
   const [syncTimerExceeded, setSyncTimerExceeded] = React.useState(false);
   const [editing, setEditing] = useState(false);
   const [editedName, setEditedName] = useState(profile?.name || '');
+  const [showFeedback, setShowFeedback] = useState(false);
 
   React.useEffect(() => {
     setEditedName(profile?.name || '');
@@ -104,6 +106,7 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
   };
 
   return (
+    <>
     <header className="fixed top-0 left-0 right-0 z-40 bg-wa-dark dark:bg-wa-dpanel border-b border-black/20 dark:border-wa-dbdr shadow-md transition-colors duration-200">
       <div className="container mx-auto px-4 py-3 max-w-5xl flex items-center justify-between gap-3">
 
@@ -215,6 +218,7 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
             {dark ? <SunIcon /> : <MoonIcon />}
           </button>
 
+
           {/* Disconnect */}
           {isConnected && (
             <button
@@ -281,5 +285,21 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
         </div>
       )}
     </header>
+    {/* Floating Feedback & Support Button */}
+    <div className="fixed bottom-6 right-6 z-[99] group">
+      {/* Tooltip */}
+      <div className="absolute bottom-16 right-0 mb-1 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 bg-slate-950/90 dark:bg-wa-dpanel/95 backdrop-blur-sm text-slate-100 text-xs font-semibold px-3 py-1.5 rounded-xl shadow-xl border border-slate-800 dark:border-wa-dbdr whitespace-nowrap">
+        Feedback & Support Box
+      </div>
+      <button
+        onClick={() => setShowFeedback(true)}
+        className="w-14 h-14 rounded-full bg-wa-teal hover:bg-wa-teal/90 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 border border-teal-400/20"
+        aria-label="Feedback & Support"
+      >
+        <span className="text-2xl leading-none select-none">💬</span>
+      </button>
+    </div>
+    {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
+  </>
   );
 }

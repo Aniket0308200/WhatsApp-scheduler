@@ -258,7 +258,7 @@ export default function MessageTable({ messages, loading, onRefresh }) {
         <div className="px-5 py-4 border-t border-gray-150 dark:border-wa-dbdr flex flex-col sm:flex-row items-center justify-between gap-4 bg-gray-50/50 dark:bg-wa-dsurf/10">
           {/* Page size select & current items info */}
           <div className="flex items-center flex-wrap justify-center sm:justify-start gap-2.5 text-xs text-gray-500 dark:text-wa-dmuted">
-            <span>Show:</span>
+            <span className="hidden sm:inline">Show:</span>
             <select
               value={pageSize}
               onChange={(e) => {
@@ -273,9 +273,9 @@ export default function MessageTable({ messages, loading, onRefresh }) {
                 </option>
               ))}
             </select>
-            <span>|</span>
+            <span className="hidden sm:inline">|</span>
             <span>
-              Showing {Math.min(startIndex + 1, totalItems)}–{Math.min(endIndex, totalItems)} of {totalItems} messages
+              Showing {Math.min(startIndex + 1, totalItems)}–{Math.min(endIndex, totalItems)} of {totalItems}<span className="hidden sm:inline"> messages</span>
             </span>
           </div>
 
@@ -288,7 +288,7 @@ export default function MessageTable({ messages, loading, onRefresh }) {
               className="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-wa-dbdr text-xs font-semibold text-gray-600 dark:text-wa-dmuted bg-white dark:bg-wa-dsurf hover:bg-gray-50 dark:hover:bg-wa-dbdr/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               title="First Page"
             >
-              « First
+              « <span className="hidden sm:inline">First</span>
             </button>
 
             {/* Prev Page */}
@@ -298,7 +298,7 @@ export default function MessageTable({ messages, loading, onRefresh }) {
               className="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-wa-dbdr text-xs font-semibold text-gray-600 dark:text-wa-dmuted bg-white dark:bg-wa-dsurf hover:bg-gray-50 dark:hover:bg-wa-dbdr/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               title="Previous Page"
             >
-              ‹ Prev
+              ‹ <span className="hidden sm:inline">Prev</span>
             </button>
 
             {/* Page info */}
@@ -313,7 +313,7 @@ export default function MessageTable({ messages, loading, onRefresh }) {
               className="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-wa-dbdr text-xs font-semibold text-gray-600 dark:text-wa-dmuted bg-white dark:bg-wa-dsurf hover:bg-gray-50 dark:hover:bg-wa-dbdr/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               title="Next Page"
             >
-              Next ›
+              <span className="hidden sm:inline">Next</span> ›
             </button>
 
             {/* Last Page */}
@@ -323,7 +323,7 @@ export default function MessageTable({ messages, loading, onRefresh }) {
               className="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-wa-dbdr text-xs font-semibold text-gray-600 dark:text-wa-dmuted bg-white dark:bg-wa-dsurf hover:bg-gray-50 dark:hover:bg-wa-dbdr/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               title="Last Page"
             >
-              Last »
+              <span className="hidden sm:inline">Last</span> »
             </button>
           </div>
         </div>
