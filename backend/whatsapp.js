@@ -49,9 +49,12 @@ function hasSession(sessionId) {
 }
 
 async function useMongoDBAuthState(sessionId) {
+  const isProd = process.env.NODE_ENV === 'production';
+  const nsSessionId = isProd ? `prod_${sessionId}` : `dev_${sessionId}`;
+
   const readData = async (key) => {
     try {
-      const doc = await db.AuthSession.findOne({ sessionId, key }).lean();
+      const doc = await db.AuthSession.findOne({ sessionId: nsSessionId, key }).lean();
       if (!doc) return null;
       return JSON.parse(doc.value, BufferJSON.reviver);
     } catch (err) {
@@ -63,11 +66,11 @@ async function useMongoDBAuthState(sessionId) {
   const writeData = async (key, value) => {
     try {
       if (value === null || value === undefined) {
-        await db.AuthSession.deleteOne({ sessionId, key });
+        await db.AuthSession.deleteOne({ sessionId: nsSessionId, key });
       } else {
         const jsonStr = JSON.stringify(value, BufferJSON.replacer);
         await db.AuthSession.updateOne(
-          { sessionId, key },
+          { sessionId: nsSessionId, key },
           { $set: { value: jsonStr } },
           { upsert: true }
         );
@@ -122,7 +125,9 @@ async function useMongoDBAuthState(sessionId) {
 /** Check if session has saved credentials and extract the phone number from them. */
 async function getPhoneFromSession(sessionId) {
   try {
-    const doc = await db.AuthSession.findOne({ sessionId, key: 'creds' }).lean();
+    const isProd = process.env.NODE_ENV === 'production';
+    const nsSessionId = isProd ? `prod_${sessionId}` : `dev_${sessionId}`;
+    const doc = await db.AuthSession.findOne({ sessionId: nsSessionId, key: 'creds' }).lean();
     if (doc) {
       const creds = JSON.parse(doc.value, BufferJSON.reviver);
       if (creds?.me?.id) {
@@ -751,8 +756,8 @@ async function initWhatsApp(sessionId) {
         // doing so creates a re-pair loop and loses the fast local cache.
         session.status = 'disconnected';
         session.isSyncing = false;
-        console.warn(`[WA] [${sessionId}] Session replaced (440). Preserving data and retrying in 30 seconds.`);
-        session.reconnectTimer = setTimeout(() => initWhatsApp(sessionId), 30_000);
+        console.warn(`[WA] [${sessionId}] Session active elsewhere (Connection replaced/440 by another instance). Gracefully halting automatic reconnection to avoid conflicts.`);
+        // Gracefully halt reconnection loops - do not set reconnectTimer
       } else if (code === multideviceMismatch) {
         // This is a genuine credential mismatch; data remains in the
         // phone-keyed database even though a new pairing will be required.
@@ -919,12 +924,17 @@ async function initWhatsApp(sessionId) {
 
 async function bootstrapSessions() {
   try {
-    const sessionIds = await db.AuthSession.distinct('sessionId');
-    for (const sessionId of sessionIds) {
-      console.log(`[WA] Bootstrapping saved session: ${sessionId}`);
-      initWhatsApp(sessionId).catch((err) => {
-        console.error(`[WA] Error bootstrapping session ${sessionId}:`, err.message);
-      });
+    const isProd = process.env.NODE_ENV === 'production';
+    const expectedPrefix = isProd ? 'prod_' : 'dev_';
+    const dbSessionIds = await db.AuthSession.distinct('sessionId');
+    for (const dbSessionId of dbSessionIds) {
+      if (dbSessionId && dbSessionId.startsWith(expectedPrefix)) {
+        const originalSessionId = dbSessionId.substring(expectedPrefix.length);
+        console.log(`[WA] Bootstrapping saved session: ${originalSessionId} (Namespace: ${expectedPrefix})`);
+        initWhatsApp(originalSessionId).catch((err) => {
+          console.error(`[WA] Error bootstrapping session ${originalSessionId}:`, err.message);
+        });
+      }
     }
   } catch (err) {
     console.error(`[WA] Error bootstrapping sessions from MongoDB:`, err.message);
@@ -1067,7 +1077,9 @@ async function logout(sessionId) {
 
 async function clearSession(sessionId) {
   try {
-    await db.AuthSession.deleteMany({ sessionId });
+    const isProd = process.env.NODE_ENV === 'production';
+    const nsSessionId = isProd ? `prod_${sessionId}` : `dev_${sessionId}`;
+    await db.AuthSession.deleteMany({ sessionId: nsSessionId });
     const sessionDir = path.join(SESSIONS_ROOT, sessionId);
     if (fs.existsSync(sessionDir)) {
       fs.rmSync(sessionDir, { recursive: true, force: true });
@@ -1133,10 +1145,10 @@ async function updateConnectedProfile(sessionId) {
         const userDoc = await db.User.findOne({ sessionId });
         if (userDoc && userDoc.name) {
           displayName = userDoc.name;
-        } else if (displayName) {
+        } else {
           await db.User.updateOne(
             { sessionId },
-            { $set: { phoneNumber: phonePart, name: displayName } },
+            { $set: { phoneNumber: phonePart, name: displayName || '' } },
             { upsert: true }
           );
         }
