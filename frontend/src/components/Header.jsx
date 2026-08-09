@@ -12,7 +12,7 @@ const STATUS_CONFIG = {
 };
 
 const WA_ICON = (
-  <img src="/whatsapp_icon.png" alt="WhatsApp Logo" className="w-full h-full object-cover" />
+  <img src="/wp-scheduler_logo.png" alt="WhatsApp Logo" className="w-full h-full object-cover rounded-full" />
 );
 
 // Sun icon for light mode
@@ -110,7 +110,7 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
 
         {/* ── Logo + title ──────────────────────────────────────────────── */}
         <div className="flex items-center gap-2.5 flex-shrink-0">
-          <div className="w-9 h-9 rounded-full bg-wa-green flex items-center justify-center shadow-sm overflow-hidden">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm overflow-hidden">
             {WA_ICON}
           </div>
           <div>
