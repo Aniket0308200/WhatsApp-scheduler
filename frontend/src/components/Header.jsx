@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { logout, updateProfileName } from '../api';
 import { useTheme } from '../ThemeContext';
 import FeedbackModal from './FeedbackModal';
+import { navigateTo } from '../utils/navigation';
 
 const STATUS_CONFIG = {
   connected:    { label: 'Connected',     bg: 'bg-green-100 dark:bg-green-900/40',   text: 'text-green-700 dark:text-green-400',  dot: 'bg-green-500',  pulse: false },
@@ -109,7 +110,10 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
       <div className="container mx-auto px-4 py-3 max-w-5xl flex items-center justify-between gap-3">
 
         {/* ── Logo + title ──────────────────────────────────────────────── */}
-        <div className="flex items-center gap-2.5 flex-shrink-0">
+        <button
+          onClick={() => navigateTo('/')}
+          className="flex items-center gap-2.5 flex-shrink-0 hover:opacity-90 active:scale-98 transition-all text-left focus:outline-none"
+        >
           <div className="w-9 h-9 flex items-center justify-center shadow-sm overflow-hidden">
             {WA_ICON}
           </div>
@@ -130,7 +134,7 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
               </span>
             </div>
           </div>
-        </div>
+        </button>
 
         {/* ── Connected profile pill (desktop) ─────────────────────────── */}
         {/* ── Connected profile pill (desktop) ─────────────────────────── */}

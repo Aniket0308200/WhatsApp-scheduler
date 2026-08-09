@@ -4,6 +4,9 @@ import ConnectionPanel from './components/ConnectionPanel';
 import SchedulerForm from './components/SchedulerForm';
 import MessageTable from './components/MessageTable';
 import Header from './components/Header';
+import PrivacyPolicy from './components/PrivacyDoc';
+import TermsOfService from './components/TermsOfService';
+import { navigateTo } from './utils/navigation';
 
 const POLL_INTERVAL = 4_000;
 const MSG_POLL_INTERVAL = 20_000;
@@ -16,6 +19,15 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [messages, setMessages] = useState([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -59,27 +71,43 @@ export default function App() {
         {/* Spacer to push content below fixed header */}
         <div className={`flex-shrink-0 transition-all duration-150 ${waStatus === 'connected' && (profile?.name || profile?.phone) ? 'h-[96px] sm:h-[60px]' : 'h-[60px]'}`} />
 
-        <main className="flex-1 container mx-auto px-4 py-6 max-w-5xl space-y-6 mt-5 sm:mt-0">
-          {!isConnected && (
-            <ConnectionPanel
-              status={waStatus}
-              qr={qr}
-              pairingCode={pairingCode}
-              onRefresh={refreshStatus}
-            />
+        <main className="flex-1 container mx-auto px-4 py-6 max-w-5xl mt-5 sm:mt-0">
+          {currentPath === '/privacy-policy' ? (
+            <PrivacyPolicy />
+          ) : currentPath === '/terms-of-service' ? (
+            <TermsOfService />
+          ) : (
+            <div className="space-y-6">
+              {!isConnected && (
+                <ConnectionPanel
+                  status={waStatus}
+                  qr={qr}
+                  pairingCode={pairingCode}
+                  onRefresh={refreshStatus}
+                />
+              )}
+
+              <SchedulerForm isConnected={isConnected} onScheduled={refreshMessages} isSyncing={isSyncing} />
+
+              <MessageTable messages={messages} loading={loadingMsgs} onRefresh={refreshMessages} />
+            </div>
           )}
-
-          <SchedulerForm isConnected={isConnected} onScheduled={refreshMessages} isSyncing={isSyncing} />
-
-          <MessageTable messages={messages} loading={loadingMsgs} onRefresh={refreshMessages} />
         </main>
 
         <footer className="w-full text-center text-xs py-5 mt-auto border-t border-black/20 dark:border-wa-dbdr bg-wa-dark dark:bg-wa-dpanel transition-colors duration-200 z-10">
-          <div className="container mx-auto px-4 max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-3 text-emerald-100 dark:text-wa-dmuted font-medium">
-            <div className="flex flex-col items-center sm:items-start gap-1">
+          <div className="container mx-auto px-4 max-w-5xl flex flex-col md:flex-row items-center justify-between gap-4 text-emerald-100 dark:text-wa-dmuted font-medium">
+            <div className="flex flex-col items-center md:items-start gap-1">
               <span className="text-slate-100 dark:text-wa-dtext">© {new Date().getFullYear()} WA Scheduler. All rights reserved.</span>
-              {/* <span className="text-[10px] text-emerald-200/70 dark:text-wa-dmuted font-normal">Sent locally via Baileys integration</span> */}
             </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-emerald-200/90 dark:text-wa-dmuted text-[11px] font-semibold">
+              <button onClick={() => navigateTo('/')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Home</button>
+              <span className="opacity-40">|</span>
+              <button onClick={() => navigateTo('/privacy-policy')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Privacy Policy</button>
+              <span className="opacity-40">|</span>
+              <button onClick={() => navigateTo('/terms-of-service')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Terms of Service</button>
+            </div>
+
             <div className="flex items-center gap-1.5 text-[11px] bg-white/10 dark:bg-wa-dsurf px-3 py-1.5 rounded-full border border-white/10 dark:border-wa-dbdr/50">
               <span className="text-emerald-300">🔒</span>
               <span className="text-slate-100 dark:text-wa-dtext">Local Encryption & End-to-End Secure Delivery</span>
