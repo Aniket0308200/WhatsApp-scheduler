@@ -634,7 +634,7 @@ async function initWhatsApp(sessionId) {
     printQRInTerminal: false,
     // Desktop identity is required by WhatsApp to deliver the largest history
     // sync available to a linked device.
-    browser: Browsers.ubuntu('Chrome'),
+    browser: ['macOS', 'Chrome', '120.0.6099.109'],
     syncFullHistory: true,
     generateHighQualityLinkPreview: false,
     keepAliveIntervalMs: 25_000,
@@ -747,9 +747,10 @@ async function initWhatsApp(sessionId) {
       const { loggedOut, connectionReplaced, multideviceMismatch, timedOut } = DisconnectReason;
 
       if (code === loggedOut) {
-        console.log(`[WA] [${sessionId}] Disconnected (loggedOut) — preserving credentials and retrying in 5 seconds.`);
+        console.log(`[WA] [${sessionId}] Disconnected (loggedOut/401) — clearing session credentials and data.`);
         session.status = 'disconnected';
-        session.reconnectTimer = setTimeout(() => initWhatsApp(sessionId), 5_000);
+        session.isSyncing = false;
+        clearSession(sessionId).catch((err) => console.error(`[WA] [${sessionId}] Error clearing loggedOut session:`, err.message));
       } else if (code === connectionReplaced) {
         // A 440 means another process/device has temporarily taken over this
         // exact linked-device session. Do not delete auth/contact files here:
@@ -1080,11 +1081,12 @@ async function clearSession(sessionId) {
     const isProd = process.env.NODE_ENV === 'production';
     const nsSessionId = isProd ? `prod_${sessionId}` : `dev_${sessionId}`;
     await db.AuthSession.deleteMany({ sessionId: nsSessionId });
+    await db.purgeSessionData(sessionId);
     const sessionDir = path.join(SESSIONS_ROOT, sessionId);
     if (fs.existsSync(sessionDir)) {
       fs.rmSync(sessionDir, { recursive: true, force: true });
     }
-    console.log(`[WA] [${sessionId}] Cleared persistent session from MongoDB and disk.`);
+    console.log(`[WA] [${sessionId}] Cleared persistent session and purged database data.`);
   } catch (err) {
     console.error(`[WA] [${sessionId}] clearSession error:`, err.message);
   }
