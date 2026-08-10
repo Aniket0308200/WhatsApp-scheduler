@@ -119,7 +119,7 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-bold text-sm sm:text-base text-slate-100 leading-tight tracking-tight">WA Scheduler</h1>
+              <h1 className="font-bold text-sm sm:text-base text-slate-100 leading-tight tracking-tight">WhatsApp Scheduler</h1>
               <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 font-medium select-none">
                 🔒 End-to-End Encrypted
               </span>

@@ -22,7 +22,7 @@ export default function TermsOfService() {
         <section className="space-y-2">
           <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">1. Acceptance of Terms</h3>
           <p>
-            By accessing or using <strong>WA Scheduler</strong> (the "Service"), you agree to be bound by these Terms of Service. 
+            By accessing or using <strong>WhatsApp Scheduler</strong> (the "Service"), you agree to be bound by these Terms of Service. 
             If you do not agree to all of these terms, please do not run, deploy, or interact with this application.
           </p>
         </section>
@@ -30,7 +30,7 @@ export default function TermsOfService() {
         <section className="space-y-2">
           <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">2. Description of Service</h3>
           <p>
-            WA Scheduler is an open-source, self-hosted automation dashboard that allows users to connect their WhatsApp account 
+            WhatsApp Scheduler is an open-source, self-hosted automation dashboard that allows users to connect their WhatsApp account 
             and queue up messages to be sent at specific date/time slots. The Service also offers Google Contacts integration 
             to assist in finding recipient contact names and numbers.
           </p>
@@ -57,7 +57,7 @@ export default function TermsOfService() {
           <p>
             WhatsApp, Inc. enforces strict anti-spam guidelines and restricts accounts that automate messages or send bulk communication. 
             By using this application, you acknowledge that connecting your account to an automation service violates WhatsApp's Terms of Service and carries a risk of your WhatsApp account being permanently banned or suspended. 
-            The creators and distributors of WA Scheduler accept <strong>zero responsibility</strong> for any account bans or suspensions resulting from your use of this software.
+            The creators and distributors of WhatsApp Scheduler accept <strong>zero responsibility</strong> for any account bans or suspensions resulting from your use of this software.
           </p>
         </section>
 
@@ -81,7 +81,7 @@ export default function TermsOfService() {
         <section className="space-y-2">
           <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">7. Limitation of Liability</h3>
           <p>
-            IN NO EVENT SHALL THE DEVELOPERS OR CONTRIBUTORS OF WA SCHEDULER BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, 
+            IN NO EVENT SHALL THE DEVELOPERS OR CONTRIBUTORS OF WHATSAPP SCHEDULER BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, 
             CONSEQUENTIAL, OR EXEMPLARY DAMAGES (INCLUDING BUT NOT LIMITED TO LOSS OF DATA, REVENUE, ACCOUNT SUSPENSION, OR SYSTEM DOWNTIME) 
             ARISING FROM YOUR USE OR INABILITY TO USE THE SERVICE.
           </p>
