@@ -6,8 +6,9 @@ import MessageTable from './components/MessageTable';
 import Header from './components/Header';
 import PrivacyPolicy from './components/PrivacyDoc';
 import TermsOfService from './components/TermsOfService';
-import { navigateTo } from './utils/navigation';
+import LandingPage from './components/LandingPage';
 import HeroSection from './components/HeroSection';
+import { navigateTo } from './utils/navigation';
 
 const POLL_INTERVAL = 4_000;
 const MSG_POLL_INTERVAL = 20_000;
@@ -21,6 +22,7 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  const [activeView, setActiveView] = useState('landing'); // 'landing' | 'app'
 
   useEffect(() => {
     const handlePopState = () => {
@@ -61,26 +63,57 @@ export default function App() {
 
   const isConnected = waStatus === 'connected';
 
+  const handleNavigate = (view, sectionId) => {
+    navigateTo('/');
+    setActiveView(view);
+    if (sectionId) {
+      setTimeout(() => {
+        const el = document.getElementById(sectionId);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleGetStarted = () => {
+    setActiveView('app');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#f1f1f1] dark:bg-[#0b141a] transition-colors duration-200">
+    <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#f1f1f1] dark:bg-[#0b141a] transition-colors duration-200 font-sans">
       {/* Background Wallpaper Doodle with overlay opacity */}
       <div className="fixed inset-0 z-0 pointer-events-none opacity-[0.12] dark:opacity-[0.06] wp-custom-bg" />
 
       <div className="relative z-10 flex-col flex-1 flex">
-        <Header status={waStatus} profile={profile} onLogout={refreshStatus} isSyncing={isSyncing} />
+        <Header
+          status={waStatus}
+          profile={profile}
+          onLogout={refreshStatus}
+          isSyncing={isSyncing}
+          activeView={activeView}
+          onNavigate={handleNavigate}
+          onGetStarted={handleGetStarted}
+        />
 
         {/* Spacer to push content below fixed header */}
         <div className={`flex-shrink-0 transition-all duration-150 ${waStatus === 'connected' && (profile?.name || profile?.phone) ? 'h-[96px] sm:h-[60px]' : 'h-[60px]'}`} />
 
-        <main className="flex-1 container mx-auto px-4 py-6 max-w-5xl mt-5 sm:mt-0">
+        <main className={`flex-1 container mx-auto ${activeView === 'landing' ? 'px-2 sm:px-4 max-w-6xl' : 'px-4 max-w-5xl'} py-6 mt-5 sm:mt-0 transition-all duration-200`}>
           {currentPath === '/privacy-policy' ? (
             <PrivacyPolicy />
           ) : currentPath === '/terms-of-service' ? (
             <TermsOfService />
+          ) : activeView === 'landing' ? (
+            <LandingPage
+              onGetStarted={handleGetStarted}
+              isConnected={isConnected}
+              waStatus={waStatus}
+              profile={profile}
+            />
           ) : (
             <div className="space-y-6">
-              <HeroSection />
-
               {!isConnected && (
                 <ConnectionPanel
                   status={waStatus}
@@ -104,7 +137,11 @@ export default function App() {
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-emerald-200/90 dark:text-wa-dmuted text-[11px] font-semibold">
-              <button onClick={() => navigateTo('/')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Home</button>
+              <button onClick={() => handleNavigate('landing')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Home</button>
+              <span className="opacity-40">|</span>
+              <button onClick={() => handleNavigate('landing', 'features')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Features</button>
+              <span className="opacity-40">|</span>
+              <button onClick={() => handleNavigate('landing', 'pricing')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Pricing</button>
               <span className="opacity-40">|</span>
               <button onClick={() => navigateTo('/privacy-policy')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Privacy Policy</button>
               <span className="opacity-40">|</span>

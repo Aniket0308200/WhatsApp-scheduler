@@ -2,7 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Base ──────────────────────────────────────────────────────────────────── */
+html, body {
+  overflow-x: hidden;
+}
+
 body {
   @apply bg-[#f1f1f1] text-slate-800 antialiased font-sans;
   transition: background-color 0.2s, color 0.2s;
@@ -12,9 +15,15 @@ body {
   @apply bg-[#0b141a] text-wa-dtext;
 }
 
-/* ── Smooth transitions on all interactives ────────────────────────────────── */
-button, input, textarea, select {
-  @apply transition-all duration-150;
+/* ── Smooth transitions & click outline cleanup on all interactives ────────── */
+button, input, textarea, select, a, [class*="transition-"] {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 250ms;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible {
+  outline: none;
 }
 
 /* ── Custom scrollbars ─────────────────────────────────────────────────────── */

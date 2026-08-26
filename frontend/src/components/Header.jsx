@@ -38,12 +38,24 @@ const LogoutIcon = () => (
   </svg>
 );
 
-export default function Header({ status, profile, onLogout, isSyncing }) {
+// Hamburger icon for mobile menu
+const HamburgerIcon = ({ isOpen }) => (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+    {isOpen ? (
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    ) : (
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+    )}
+  </svg>
+);
+
+export default function Header({ status, profile, onLogout, isSyncing, activeView, onNavigate, onGetStarted }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [syncTimerExceeded, setSyncTimerExceeded] = React.useState(false);
   const [editing, setEditing] = useState(false);
   const [editedName, setEditedName] = useState(profile?.name || '');
   const [showFeedback, setShowFeedback] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   React.useEffect(() => {
     setEditedName(profile?.name || '');
@@ -104,43 +116,86 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
     }
   };
 
+  const handleNavClick = (view, sectionId) => {
+    if (onNavigate) {
+      onNavigate(view, sectionId);
+    } else {
+      navigateTo('/');
+      if (sectionId) {
+        setTimeout(() => {
+          document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      }
+    }
+  };
+
+  const isAppView = activeView === 'app';
+
   return (
     <>
     <header className="fixed top-0 left-0 right-0 z-40 bg-wa-dark dark:bg-wa-dpanel border-b border-black/20 dark:border-wa-dbdr shadow-md transition-colors duration-200">
-      <div className="container mx-auto px-4 py-3 max-w-5xl flex items-center justify-between gap-3">
+      <div className={`container mx-auto px-4 py-3 ${isAppView ? 'max-w-5xl' : 'max-w-6xl'} flex items-center justify-between gap-3 transition-all duration-200`}>
 
-        {/* ── Logo + title ──────────────────────────────────────────────── */}
+        {/* ── Logo + title (Clickable link back to Home) ──────────────── */}
         <button
-          onClick={() => navigateTo('/')}
-          className="flex items-center gap-2.5 flex-shrink-0 hover:opacity-90 active:scale-98 transition-all text-left focus:outline-none"
+          onClick={() => handleNavClick('landing')}
+          className="flex items-center gap-2.5 flex-shrink-0 hover:opacity-90 active:scale-98 transition-all text-left outline-none border-0 ring-0 focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none select-none group"
+          title="Click to return to Home Page"
         >
-          <div className="w-9 h-9 flex items-center justify-center shadow-sm overflow-hidden">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center shadow-sm overflow-hidden group-hover:scale-105 transition-transform shrink-0">
             {WA_ICON}
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-bold text-sm sm:text-base text-slate-100 leading-tight tracking-tight">WhatsApp Scheduler</h1>
-              <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 font-medium select-none">
+              <h1 className="font-bold text-sm sm:text-base text-slate-100 leading-tight tracking-tight group-hover:text-emerald-200 transition-colors">
+                WhatsApp Scheduler
+              </h1>
+              <span className="hidden lg:inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 font-medium select-none">
                 🔒 End-to-End Encrypted
               </span>
             </div>
-            <p className="text-[10px] sm:text-[11px] text-green-300 dark:text-wa-dmuted leading-tight mt-0.5">
-              WhatsApp Message Scheduler
+            <p className="text-[10px] sm:text-[11px] text-green-300 dark:text-wa-dmuted leading-tight mt-0.5 flex items-center gap-1">
+              <span>WhatsApp Message Scheduler</span>
             </p>
-            {/* Show below the subtitle on mobile */}
-            <div className="sm:hidden mt-1">
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 font-medium select-none">
-                🔒 End-to-End Encrypted
-              </span>
-            </div>
           </div>
         </button>
 
-        {/* ── Connected profile pill (desktop) ─────────────────────────── */}
-        {/* ── Connected profile pill (desktop) ─────────────────────────── */}
+        {/* ── Landing Navigation Links (Desktop view) ──── */}
+        {!isAppView && (
+          <nav className="hidden md:flex items-center gap-1 sm:gap-2 text-xs font-semibold text-emerald-100 dark:text-wa-dmuted">
+            <button
+              onClick={() => handleNavClick('landing')}
+              className="px-3 py-1.5 rounded-lg bg-white/15 text-white font-bold dark:bg-wa-dsurf dark:text-wa-dtext transition-colors"
+            >
+              Home
+            </button>
+            <button
+              onClick={() => handleNavClick('landing', 'features')}
+              className="px-3 py-1.5 rounded-lg hover:text-white hover:bg-white/10 dark:hover:text-wa-dtext transition-colors"
+            >
+              Features
+            </button>
+            <button
+              onClick={() => handleNavClick('landing', 'how-it-works')}
+              className="px-3 py-1.5 rounded-lg hover:text-white hover:bg-white/10 dark:hover:text-wa-dtext transition-colors"
+            >
+              How It Works
+            </button>
+            <button
+              onClick={() => handleNavClick('landing', 'pricing')}
+              className="px-3 py-1.5 rounded-lg hover:text-white hover:bg-white/10 dark:hover:text-wa-dtext transition-colors flex items-center gap-1"
+            >
+              <span>Pricing</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-emerald-500 text-white uppercase">
+                Free
+              </span>
+            </button>
+          </nav>
+        )}
+
+        {/* ── Connected Profile Pill (Desktop) ─────────── */}
         {isConnected && (
-          <div className="hidden sm:flex items-center gap-2.5 bg-white/10 dark:bg-wa-dsurf border border-white/10 dark:border-wa-dbdr rounded-xl px-3 py-1.5 min-w-0 flex-1 max-w-[260px]">
-            {/* Avatar */}
+          <div className="hidden lg:flex items-center gap-2.5 bg-white/10 dark:bg-wa-dsurf border border-white/10 dark:border-wa-dbdr rounded-xl px-3 py-1.5 min-w-0 flex-1 max-w-[240px]">
             <div className="w-8 h-8 rounded-full bg-wa-green flex-shrink-0 flex items-center justify-center text-slate-100 font-bold text-sm shadow-sm">
               {avatarLetter}
             </div>
@@ -183,7 +238,6 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
                 </div>
               )}
             </div>
-            {/* Online indicator */}
             <div className="flex-shrink-0 ml-auto">
               <span className="flex items-center gap-1 text-[10px] text-green-300 dark:text-green-400 font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
@@ -193,24 +247,30 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
           </div>
         )}
 
-        {/* ── Right side: status + theme toggle + disconnect ────────────── */}
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-          {/* Syncing Indicator */}
+        {/* ── Desktop Action Controls ───────────── */}
+        <div className="hidden md:flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          {!isAppView && (
+            <button
+              onClick={onGetStarted}
+              className="px-3.5 sm:px-4 py-1.5 rounded-xl text-xs font-extrabold text-slate-900 dark:text-white bg-white dark:bg-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500 border border-slate-200 dark:border-emerald-500/30 shadow-sm transition-all duration-300 transform hover:scale-[1.03] hover:-translate-y-0.5 flex items-center gap-1"
+            >
+              <span>{isConnected ? 'Workspace' : 'Get Started'}</span>
+              <span className="text-emerald-600 dark:text-emerald-200 font-black">→</span>
+            </button>
+          )}
+
           {isConnected && isSyncing && !syncTimerExceeded && (
             <span className="flex items-center gap-1 text-[10px] sm:text-xs font-semibold px-2 py-1 rounded-full bg-blue-500/25 text-blue-200 border border-blue-400/30 animate-pulse">
               <span className="w-2.5 h-2.5 border-2 border-blue-200 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-              <span className="hidden sm:inline">Syncing Contacts…</span>
-              <span className="inline sm:hidden">Syncing…</span>
+              <span>Syncing…</span>
             </span>
           )}
 
-          {/* Status badge */}
           <span className={`flex items-center gap-1 text-[10px] sm:text-xs font-medium px-2.5 py-1 rounded-full ${cfg.bg} ${cfg.text}`}>
             <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full flex-shrink-0 ${cfg.dot} ${cfg.pulse ? 'animate-pulse' : ''}`} />
-            <span className="hidden sm:inline">{cfg.label}</span>
+            <span>{cfg.label}</span>
           </span>
 
-          {/* Dark/Light mode toggle */}
           <button
             onClick={toggle}
             aria-label="Toggle theme"
@@ -220,8 +280,6 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
             {dark ? <SunIcon /> : <MoonIcon />}
           </button>
 
-
-          {/* Disconnect */}
           {isConnected && (
             <button
               onClick={handleLogout}
@@ -240,9 +298,93 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
             </button>
           )}
         </div>
+
+        {/* ── Mobile 3-Line Hamburger Button ──────────────────────── */}
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="md:hidden p-2 rounded-xl text-slate-200 hover:text-white bg-white/10 dark:bg-wa-dsurf transition-colors focus:outline-none"
+          aria-label="Toggle navigation menu"
+        >
+          <HamburgerIcon isOpen={mobileMenuOpen} />
+        </button>
+
       </div>
 
-      {/* ── Mobile profile strip ─────────────────────────────────────────── */}
+      {/* ── Mobile Hamburger Dropdown Menu Panel ───────────────────── */}
+      {mobileMenuOpen && (
+        <div className="md:hidden bg-wa-dark/95 dark:bg-wa-dpanel/95 backdrop-blur-xl border-b border-black/20 dark:border-wa-dbdr px-4 py-4 space-y-3 shadow-2xl transition-all">
+          {!isAppView && (
+            <div className="flex flex-col gap-1 text-xs font-semibold text-emerald-100 dark:text-wa-dmuted pb-3 border-b border-white/10 dark:border-wa-dbdr/60">
+              <button
+                onClick={() => { handleNavClick('landing'); setMobileMenuOpen(false); }}
+                className="text-left px-3 py-2 rounded-lg hover:bg-white/10 dark:hover:bg-wa-dsurf text-white font-bold"
+              >
+                Home
+              </button>
+              <button
+                onClick={() => { handleNavClick('landing', 'features'); setMobileMenuOpen(false); }}
+                className="text-left px-3 py-2 rounded-lg hover:bg-white/10 dark:hover:bg-wa-dsurf"
+              >
+                Features
+              </button>
+              <button
+                onClick={() => { handleNavClick('landing', 'how-it-works'); setMobileMenuOpen(false); }}
+                className="text-left px-3 py-2 rounded-lg hover:bg-white/10 dark:hover:bg-wa-dsurf"
+              >
+                How It Works
+              </button>
+              <button
+                onClick={() => { handleNavClick('landing', 'pricing'); setMobileMenuOpen(false); }}
+                className="text-left px-3 py-2 rounded-lg hover:bg-white/10 dark:hover:bg-wa-dsurf flex items-center justify-between"
+              >
+                <span>Pricing</span>
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500 text-white uppercase">Free</span>
+              </button>
+            </div>
+          )}
+
+          {/* Mobile Actions: CTA + Status + Theme Toggle */}
+          <div className="flex flex-col gap-2.5 pt-1">
+            {!isAppView && (
+              <button
+                onClick={() => { onGetStarted(); setMobileMenuOpen(false); }}
+                className="w-full py-2.5 rounded-xl text-xs font-extrabold text-slate-900 dark:text-white bg-white dark:bg-emerald-600 hover:bg-emerald-50 shadow-md flex items-center justify-center gap-1.5"
+              >
+                <span>{isConnected ? 'Go to Messaging Workspace' : 'Get Started Free'}</span>
+                <span>→</span>
+              </button>
+            )}
+
+            <div className="flex items-center justify-between pt-1">
+              <span className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full ${cfg.bg} ${cfg.text}`}>
+                <span className={`w-2 h-2 rounded-full ${cfg.dot} ${cfg.pulse ? 'animate-pulse' : ''}`} />
+                <span>{cfg.label}</span>
+              </span>
+
+              <button
+                onClick={() => { toggle(); setMobileMenuOpen(false); }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 dark:bg-wa-dsurf text-white"
+              >
+                {dark ? <SunIcon /> : <MoonIcon />}
+                <span>{dark ? 'Light Mode' : 'Dark Mode'}</span>
+              </button>
+            </div>
+
+            {isConnected && (
+              <button
+                onClick={() => { handleLogout(); setMobileMenuOpen(false); }}
+                disabled={loggingOut}
+                className="w-full mt-1 flex items-center justify-center gap-1.5 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 py-2 rounded-xl font-medium"
+              >
+                <LogoutIcon />
+                <span>Disconnect Session</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Mobile Profile Strip (When connected) ────────────────────── */}
       {isConnected && (
         <div className="sm:hidden bg-black/20 dark:bg-wa-dsurf/60 px-4 py-1.5 flex items-center gap-2 border-t border-black/10 dark:border-wa-dbdr">
           <div className="w-5 h-5 rounded-full bg-wa-green flex items-center justify-center text-slate-100 font-bold text-[10px] flex-shrink-0">
@@ -287,9 +429,9 @@ export default function Header({ status, profile, onLogout, isSyncing }) {
         </div>
       )}
     </header>
+
     {/* Floating Feedback & Support Button */}
     <div className="fixed bottom-6 right-6 z-[99] group">
-      {/* Tooltip */}
       <div className="absolute bottom-16 right-0 mb-1 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 bg-slate-950/90 dark:bg-wa-dpanel/95 backdrop-blur-sm text-slate-100 text-xs font-semibold px-3 py-1.5 rounded-xl shadow-xl border border-slate-800 dark:border-wa-dbdr whitespace-nowrap">
         Feedback & Support Box
       </div>
