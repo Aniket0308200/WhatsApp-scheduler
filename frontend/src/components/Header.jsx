@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { logout, updateProfileName } from '../api';
 import { useTheme } from '../ThemeContext';
 import FeedbackModal from './FeedbackModal';
+import AvatarSelectorModal, { PRESET_AVATARS, COLOR_OPTIONS } from './AvatarSelectorModal';
 import { navigateTo } from '../utils/navigation';
 
 const STATUS_CONFIG = {
@@ -57,6 +58,27 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
   const [showFeedback, setShowFeedback] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Avatar state persistence
+  const [avatarConfig, setAvatarConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem('wa_profile_avatar');
+      return saved ? JSON.parse(saved) : { type: 'initial', colorId: 'emerald' };
+    } catch {
+      return { type: 'initial', colorId: 'emerald' };
+    }
+  });
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+
+  const handleSaveAvatar = (newConfig) => {
+    setAvatarConfig(newConfig);
+    try {
+      localStorage.setItem('wa_profile_avatar', JSON.stringify(newConfig));
+      toast.success('Avatar updated successfully!');
+    } catch (err) {
+      console.error('Failed to save avatar', err);
+    }
+  };
+
   React.useEffect(() => {
     setEditedName(profile?.name || '');
   }, [profile]);
@@ -101,6 +123,32 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
   const avatarLetter = displayName ? displayName.replace('+','').trim().charAt(0).toUpperCase() : '?';
 
   const showPhoneSubtitle = displayPhone && displayName.replace(/\D/g, '') !== cleanPhone;
+
+  const renderAvatarGraphic = (sizeClass = "w-8 h-8", textClass = "text-sm") => {
+    if (avatarConfig.type === 'custom' && avatarConfig.value) {
+      return (
+        <img
+          src={avatarConfig.value}
+          alt="Avatar"
+          className={`${sizeClass} rounded-full object-cover shadow-sm border border-white/20`}
+        />
+      );
+    }
+    if (avatarConfig.type === 'preset' && avatarConfig.presetId) {
+      const presetObj = PRESET_AVATARS.find(p => p.id === avatarConfig.presetId) || PRESET_AVATARS[0];
+      return (
+        <div className={`${sizeClass} rounded-full overflow-hidden shadow-sm border border-white/20 bg-slate-800`}>
+          {presetObj.svg}
+        </div>
+      );
+    }
+    const colorObj = COLOR_OPTIONS.find(c => c.id === avatarConfig.colorId) || COLOR_OPTIONS[0];
+    return (
+      <div className={`${sizeClass} rounded-full ${colorObj.bg} flex-shrink-0 flex items-center justify-center text-white font-extrabold ${textClass} shadow-sm border border-white/20`}>
+        {avatarLetter}
+      </div>
+    );
+  };
 
   const handleLogout = async () => {
     if (!window.confirm('Disconnect WhatsApp and clear the session?')) return;
@@ -193,15 +241,34 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
           </nav>
         )}
 
-        {/* ── Connected Profile Pill (Desktop) ─────────── */}
+        {/* ── Connected Profile Card (Clickable workspace entrance) ─────────── */}
         {isConnected && (
-          <div className="hidden lg:flex items-center gap-2.5 bg-white/10 dark:bg-wa-dsurf border border-white/10 dark:border-wa-dbdr rounded-xl px-3 py-1.5 min-w-0 flex-1 max-w-[240px]">
-            <div className="w-8 h-8 rounded-full bg-wa-green flex-shrink-0 flex items-center justify-center text-slate-100 font-bold text-sm shadow-sm">
-              {avatarLetter}
+          <div
+            onClick={(e) => {
+              if (editing) return;
+              if (!isAppView) onGetStarted();
+            }}
+            className={`hidden md:flex items-center gap-2.5 bg-white/10 dark:bg-wa-dsurf border border-white/15 dark:border-wa-dbdr rounded-xl px-3 py-1.5 min-w-0 flex-1 max-w-[260px] transition-all duration-200 group select-none ${
+              !isAppView ? 'cursor-pointer hover:bg-white/20 dark:hover:bg-wa-dbdr/80 hover:border-emerald-400/50 hover:shadow-md' : 'cursor-default'
+            }`}
+            title={!isAppView ? "Go to Messaging Workspace" : "Connected WhatsApp Profile"}
+          >
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowAvatarModal(true);
+              }}
+              className="relative group/avatar cursor-pointer shrink-0"
+              title="Click to customize avatar (Photo, 8 Avatars, Color)"
+            >
+              {renderAvatarGraphic("w-8 h-8", "text-sm")}
+              <div className="absolute -bottom-1 -right-1 bg-slate-900/90 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center border border-white/30 shadow-md group-hover/avatar:scale-110 transition-transform">
+                📷
+              </div>
             </div>
             <div className="min-w-0 flex-1 flex items-center gap-1.5">
               {editing ? (
-                <div className="flex items-center gap-1 w-full min-w-0">
+                <div className="flex items-center gap-1 w-full min-w-0" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="text"
                     value={editedName}
@@ -219,17 +286,26 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
               ) : (
                 <div className="min-w-0 flex-1 group/name flex items-center gap-1">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-100 truncate leading-tight">
-                      {displayName || 'No Name'}
+                    <p className="text-xs sm:text-sm font-semibold text-slate-100 group-hover:text-emerald-200 transition-colors truncate leading-tight">
+                      {displayName || 'Connected User'}
                     </p>
-                    {showPhoneSubtitle && (
-                      <p className="text-[11px] text-green-300 dark:text-wa-dmuted leading-tight font-mono">
+                    {showPhoneSubtitle ? (
+                      <p className="text-[10px] sm:text-[11px] text-green-300 dark:text-wa-dmuted leading-tight font-mono truncate">
                         +{cleanPhone}
                       </p>
+                    ) : (
+                      <span className="flex items-center gap-1 text-[9px] sm:text-[10px] text-green-300 dark:text-green-400 font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                        online
+                      </span>
                     )}
                   </div>
                   <button
-                    onClick={() => { setEditing(true); setEditedName(displayName || ''); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditing(true);
+                      setEditedName(displayName || '');
+                    }}
                     className="p-1 text-slate-300 hover:text-slate-100 opacity-0 group-hover/name:opacity-100 transition-opacity shrink-0 text-xs"
                     title="Edit profile name"
                   >
@@ -238,23 +314,22 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
                 </div>
               )}
             </div>
-            <div className="flex-shrink-0 ml-auto">
-              <span className="flex items-center gap-1 text-[10px] text-green-300 dark:text-green-400 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                online
+            {!isAppView && !editing && (
+              <span className="text-emerald-400 dark:text-emerald-300 text-xs font-extrabold opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all ml-0.5 shrink-0">
+                →
               </span>
-            </div>
+            )}
           </div>
         )}
 
         {/* ── Desktop Action Controls ───────────── */}
         <div className="hidden md:flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-          {!isAppView && (
+          {!isAppView && !isConnected && (
             <button
               onClick={onGetStarted}
               className="px-3.5 sm:px-4 py-1.5 rounded-xl text-xs font-extrabold text-slate-900 dark:text-white bg-white dark:bg-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500 border border-slate-200 dark:border-emerald-500/30 shadow-sm transition-all duration-300 transform hover:scale-[1.03] hover:-translate-y-0.5 flex items-center gap-1"
             >
-              <span>{isConnected ? 'Workspace' : 'Get Started'}</span>
+              <span>Get Started</span>
               <span className="text-emerald-600 dark:text-emerald-200 font-black">→</span>
             </button>
           )}
@@ -386,13 +461,29 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
 
       {/* ── Mobile Profile Strip (When connected) ────────────────────── */}
       {isConnected && (
-        <div className="sm:hidden bg-black/20 dark:bg-wa-dsurf/60 px-4 py-1.5 flex items-center gap-2 border-t border-black/10 dark:border-wa-dbdr">
-          <div className="w-5 h-5 rounded-full bg-wa-green flex items-center justify-center text-slate-100 font-bold text-[10px] flex-shrink-0">
-            {avatarLetter}
+        <div
+          onClick={() => {
+            if (editing) return;
+            if (!isAppView) onGetStarted();
+          }}
+          className={`md:hidden bg-black/20 dark:bg-wa-dsurf/60 px-4 py-1.5 flex items-center gap-2 border-t border-black/10 dark:border-wa-dbdr ${
+            !isAppView ? 'cursor-pointer hover:bg-black/30 active:bg-black/40' : ''
+          }`}
+          title={!isAppView ? "Tap to open Messaging Workspace" : "Connected WhatsApp Profile"}
+        >
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowAvatarModal(true);
+            }}
+            className="relative cursor-pointer shrink-0"
+            title="Tap to customize avatar"
+          >
+            {renderAvatarGraphic("w-6 h-6", "text-xs")}
           </div>
           <div className="flex-1 min-w-0 flex items-center gap-1.5">
             {editing ? (
-              <div className="flex items-center gap-1 w-full min-w-0">
+              <div className="flex items-center gap-1 w-full min-w-0" onClick={(e) => e.stopPropagation()}>
                 <input
                   type="text"
                   value={editedName}
@@ -409,11 +500,15 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
               </div>
             ) : (
               <div className="min-w-0 flex-1 flex items-center gap-1.5 group/mobname">
-                <span className="text-xs text-green-200 dark:text-wa-dmuted truncate">
-                  {displayName || 'No Name'}{showPhoneSubtitle ? ` · +${cleanPhone}` : ''}
+                <span className="text-xs font-semibold text-emerald-200 dark:text-wa-dmuted truncate">
+                  {displayName || 'Connected User'}{showPhoneSubtitle ? ` · +${cleanPhone}` : ''}
                 </span>
                 <button
-                  onClick={() => { setEditing(true); setEditedName(displayName || ''); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditing(true);
+                    setEditedName(displayName || '');
+                  }}
                   className="text-[10px] text-slate-300 opacity-60 hover:opacity-100 shrink-0"
                   title="Edit profile name"
                 >
@@ -422,10 +517,17 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
               </div>
             )}
           </div>
-          <span className="ml-auto flex items-center gap-1 text-[10px] text-green-300 dark:text-green-400 flex-shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            online
-          </span>
+          {!isAppView && !editing && (
+            <span className="text-emerald-400 text-xs font-bold shrink-0 ml-auto">
+              Open Workspace →
+            </span>
+          )}
+          {isAppView && (
+            <span className="ml-auto flex items-center gap-1 text-[10px] text-green-300 dark:text-green-400 flex-shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+              online
+            </span>
+          )}
         </div>
       )}
     </header>
@@ -444,6 +546,15 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
       </button>
     </div>
     {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
+    {showAvatarModal && (
+      <AvatarSelectorModal
+        isOpen={showAvatarModal}
+        onClose={() => setShowAvatarModal(false)}
+        currentAvatar={avatarConfig}
+        onSave={handleSaveAvatar}
+        userName={displayName}
+      />
+    )}
   </>
   );
 }
