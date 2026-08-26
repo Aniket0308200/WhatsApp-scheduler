@@ -133,7 +133,7 @@ export default function App() {
         <footer className="w-full text-center text-xs py-5 mt-auto border-t border-black/20 dark:border-wa-dbdr bg-wa-dark dark:bg-wa-dpanel transition-colors duration-200 z-10">
           <div className="container mx-auto px-4 max-w-5xl flex flex-col md:flex-row items-center justify-between gap-4 text-emerald-100 dark:text-wa-dmuted font-medium">
             <div className="flex flex-col items-center md:items-start gap-1">
-              <span className="text-slate-100 dark:text-wa-dtext">© {new Date().getFullYear()} WhatsApp Scheduler. All rights reserved.</span>
+              <span className="text-slate-100 dark:text-wa-dtext">© {new Date().getFullYear()} WA Scheduler. All rights reserved.</span>
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-emerald-200/90 dark:text-wa-dmuted text-[11px] font-semibold">

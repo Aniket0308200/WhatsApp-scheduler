@@ -90,7 +90,7 @@ export default function LandingPage({ onGetStarted, isConnected, waStatus, profi
                         WA
                       </div>
                       <div>
-                        <h4 className="text-xs font-bold text-slate-800 dark:text-white">WhatsApp Scheduler Pro</h4>
+                        <h4 className="text-xs font-bold text-slate-800 dark:text-white">WA Scheduler Pro</h4>
                         <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
                           {isConnected ? `Connected as ${profile?.name || 'Session Active'}` : '● Ready to Connect'}
                         </p>
@@ -197,7 +197,7 @@ export default function LandingPage({ onGetStarted, isConnected, waStatus, profi
               Ready to Automate Your WhatsApp Messaging?
             </h2>
             <p className="text-sm sm:text-base text-emerald-100 leading-relaxed">
-              Join thousands of professionals, freelancers, and businesses who save hours every week using WhatsApp Scheduler. Start free today!
+              Join thousands of professionals, freelancers, and businesses who save hours every week using WA Scheduler. Start free today!
             </p>
             <div className="pt-4">
               <button

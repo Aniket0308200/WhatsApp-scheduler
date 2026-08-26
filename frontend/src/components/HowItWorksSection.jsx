@@ -35,7 +35,7 @@ export default function HowItWorksSection({ onGetStarted }) {
             <span>⚡ 3 Easy Steps</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            How WhatsApp Scheduler <span className="bg-gradient-to-r from-wa-teal to-emerald-500 bg-clip-text text-transparent dark:from-emerald-400 dark:to-wa-green">Works</span>
+            How WA Scheduler <span className="bg-gradient-to-r from-wa-teal to-emerald-500 bg-clip-text text-transparent dark:from-emerald-400 dark:to-wa-green">Works</span>
           </h2>
           <p className="mt-3 text-base text-slate-600 dark:text-wa-dmuted">
             Get up and running in under 2 minutes. No technical expertise or complex API setup needed.

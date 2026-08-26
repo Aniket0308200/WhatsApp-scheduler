@@ -43,7 +43,7 @@ export default function FaqSection() {
             Have Questions? We Have <span className="bg-gradient-to-r from-wa-teal to-emerald-500 bg-clip-text text-transparent dark:from-emerald-400 dark:to-wa-green">Answers</span>
           </h2>
           <p className="mt-3 text-sm sm:text-base text-slate-600 dark:text-wa-dmuted">
-            Everything you need to know about WhatsApp Scheduler setup, privacy, and plans.
+            Everything you need to know about WA Scheduler setup, privacy, and plans.
           </p>
         </div>
 

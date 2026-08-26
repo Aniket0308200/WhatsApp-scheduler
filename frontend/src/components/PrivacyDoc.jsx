@@ -22,7 +22,7 @@ export default function PrivacyDoc() {
         <section className="space-y-2">
           <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">1. Introduction</h3>
           <p>
-            Welcome to <strong>WhatsApp Scheduler</strong>. We respect your privacy and are committed to protecting any information processed through this application. 
+            Welcome to <strong>WA Scheduler</strong>. We respect your privacy and are committed to protecting any information processed through this application. 
             Because this application operates locally under your own deployment, you retain control of your data. This Privacy Policy details how we interact with, retrieve, and store your information.
           </p>
         </section>
@@ -30,7 +30,7 @@ export default function PrivacyDoc() {
         <section className="space-y-2">
           <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">2. Google API Services & OAuth Consent</h3>
           <p>
-            WhatsApp Scheduler offers an optional integration to import and synchronize your Google Contacts. 
+            WA Scheduler offers an optional integration to import and synchronize your Google Contacts. 
             To do this, we use Google OAuth authentication to request access to your Google Contacts via the Google People API (specifically the 
             <code>https://www.googleapis.com/auth/contacts.readonly</code> scope).
           </p>
@@ -81,7 +81,7 @@ export default function PrivacyDoc() {
         <section className="space-y-2">
           <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">7. Contact Information</h3>
           <p>
-            If you have any questions or concerns regarding this Privacy Policy, please contact the administrator of your local WhatsApp Scheduler deployment instance.
+            If you have any questions or concerns regarding this Privacy Policy, please contact the administrator of your local WA Scheduler deployment instance.
           </p>
         </section>
       </div>

@@ -196,14 +196,14 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
           <div>
             <div className="flex items-center gap-2">
               <h1 className="font-bold text-sm sm:text-base text-slate-100 leading-tight tracking-tight group-hover:text-emerald-200 transition-colors">
-                WhatsApp Scheduler
+                WA Scheduler
               </h1>
               <span className="hidden lg:inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 font-medium select-none">
                 🔒 End-to-End Encrypted
               </span>
             </div>
             <p className="text-[10px] sm:text-[11px] text-green-300 dark:text-wa-dmuted leading-tight mt-0.5 flex items-center gap-1">
-              <span>WhatsApp Message Scheduler</span>
+              <span>WA Message Scheduler</span>
             </p>
           </div>
         </button>
