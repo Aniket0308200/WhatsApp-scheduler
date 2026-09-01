@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { format, addMinutes } from 'date-fns';
 import { scheduleMessage, fetchContactName, resolveContactLive, importContacts, fetchAllContacts, fetchGoogleAuthUrl, fetchLinkedGoogleAccounts, syncGroups, deleteGoogleAccount } from '../api';
+import DateTimePicker from './DateTimePicker';
 
 // ─── Complete country-code list ───────────────────────────────────────────────
 // ─── Complete country-code list ───────────────────────────────────────────────
@@ -239,7 +240,7 @@ function ContactsImportModal({ onClose, onImported }) {
       <div className="w-full max-w-lg bg-white dark:bg-wa-dpanel rounded-2xl shadow-2xl border border-gray-200 dark:border-wa-dbdr overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 dark:border-wa-dbdr flex items-center justify-between">
           <div><h3 className="font-semibold text-gray-800 dark:text-wa-dtext">Import Contacts</h3><p className="text-xs text-gray-400 mt-0.5">Supported formats: VCF / vCard and CSV</p></div>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700 dark:hover:text-white text-xl" aria-label="Close">×</button>
+          <button type="button" onClick={onClose} className="btn-close text-lg" aria-label="Close">✕</button>
         </div>
         <div className="p-5 space-y-4">
           <button type="button" onClick={() => inputRef.current?.click()}
@@ -304,14 +305,12 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
 
   const getMinTime = () => {
     const d = addMinutes(new Date(), 1);
-    d.setSeconds(0, 0);
-    return format(d, "yyyy-MM-dd'T'HH:mm");
+    return format(d, "yyyy-MM-dd'T'HH:mm:ss");
   };
 
   const getDefaultTime = () => {
     const d = addMinutes(new Date(), 5);
-    d.setSeconds(0, 0);
-    return format(d, "yyyy-MM-dd'T'HH:mm");
+    return format(d, "yyyy-MM-dd'T'HH:mm:ss");
   };
 
   const [countryCode,   setCountryCode]   = useState('91');
@@ -786,7 +785,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
                     setContactName(null);
                     setContactExists(false);
                   }}
-                  className={`absolute top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-white hover:scale-110 active:scale-95 transition-transform ${fetchingName ? 'right-9' : 'right-3'}`}
+                  className={`absolute top-1/2 -translate-y-1/2 btn-close text-xs p-1 ${fetchingName ? 'right-9' : 'right-2'}`}
                   title="Clear recipient"
                 >
                   ✕
@@ -919,63 +918,16 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
 
         {/* ── Date & Time ───────────────────────────────────────────────── */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-wa-dtext mb-1.5">
+          <label className="block text-sm font-semibold text-slate-800 dark:text-wa-dtext mb-2">
             Scheduled Date & Time
           </label>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <div className="relative flex-1 w-full">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-wa-dmuted pointer-events-none text-sm select-none">
-                📅
-              </span>
-              <input
-                type="datetime-local"
-                value={scheduledAt}
-                onChange={e => handleDateChange(e.target.value)}
-                min={minTime}
-                required
-                className={`w-full border rounded-xl pl-9 pr-3 py-2.5 text-sm bg-slate-50 focus:bg-white dark:bg-wa-dsurf text-gray-900 dark:text-wa-dtext focus:outline-none focus:ring-2 focus:ring-wa-teal/40 focus:border-wa-teal transition-colors
-                  ${timeConfirmed ? 'border-green-400 dark:border-green-500/50 bg-green-50 dark:bg-green-950/20 text-green-800 dark:text-green-300' : 'border-slate-200 dark:border-wa-dbdr'}`}
-              />
-            </div>
-            {/* Confirm / Done button */}
-            <button
-              type="button"
-              onClick={() => {
-                if (!scheduledAt) { toast.error('Pick a date & time first.'); return; }
-                const picked = new Date(scheduledAt);
-                if (picked <= addMinutes(new Date(), 0)) {
-                  toast.error('Must be at least 1 minute in the future.');
-                  return;
-                }
-                setTimeConfirmed(true);
-                toast.success('Time confirmed!');
-              }}
-              className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-1.5
-                ${timeConfirmed
-                  ? 'bg-green-500 text-white cursor-default'
-                  : 'bg-wa-teal hover:bg-wa-dark text-white'}`}
-            >
-              {timeConfirmed ? '✓ Done' : 'Confirm'}
-            </button>
-          </div>
-          
-          {/* WhatsApp themed premium success block */}
-          {timeConfirmed ? (
-            <div className="mt-2.5 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-500/10 p-3 text-xs text-emerald-800 dark:text-emerald-300 animate-fade-in">
-              <span className="text-sm mt-0.5 select-none">⏰</span>
-              <div>
-                <p className="font-semibold text-emerald-950 dark:text-emerald-200">Time Lock Active</p>
-                <p className="mt-0.5 text-emerald-700/90 dark:text-emerald-300/80 leading-relaxed">
-                  Message will be dispatched at <span className="font-bold underline">{new Date(scheduledAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (IST)</span>.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <p className="text-xs text-gray-400 dark:text-wa-dmuted mt-1.5 flex items-center gap-1.5 pl-1 leading-normal">
-              <span className="select-none">💡</span>
-              Select a time at least 1 minute ahead, then click Confirm.
-            </p>
-          )}
+          <DateTimePicker
+            value={scheduledAt}
+            onChange={handleDateChange}
+            min={minTime}
+            timeConfirmed={timeConfirmed}
+            setTimeConfirmed={setTimeConfirmed}
+          />
         </div>
 
         {/* ── Submit ────────────────────────────────────────────────────── */}
@@ -1023,8 +975,8 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
                 </h3>
                 <p className="text-[11px] text-emerald-100/90 dark:text-wa-dmuted mt-0.5">Click a contact to fill the scheduler form</p>
               </div>
-              <button type="button" onClick={() => setShowDirectory(false)} className="text-emerald-100 hover:text-white dark:text-gray-400 dark:hover:text-white text-2xl font-light focus:outline-none">
-                &times;
+              <button type="button" onClick={() => setShowDirectory(false)} className="btn-close text-[18px]">
+                ✕
               </button>
             </div>
 
@@ -1057,7 +1009,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
                         <button
                           type="button"
                           onClick={() => handleDisconnectGmail(email)}
-                          className="hover:text-red-500 text-[9px] font-bold ml-0.5 focus:outline-none shrink-0"
+                          className="btn-close p-0.5 text-[9px] hover:bg-red-500/20 text-red-500 ml-0.5 shrink-0"
                           title="Disconnect Gmail Account"
                         >
                           ✕
@@ -1165,7 +1117,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
                 />
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
                 {directorySearch && (
-                  <button type="button" onClick={() => setDirectorySearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm">
+                  <button type="button" onClick={() => setDirectorySearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 btn-close p-1 text-xs">
                     ✕
                   </button>
                 )}

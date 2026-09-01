@@ -142,7 +142,7 @@ export default function FeedbackModal({ onClose }) {
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-wa-dbdr transition-all"
+            className="btn-close w-8 h-8 text-sm"
           >
             ✕
           </button>

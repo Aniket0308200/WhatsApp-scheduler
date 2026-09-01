@@ -112,7 +112,7 @@ export default function TermsOfService() {
           <div className="bg-slate-100/70 dark:bg-wa-dsurf p-4 rounded-xl border border-slate-200 dark:border-wa-dbdr font-mono text-xs sm:text-sm text-slate-800 dark:text-wa-dtext space-y-1">
             <p><strong>App Name:</strong> WhatsApp Scheduler (WA Scheduler)</p>
             <p><strong>Official Site:</strong> <a href="https://www.wascheduler.site" className="text-emerald-600 dark:text-emerald-400 hover:underline">https://www.wascheduler.site</a></p>
-            <p><strong>Support Email:</strong> <a href="mailto:support@wascheduler.site" className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold">support@wascheduler.site</a></p>
+            {/* <p><strong>Support Email:</strong> <a href="mailto:support@wascheduler.site" className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold">support@wascheduler.site</a></p> */}
           </div>
         </section>
       </div>

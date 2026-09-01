@@ -18,26 +18,65 @@ body {
 /* ── Smooth transitions & click outline cleanup on all interactives ────────── */
 button, input, textarea, select, a, [class*="transition-"] {
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 250ms;
+  transition-duration: 200ms;
   -webkit-tap-highlight-color: transparent;
 }
 
-button:focus-visible {
-  outline: none;
+button:focus, button:focus-visible, button:active, input:focus, input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
-/* ── Custom scrollbars ─────────────────────────────────────────────────────── */
-.custom-scroll::-webkit-scrollbar       { width: 5px; }
-.custom-scroll::-webkit-scrollbar-track { @apply bg-gray-100 rounded-full; }
-.custom-scroll::-webkit-scrollbar-thumb { @apply bg-gray-300 rounded-full; }
-
-.dark .custom-scroll::-webkit-scrollbar-track { background: #1f2c33; }
-.dark .custom-scroll::-webkit-scrollbar-thumb { background: #2a3942; }
-
-/* ── Dark-mode datetime-local input native icon color ──────────────────────── */
-.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.8);
+/* ── Global Sleek Scrollbar Styling ───────────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
+
+.dark * {
+  scrollbar-color: #2a3942 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+  transition: background-color 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #2a3942;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #00a884;
+}
+
+/* Custom inner scroll utility */
+.custom-scroll::-webkit-scrollbar       { width: 5px; height: 5px; }
+.custom-scroll::-webkit-scrollbar-track { @apply bg-transparent rounded-full; }
+.custom-scroll::-webkit-scrollbar-thumb { @apply bg-slate-300 dark:bg-wa-dbdr rounded-full hover:bg-slate-400 dark:hover:bg-wa-teal; }
+
+/* ── Standard Styled Close Button Utility ──────────────────────────────────── */
+.btn-close {
+  @apply relative inline-flex items-center justify-center rounded-lg p-1.5 text-slate-400 
+         hover:text-red-500 hover:bg-red-500/10 dark:hover:bg-red-500/20 dark:hover:text-red-400 
+         transition-all duration-200 outline-none focus:outline-none active:scale-95 shrink-0 select-none;
+}
+
 
 /* ── Contact suggestion list z-index safety ────────────────────────────────── */
 .suggest-list { z-index: 60; }

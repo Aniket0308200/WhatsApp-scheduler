@@ -409,7 +409,7 @@ export default function AvatarSelectorModal({ isOpen, onClose, currentAvatar, on
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            className="btn-close w-8 h-8 text-sm"
           >
             ✕
           </button>
