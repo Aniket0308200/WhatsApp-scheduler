@@ -1,19 +1,20 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { Routes, Route, useNavigate, Link, useLocation } from 'react-router-dom';
 import { fetchStatus, fetchMessages } from './api';
 import ConnectionPanel from './components/ConnectionPanel';
 import SchedulerForm from './components/SchedulerForm';
 import MessageTable from './components/MessageTable';
 import Header from './components/Header';
-import PrivacyPolicy from './components/PrivacyDoc';
+import PrivacyPolicy from './components/PrivacyPolicy';
 import TermsOfService from './components/TermsOfService';
 import LandingPage from './components/LandingPage';
-import HeroSection from './components/HeroSection';
-import { navigateTo } from './utils/navigation';
 
 const POLL_INTERVAL = 4_000;
 const MSG_POLL_INTERVAL = 20_000;
 
 export default function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [waStatus, setWaStatus] = useState('connecting');
   const [qr, setQr] = useState(null);
   const [pairingCode, setPairingCode] = useState(null);
@@ -21,16 +22,7 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [messages, setMessages] = useState([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
-  const [currentPath, setCurrentPath] = useState(window.location.pathname);
   const [activeView, setActiveView] = useState('landing'); // 'landing' | 'app'
-
-  useEffect(() => {
-    const handlePopState = () => {
-      setCurrentPath(window.location.pathname);
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -64,7 +56,7 @@ export default function App() {
   const isConnected = waStatus === 'connected';
 
   const handleNavigate = (view, sectionId) => {
-    navigateTo('/');
+    navigate('/');
     setActiveView(view);
     if (sectionId) {
       setTimeout(() => {
@@ -77,9 +69,12 @@ export default function App() {
   };
 
   const handleGetStarted = () => {
+    navigate('/');
     setActiveView('app');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  const isPolicyOrTerms = location.pathname === '/privacy-policy' || location.pathname === '/terms-of-service';
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#f1f1f1] dark:bg-[#0b141a] transition-colors duration-200 font-sans">
@@ -100,34 +95,39 @@ export default function App() {
         {/* Spacer to push content below fixed header */}
         <div className={`flex-shrink-0 transition-all duration-150 ${waStatus === 'connected' && (profile?.name || profile?.phone) ? 'h-[96px] sm:h-[60px]' : 'h-[60px]'}`} />
 
-        <main className={`flex-1 container mx-auto ${activeView === 'landing' ? 'px-2 sm:px-4 max-w-6xl' : 'px-4 max-w-5xl'} py-6 mt-5 sm:mt-0 transition-all duration-200`}>
-          {currentPath === '/privacy-policy' ? (
-            <PrivacyPolicy />
-          ) : currentPath === '/terms-of-service' ? (
-            <TermsOfService />
-          ) : activeView === 'landing' ? (
-            <LandingPage
-              onGetStarted={handleGetStarted}
-              isConnected={isConnected}
-              waStatus={waStatus}
-              profile={profile}
+        <main className={`flex-1 container mx-auto ${isPolicyOrTerms ? 'px-4 max-w-4xl' : activeView === 'landing' ? 'px-2 sm:px-4 max-w-6xl' : 'px-4 max-w-5xl'} py-6 mt-5 sm:mt-0 transition-all duration-200`}>
+          <Routes>
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/terms-of-service" element={<TermsOfService />} />
+            <Route
+              path="*"
+              element={
+                activeView === 'landing' ? (
+                  <LandingPage
+                    onGetStarted={handleGetStarted}
+                    isConnected={isConnected}
+                    waStatus={waStatus}
+                    profile={profile}
+                  />
+                ) : (
+                  <div className="space-y-6">
+                    {!isConnected && (
+                      <ConnectionPanel
+                        status={waStatus}
+                        qr={qr}
+                        pairingCode={pairingCode}
+                        onRefresh={refreshStatus}
+                      />
+                    )}
+
+                    <SchedulerForm isConnected={isConnected} onScheduled={refreshMessages} isSyncing={isSyncing} />
+
+                    <MessageTable messages={messages} loading={loadingMsgs} onRefresh={refreshMessages} />
+                  </div>
+                )
+              }
             />
-          ) : (
-            <div className="space-y-6">
-              {!isConnected && (
-                <ConnectionPanel
-                  status={waStatus}
-                  qr={qr}
-                  pairingCode={pairingCode}
-                  onRefresh={refreshStatus}
-                />
-              )}
-
-              <SchedulerForm isConnected={isConnected} onScheduled={refreshMessages} isSyncing={isSyncing} />
-
-              <MessageTable messages={messages} loading={loadingMsgs} onRefresh={refreshMessages} />
-            </div>
-          )}
+          </Routes>
         </main>
 
         <footer className="w-full text-center text-xs py-5 mt-auto border-t border-black/20 dark:border-wa-dbdr bg-wa-dark dark:bg-wa-dpanel transition-colors duration-200 z-10">
@@ -143,9 +143,9 @@ export default function App() {
               <span className="opacity-40">|</span>
               <button onClick={() => handleNavigate('landing', 'pricing')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Pricing</button>
               <span className="opacity-40">|</span>
-              <button onClick={() => navigateTo('/privacy-policy')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Privacy Policy</button>
+              <Link to="/privacy-policy" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Privacy Policy</Link>
               <span className="opacity-40">|</span>
-              <button onClick={() => navigateTo('/terms-of-service')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Terms of Service</button>
+              <Link to="/terms-of-service" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Terms of Service</Link>
             </div>
 
             <div className="flex items-center gap-1.5 text-[11px] bg-white/10 dark:bg-wa-dsurf px-3 py-1.5 rounded-full border border-white/10 dark:border-wa-dbdr/50">

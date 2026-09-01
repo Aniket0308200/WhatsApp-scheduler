@@ -315,7 +315,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
               )}
             </div>
             {!isAppView && !editing && (
-              <span className="text-emerald-400 dark:text-emerald-300 text-xs font-extrabold opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all ml-0.5 shrink-0">
+              <span className="text-emerald-400 dark:text-emerald-300 text-xs font-extrabold opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all ml-0.5 shrink-0 hidden">
                 →
               </span>
             )}
