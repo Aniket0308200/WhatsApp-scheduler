@@ -1,15 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { format, parseISO, addMinutes, addHours, addDays, setHours, setMinutes, setSeconds, isValid } from 'date-fns';
 import toast from 'react-hot-toast';
 
 /**
- * Clean & Simplified DateTimePicker:
- * - Single view (No confusing mode tabs)
- * - Date Picker Calendar
- * - Direct HH : MM : SS numeric inputs (Works on mobile & desktop with seconds support)
- * - Single-line Direct Text sync input (YYYY-MM-DD HH:mm:ss)
- * - Presets: +1 min, +5 min, +15 min, +30 min, +1 hour, Tomorrow 12 AM (Midnight), Tomorrow 9 AM
- * - Live IST time preview badge
+ * Native Calendar & Time Picker Component:
+ * - Simple Date Calendar picker (type="date")
+ * - Simple Time picker with Seconds & AM/PM (type="time" step="1")
+ * - Combined DateTime Local picker option (type="datetime-local" step="1")
+ * - Quick presets: +1 min, +5 min, +15 min, +30 min, +1 hour, Tomorrow 12 AM, Tomorrow 9 AM
+ * - Live formatted IST preview badge + Confirm Time button
  */
 export default function DateTimePicker({
   value,
@@ -18,31 +17,7 @@ export default function DateTimePicker({
   timeConfirmed,
   setTimeConfirmed
 }) {
-  // Local text input buffer for Direct Text Edit
-  const [textBuffer, setTextBuffer] = useState('');
-  const [textError, setTextError] = useState('');
-
-  // Helper: Format Date object to "yyyy-MM-dd'T'HH:mm:ss"
-  const formatToInternal = (dateObj) => {
-    try {
-      if (!dateObj || !isValid(dateObj)) return '';
-      return format(dateObj, "yyyy-MM-dd'T'HH:mm:ss");
-    } catch {
-      return '';
-    }
-  };
-
-  // Helper: Format Date object for display in Text Input mode "yyyy-MM-dd HH:mm:ss"
-  const formatToTextDisplay = (dateObj) => {
-    try {
-      if (!dateObj || !isValid(dateObj)) return '';
-      return format(dateObj, 'yyyy-MM-dd HH:mm:ss');
-    } catch {
-      return '';
-    }
-  };
-
-  // Parse current value into a Date object or fallback to now + 5 min
+  // Parse value into a valid Date object or fallback to now + 5 min
   const getCurrentDate = () => {
     if (!value) return addMinutes(new Date(), 5);
     try {
@@ -57,83 +32,54 @@ export default function DateTimePicker({
 
   const currentDate = getCurrentDate();
   
-  const currentDateStr = format(currentDate, 'yyyy-MM-dd');
-  const currentHours = currentDate.getHours();
-  const currentMinutes = currentDate.getMinutes();
-  const currentSeconds = currentDate.getSeconds();
+  // Format parts for native HTML inputs
+  const dateStr = format(currentDate, 'yyyy-MM-dd');
+  const timeStr = format(currentDate, 'HH:mm:ss');
+  const datetimeLocalStr = format(currentDate, "yyyy-MM-dd'T'HH:mm:ss");
 
-  // Synchronize textBuffer whenever value changes
-  useEffect(() => {
-    setTextBuffer(formatToTextDisplay(currentDate));
-    setTextError('');
-  }, [value]);
-
-  // Handler to update date/time from parts
-  const updateFromParts = (newDateStr, hours, minutes, seconds) => {
+  // Helper: Format Date object to "yyyy-MM-dd'T'HH:mm:ss"
+  const formatToInternal = (dateObj) => {
     try {
-      const [year, month, day] = newDateStr.split('-').map(Number);
-      const updated = new Date(year, month - 1, day, hours, minutes, seconds);
-      if (isValid(updated)) {
-        onChange(formatToInternal(updated));
+      if (!dateObj || !isValid(dateObj)) return '';
+      return format(dateObj, "yyyy-MM-dd'T'HH:mm:ss");
+    } catch {
+      return '';
+    }
+  };
+
+  // Handler for Date change
+  const handleDateChange = (newDateStr) => {
+    if (!newDateStr) return;
+    try {
+      const combined = `${newDateStr}T${timeStr}`;
+      const d = parseISO(combined);
+      if (isValid(d)) {
+        onChange(formatToInternal(d));
         if (timeConfirmed) setTimeConfirmed(false);
       }
     } catch (e) {
-      console.error('Error updating date parts:', e);
+      console.error('Error changing date:', e);
     }
   };
 
-  // Handler for Direct Text Typing
-  const handleTextInputChange = (rawText) => {
-    setTextBuffer(rawText);
-    if (!rawText.trim()) {
-      setTextError('Please enter date & time');
-      return;
+  // Handler for Time change
+  const handleTimeChange = (newTimeStr) => {
+    if (!newTimeStr) return;
+    try {
+      // Ensure seconds are included if input returns HH:mm
+      const fullTime = newTimeStr.split(':').length === 2 ? `${newTimeStr}:00` : newTimeStr;
+      const combined = `${dateStr}T${fullTime}`;
+      const d = parseISO(combined);
+      if (isValid(d)) {
+        onChange(formatToInternal(d));
+        if (timeConfirmed) setTimeConfirmed(false);
+      }
+    } catch (e) {
+      console.error('Error changing time:', e);
     }
-
-    const cleaned = rawText.trim().replace('T', ' ');
-    const parts = cleaned.split(' ');
-    
-    if (parts.length < 2) {
-      setTextError('Use format: YYYY-MM-DD HH:mm:ss');
-      return;
-    }
-
-    const datePart = parts[0];
-    const timePart = parts[1];
-
-    const dateComponents = datePart.split('-');
-    const timeComponents = timePart.split(':');
-
-    if (dateComponents.length !== 3 || timeComponents.length < 2) {
-      setTextError('Use format: YYYY-MM-DD HH:mm:ss');
-      return;
-    }
-
-    const y = Number(dateComponents[0]);
-    const m = Number(dateComponents[1]) - 1;
-    const d = Number(dateComponents[2]);
-
-    const hh = Number(timeComponents[0]);
-    const mm = Number(timeComponents[1]);
-    const ss = timeComponents[2] ? Number(timeComponents[2]) : 0;
-
-    if (isNaN(y) || isNaN(m) || isNaN(d) || isNaN(hh) || isNaN(mm) || isNaN(ss)) {
-      setTextError('Invalid numeric values');
-      return;
-    }
-
-    const testDate = new Date(y, m, d, hh, mm, ss);
-    if (!isValid(testDate) || testDate.getFullYear() !== y || testDate.getMonth() !== m || testDate.getDate() !== d) {
-      setTextError('Invalid calendar date or time');
-      return;
-    }
-
-    setTextError('');
-    onChange(formatToInternal(testDate));
-    if (timeConfirmed) setTimeConfirmed(false);
   };
 
-  // Quick Presets
+  // Presets
   const applyPreset = (presetType) => {
     let now = new Date();
     let target = now;
@@ -155,7 +101,6 @@ export default function DateTimePicker({
         target = addHours(now, 1);
         break;
       case 'tomorrow-12am':
-        // Midnight (00:00:00) of next day
         target = setSeconds(setMinutes(setHours(addDays(now, 1), 0), 0), 0);
         break;
       case 'tomorrow-9am':
@@ -228,127 +173,61 @@ export default function DateTimePicker({
         </button>
       </div>
 
-      {/* ── Main Simplified Picker Card (Single View) ─────────────────────── */}
+      {/* ── Native Calendar & Time Pickers ─────────────────────────────────── */}
       <div className="bg-slate-50/80 dark:bg-wa-dsurf/60 border border-slate-200 dark:border-wa-dbdr rounded-2xl p-3.5 sm:p-4 space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           
-          {/* Date Picker */}
-          <div className="sm:col-span-5 space-y-1">
-            <label className="block text-[11px] font-bold tracking-wider uppercase text-slate-500 dark:text-wa-dmuted">
-              📅 Calendar Date
+          {/* Calendar Date Picker */}
+          <div className="space-y-1">
+            <label className="block text-xs font-bold text-slate-700 dark:text-wa-dtext flex items-center gap-1.5">
+              📅 Select Date
             </label>
             <input
               type="date"
-              value={currentDateStr}
+              value={dateStr}
               min={min ? min.split('T')[0] : undefined}
-              onChange={(e) => {
-                if (e.target.value) {
-                  updateFromParts(e.target.value, currentHours, currentMinutes, currentSeconds);
-                }
-              }}
-              className="w-full bg-white dark:bg-wa-dpanel border border-slate-200 dark:border-wa-dbdr rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 dark:text-wa-dtext focus:border-wa-teal focus:ring-1 focus:ring-wa-teal transition-all"
+              onChange={(e) => handleDateChange(e.target.value)}
+              className="w-full bg-white dark:bg-wa-dpanel border border-slate-200 dark:border-wa-dbdr rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 dark:text-wa-dtext focus:border-wa-teal focus:ring-2 focus:ring-wa-teal/30 transition-all cursor-pointer"
             />
           </div>
 
-          {/* Time Picker (HH : MM : SS) */}
-          <div className="sm:col-span-7 space-y-1">
-            <div className="flex items-center justify-between">
-              <label className="block text-[11px] font-bold tracking-wider uppercase text-slate-500 dark:text-wa-dmuted">
-                ⏰ Time (HH : MM : SS)
-              </label>
-              {currentSeconds > 0 && (
-                <button
-                  type="button"
-                  onClick={() => updateFromParts(currentDateStr, currentHours, currentMinutes, 0)}
-                  className="text-[10px] text-emerald-600 dark:text-wa-green hover:underline font-semibold"
-                >
-                  Reset SS to 00
-                </button>
-              )}
-            </div>
-
-            {/* Mobile & Desktop friendly HH:MM:SS inputs */}
-            <div className="flex items-center gap-1.5 bg-white dark:bg-wa-dpanel border border-slate-200 dark:border-wa-dbdr rounded-xl p-1.5 shadow-2xs">
-              {/* Hours */}
-              <div className="flex-1 flex items-center justify-center bg-slate-50 dark:bg-wa-dsurf rounded-lg p-1">
-                <span className="text-[10px] font-bold text-slate-400 mr-1 select-none">HH:</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="23"
-                  value={String(currentHours).padStart(2, '0')}
-                  onChange={(e) => {
-                    const val = Math.max(0, Math.min(23, Number(e.target.value) || 0));
-                    updateFromParts(currentDateStr, val, currentMinutes, currentSeconds);
-                  }}
-                  className="w-10 text-center font-mono font-bold text-sm text-slate-900 dark:text-wa-dtext bg-transparent focus:outline-none"
-                />
-              </div>
-
-              <span className="font-bold text-slate-400 dark:text-wa-dmuted select-none">:</span>
-
-              {/* Minutes */}
-              <div className="flex-1 flex items-center justify-center bg-slate-50 dark:bg-wa-dsurf rounded-lg p-1">
-                <span className="text-[10px] font-bold text-slate-400 mr-1 select-none">MM:</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="59"
-                  value={String(currentMinutes).padStart(2, '0')}
-                  onChange={(e) => {
-                    const val = Math.max(0, Math.min(59, Number(e.target.value) || 0));
-                    updateFromParts(currentDateStr, currentHours, val, currentSeconds);
-                  }}
-                  className="w-10 text-center font-mono font-bold text-sm text-slate-900 dark:text-wa-dtext bg-transparent focus:outline-none"
-                />
-              </div>
-
-              <span className="font-bold text-slate-400 dark:text-wa-dmuted select-none">:</span>
-
-              {/* Seconds */}
-              <div className="flex-1 flex items-center justify-center bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/30 rounded-lg p-1">
-                <span className="text-[10px] font-bold text-emerald-600 dark:text-wa-green mr-1 select-none">SS:</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="59"
-                  value={String(currentSeconds).padStart(2, '0')}
-                  onChange={(e) => {
-                    const val = Math.max(0, Math.min(59, Number(e.target.value) || 0));
-                    updateFromParts(currentDateStr, currentHours, currentMinutes, val);
-                  }}
-                  className="w-10 text-center font-mono font-bold text-sm text-emerald-700 dark:text-wa-green bg-transparent focus:outline-none"
-                />
-              </div>
-            </div>
+          {/* Time Picker with Seconds & AM/PM */}
+          <div className="space-y-1">
+            <label className="block text-xs font-bold text-slate-700 dark:text-wa-dtext flex items-center justify-between">
+              <span className="flex items-center gap-1.5">⏰ Select Time (HH:MM:SS)</span>
+            </label>
+            <input
+              type="time"
+              step="1"
+              value={timeStr}
+              onChange={(e) => handleTimeChange(e.target.value)}
+              className="w-full bg-white dark:bg-wa-dpanel border border-slate-200 dark:border-wa-dbdr rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900 dark:text-wa-dtext focus:border-wa-teal focus:ring-2 focus:ring-wa-teal/30 transition-all cursor-pointer"
+            />
           </div>
         </div>
 
-        {/* Direct Text Sync Row */}
+        {/* Combined Mobile/Desktop Full DateTime Selector */}
         <div className="pt-1">
-          <div className="relative">
-            <input
-              type="text"
-              value={textBuffer}
-              onChange={(e) => handleTextInputChange(e.target.value)}
-              placeholder="YYYY-MM-DD HH:mm:ss"
-              className={`w-full bg-white dark:bg-wa-dpanel border rounded-xl px-3 py-1.5 pr-24 text-xs font-mono tracking-wide text-slate-800 dark:text-wa-dtext focus:outline-none transition-colors ${
-                textError
-                  ? 'border-red-400 focus:border-red-500'
-                  : 'border-slate-200 dark:border-wa-dbdr focus:border-wa-teal'
-              }`}
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 dark:text-wa-dmuted pointer-events-none select-none font-sans font-semibold">
-              ✍️ Text Edit
-            </span>
-          </div>
-          {textError && (
-            <p className="text-[11px] text-red-500 mt-1 font-medium">⚠️ {textError}</p>
-          )}
+          <label className="block text-[11px] font-bold text-slate-400 dark:text-wa-dmuted mb-1">
+            🗓️ Combined Date & Time Picker (Alternative)
+          </label>
+          <input
+            type="datetime-local"
+            step="1"
+            value={datetimeLocalStr}
+            min={min}
+            onChange={(e) => {
+              if (e.target.value) {
+                onChange(e.target.value);
+                if (timeConfirmed) setTimeConfirmed(false);
+              }
+            }}
+            className="w-full bg-white dark:bg-wa-dpanel border border-slate-200 dark:border-wa-dbdr rounded-xl px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-wa-dtext focus:border-wa-teal focus:ring-1 focus:ring-wa-teal transition-all cursor-pointer"
+          />
         </div>
       </div>
 
-      {/* ── Live Formatted Preview Badge ─────────────────────────────────── */}
+      {/* ── Live Formatted IST Time Preview Badge ─────────────────────────── */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-slate-900 dark:bg-wa-dpanel text-white p-3 rounded-xl border border-slate-800 dark:border-wa-dbdr shadow-md">
         <div className="flex items-center gap-2.5 min-w-0">
           <span className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 text-base">
