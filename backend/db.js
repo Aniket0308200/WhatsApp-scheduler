@@ -102,6 +102,40 @@ AuthSessionSchema.index({ sessionId: 1, key: 1 }, { unique: true });
 
 const AuthSession = mongoose.model('AuthSession', AuthSessionSchema);
 
+// ─── AuthAccount Model (User Login & Sign Up) ──────────────────────────────
+const AuthAccountSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  passwordHash: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const AuthAccount = mongoose.model('AuthAccount', AuthAccountSchema);
+
+async function createAuthAccount({ name, email, password }) {
+  const cleanEmail = email.toLowerCase().trim();
+  const existing = await AuthAccount.findOne({ email: cleanEmail });
+  if (existing) {
+    throw new Error('Email is already registered. Please sign in instead.');
+  }
+  const passwordHash = encrypt(password);
+  const account = await AuthAccount.create({
+    name: name.trim(),
+    email: cleanEmail,
+    passwordHash
+  });
+  return { id: account._id.toString(), name: account.name, email: account.email };
+}
+
+async function findAuthAccountByEmail(email) {
+  return await AuthAccount.findOne({ email: email.toLowerCase().trim() });
+}
+
+function verifyAuthAccountPassword(inputPassword, storedHash) {
+  const decrypted = decrypt(storedHash);
+  return decrypted === inputPassword;
+}
+
 // ─── Feedback Model ──────────────────────────────────────────────────────────
 const FeedbackSchema = new mongoose.Schema({
   userId: { type: String, required: true },
@@ -349,6 +383,10 @@ module.exports = {
   ScheduledMessage,
   AuthSession,
   LinkedGoogleAccount,
+  AuthAccount,
+  createAuthAccount,
+  findAuthAccountByEmail,
+  verifyAuthAccountPassword,
   encrypt,
   decrypt,
   insertMessage,

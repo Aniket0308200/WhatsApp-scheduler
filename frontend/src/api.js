@@ -21,6 +21,11 @@ export const api = axios.create({
   },
 });
 
+// ─── User Authentication (Sign Up & Sign In) ─────────────────────────────────
+export const signUpUser  = (data) => api.post('/auth/signup', data).then(r => r.data);
+export const signInUser  = (data) => api.post('/auth/login', data).then(r => r.data);
+export const fetchAuthUser = (token) => api.get('/auth/me', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+
 // ─── WhatsApp ─────────────────────────────────────────────────────────────────
 export const fetchStatus        = ()       => api.get('/status').then(r => r.data);
 export const requestPairingCode = (phone)  => api.post('/pairing-code', { phone }).then(r => r.data);

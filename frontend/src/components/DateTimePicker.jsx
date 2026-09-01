@@ -31,7 +31,7 @@ export default function DateTimePicker({
   };
 
   const currentDate = getCurrentDate();
-  
+
   // Format parts for native HTML inputs
   const dateStr = format(currentDate, 'yyyy-MM-dd');
   const timeStr = format(currentDate, 'HH:mm:ss');
@@ -176,11 +176,11 @@ export default function DateTimePicker({
       {/* ── Native Calendar & Time Pickers ─────────────────────────────────── */}
       <div className="bg-slate-50/80 dark:bg-wa-dsurf/60 border border-slate-200 dark:border-wa-dbdr rounded-2xl p-3.5 sm:p-4 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          
+
           {/* Calendar Date Picker */}
           <div className="space-y-1">
             <label className="block text-xs font-bold text-slate-700 dark:text-wa-dtext flex items-center gap-1.5">
-              📅 Select Date
+              📅 Select Date (MM/DD/YYYY)
             </label>
             <input
               type="date"
@@ -261,11 +261,10 @@ export default function DateTimePicker({
             setTimeConfirmed(true);
             toast.success('Scheduled date & time confirmed!');
           }}
-          className={`px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 ${
-            timeConfirmed
+          className={`px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 ${timeConfirmed
               ? 'bg-emerald-500 text-slate-950 cursor-default shadow-md shadow-emerald-500/20'
               : 'bg-wa-teal hover:bg-emerald-600 text-white active:scale-98'
-          }`}
+            }`}
         >
           {timeConfirmed ? '✓ Time Confirmed' : 'Confirm Time'}
         </button>

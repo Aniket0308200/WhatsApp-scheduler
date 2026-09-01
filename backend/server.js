@@ -73,6 +73,70 @@ app.use('/api/auth/google', googleContactsRouter);
 const feedbackRouter = require('./routes/feedback');
 app.use('/api/feedback', feedbackRouter);
 
+// ─── User Authentication Routes (Sign Up, Sign In, Session) ────────────────────
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const { name, email, password } = req.body || {};
+    if (!name || !name.trim() || !email || !email.trim() || !password) {
+      return res.status(400).json({ error: 'Name, email, and password are required.' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    }
+    const user = await db.createAuthAccount({ name, email, password });
+    const token = db.encrypt(JSON.stringify({ id: user.id, email: user.email, timestamp: Date.now() }));
+    return res.json({ success: true, user, token });
+  } catch (err) {
+    return res.status(400).json({ error: err.message || 'Failed to create account.' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !email.trim() || !password) {
+      return res.status(400).json({ error: 'Email and password are required.' });
+    }
+    const account = await db.findAuthAccountByEmail(email);
+    if (!account) {
+      return res.status(400).json({ error: 'Account not found. Please sign up first.' });
+    }
+    const isMatch = db.verifyAuthAccountPassword(password, account.passwordHash);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Invalid email or password.' });
+    }
+    const user = { id: account._id.toString(), name: account.name, email: account.email };
+    const token = db.encrypt(JSON.stringify({ id: user.id, email: user.email, timestamp: Date.now() }));
+    return res.json({ success: true, user, token });
+  } catch (err) {
+    return res.status(400).json({ error: err.message || 'Failed to sign in.' });
+  }
+});
+
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const token = authHeader.split(' ')[1];
+    const decryptedStr = db.decrypt(token);
+    const decrypted = JSON.parse(decryptedStr);
+    if (!decrypted || !decrypted.email) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    const account = await db.findAuthAccountByEmail(decrypted.email);
+    if (!account) {
+      return res.status(401).json({ error: 'Account not found' });
+    }
+    return res.json({
+      user: { id: account._id.toString(), name: account.name, email: account.email }
+    });
+  } catch (err) {
+    return res.status(401).json({ error: 'Session expired or invalid.' });
+  }
+});
+
 // ─── WhatsApp status ──────────────────────────────────────────────────────────
 
 /**

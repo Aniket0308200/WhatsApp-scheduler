@@ -50,7 +50,7 @@ const HamburgerIcon = ({ isOpen }) => (
   </svg>
 );
 
-export default function Header({ status, profile, onLogout, isSyncing, activeView, onNavigate, onGetStarted }) {
+export default function Header({ status, profile, onLogout, isSyncing, activeView, onNavigate, onGetStarted, authUser, onOpenAuthModal, onAuthLogout }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [syncTimerExceeded, setSyncTimerExceeded] = React.useState(false);
   const [editing, setEditing] = useState(false);
@@ -324,6 +324,36 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
 
         {/* ── Desktop Action Controls ───────────── */}
         <div className="hidden md:flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          {/* User Account Login/Badge */}
+          {authUser ? (
+            <div className="flex items-center gap-2 bg-white/10 dark:bg-wa-dsurf border border-white/20 dark:border-wa-dbdr rounded-xl px-3 py-1 text-xs text-slate-100 shadow-xs">
+              <span className="w-6 h-6 rounded-full bg-emerald-500/25 text-emerald-300 font-bold flex items-center justify-center text-xs shrink-0 border border-emerald-400/40">
+                {authUser.name ? authUser.name.charAt(0).toUpperCase() : '👤'}
+              </span>
+              <div className="flex flex-col min-w-0 max-w-[120px]">
+                <span className="font-bold text-white truncate leading-tight">{authUser.name}</span>
+                <span className="text-[10px] text-emerald-300/80 truncate leading-tight">{authUser.email}</span>
+              </div>
+              <button
+                type="button"
+                onClick={onAuthLogout}
+                className="ml-1 px-2 py-0.5 rounded-lg text-[10px] font-bold text-red-300 hover:text-white bg-red-500/20 hover:bg-red-500/40 transition-colors shrink-0"
+                title="Sign Out of Account"
+              >
+                Sign Out
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={onOpenAuthModal}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-900 bg-white hover:bg-emerald-50 border border-slate-200 shadow-sm transition-all duration-200 flex items-center gap-1.5 active:scale-95"
+            >
+              <span>🔑</span>
+              <span>Sign In / Register</span>
+            </button>
+          )}
+
           {!isAppView && !isConnected && (
             <button
               onClick={onGetStarted}

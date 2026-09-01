@@ -7,7 +7,9 @@ import MessageTable from './components/MessageTable';
 import Header from './components/Header';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import TermsOfService from './components/TermsOfService';
+import toast from 'react-hot-toast';
 import LandingPage from './components/LandingPage';
+import AuthModal from './components/AuthModal';
 
 const POLL_INTERVAL = 4_000;
 const MSG_POLL_INTERVAL = 20_000;
@@ -23,6 +25,15 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [activeView, setActiveView] = useState('landing'); // 'landing' | 'app'
+  const [authUser, setAuthUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('wa_auth_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -69,9 +80,21 @@ export default function App() {
   };
 
   const handleGetStarted = () => {
+    if (!authUser) {
+      setShowAuthModal(true);
+      return;
+    }
     navigate('/');
     setActiveView('app');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleAuthLogout = () => {
+    localStorage.removeItem('wa_auth_user');
+    localStorage.removeItem('wa_auth_token');
+    setAuthUser(null);
+    setActiveView('landing');
+    toast.success('Signed out of account.');
   };
 
   const isPolicyOrTerms = location.pathname === '/privacy-policy' || location.pathname === '/terms-of-service';
@@ -90,6 +113,9 @@ export default function App() {
           activeView={activeView}
           onNavigate={handleNavigate}
           onGetStarted={handleGetStarted}
+          authUser={authUser}
+          onOpenAuthModal={() => setShowAuthModal(true)}
+          onAuthLogout={handleAuthLogout}
         />
 
         {/* Spacer to push content below fixed header */}
@@ -155,6 +181,18 @@ export default function App() {
           </div>
         </footer>
       </div>
+
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={(user) => {
+          setAuthUser(user);
+          setShowAuthModal(false);
+          navigate('/');
+          setActiveView('app');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+      />
     </div>
   );
 }
