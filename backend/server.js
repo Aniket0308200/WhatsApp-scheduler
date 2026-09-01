@@ -80,9 +80,19 @@ app.post('/api/auth/signup', async (req, res) => {
     if (!name || !name.trim() || !email || !email.trim() || !password) {
       return res.status(400).json({ error: 'Name, email, and password are required.' });
     }
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
     }
+    if (!/[a-zA-Z]/.test(password)) {
+      return res.status(400).json({ error: 'Password must contain at least one letter.' });
+    }
+    if (!/[0-9]/.test(password)) {
+      return res.status(400).json({ error: 'Password must contain at least one number.' });
+    }
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+      return res.status(400).json({ error: 'Password must contain at least one special character (!@#$%^&*...).' });
+    }
+
     const user = await db.createAuthAccount({ name, email, password });
     const token = db.encrypt(JSON.stringify({ id: user.id, email: user.email, timestamp: Date.now() }));
     return res.json({ success: true, user, token });

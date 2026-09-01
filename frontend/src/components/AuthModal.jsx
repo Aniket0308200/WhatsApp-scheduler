@@ -4,8 +4,11 @@ import { signUpUser, signInUser } from '../api';
 
 /**
  * AuthModal Component
- * Handles User Sign In and Sign Up with database persistence
- * and 1-time authentication caching in localStorage.
+ * Handles User Sign In and Sign Up with:
+ * - Password Show/Hide toggle button (👁️ / 🙈)
+ * - Strict password policy (8+ chars, letter, number, special char)
+ * - Real-time password criteria checklist
+ * - MongoDB database persistence & localStorage 1-time session caching.
  */
 export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 'signup' }) {
   const [mode, setMode] = useState(initialMode); // 'signin' | 'signup'
@@ -13,9 +16,21 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Password visibility toggles
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
+
+  // Password criteria verification
+  const hasMinLength = password.length >= 8;
+  const hasLetter = /[a-zA-Z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+  const isPasswordValid = hasMinLength && hasLetter && hasNumber && hasSpecial;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -30,8 +45,20 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
         toast.error('Please enter your full name.');
         return;
       }
-      if (password.length < 6) {
-        toast.error('Password must be at least 6 characters.');
+      if (!hasMinLength) {
+        toast.error('Password must be at least 8 characters long.');
+        return;
+      }
+      if (!hasLetter) {
+        toast.error('Password must contain at least one letter (a-z, A-Z).');
+        return;
+      }
+      if (!hasNumber) {
+        toast.error('Password must contain at least one number (0-9).');
+        return;
+      }
+      if (!hasSpecial) {
+        toast.error('Password must contain at least one special character (!@#$%^&*...).');
         return;
       }
       if (password !== confirmPassword) {
@@ -170,25 +197,63 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
             </div>
           </div>
 
+          {/* Password with Eye Show/Hide toggle */}
           <div className="space-y-1">
             <label className="block text-xs font-bold text-slate-700 dark:text-wa-dtext">
               Password
             </label>
             <div className="relative">
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-slate-50 dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr rounded-xl px-3.5 py-2.5 pl-9 text-sm text-slate-900 dark:text-wa-dtext focus:outline-none focus:border-wa-teal focus:ring-1 focus:ring-wa-teal transition-all"
+                className="w-full bg-slate-50 dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr rounded-xl px-3.5 py-2.5 pl-9 pr-10 text-sm text-slate-900 dark:text-wa-dtext focus:outline-none focus:border-wa-teal focus:ring-1 focus:ring-wa-teal transition-all"
               />
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none select-none">
                 🔒
               </span>
+              {/* Eye Button Toggle */}
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs focus:outline-none transition-colors"
+                title={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? '🙈' : '👁️'}
+              </button>
             </div>
           </div>
 
+          {/* Real-time Password Requirements Checklist for Sign Up */}
+          {mode === 'signup' && (
+            <div className="bg-slate-50 dark:bg-wa-dsurf/70 border border-slate-200/80 dark:border-wa-dbdr rounded-xl p-2.5 space-y-1.5">
+              <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400 dark:text-wa-dmuted mb-1">
+                Password Requirements
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                <div className={`flex items-center gap-1.5 font-medium ${hasMinLength ? 'text-emerald-600 dark:text-wa-green font-bold' : 'text-slate-400 dark:text-slate-500'}`}>
+                  <span>{hasMinLength ? '✓' : '○'}</span>
+                  <span>8+ Characters</span>
+                </div>
+                <div className={`flex items-center gap-1.5 font-medium ${hasLetter ? 'text-emerald-600 dark:text-wa-green font-bold' : 'text-slate-400 dark:text-slate-500'}`}>
+                  <span>{hasLetter ? '✓' : '○'}</span>
+                  <span>Letter (A-Z)</span>
+                </div>
+                <div className={`flex items-center gap-1.5 font-medium ${hasNumber ? 'text-emerald-600 dark:text-wa-green font-bold' : 'text-slate-400 dark:text-slate-500'}`}>
+                  <span>{hasNumber ? '✓' : '○'}</span>
+                  <span>Number (0-9)</span>
+                </div>
+                <div className={`flex items-center gap-1.5 font-medium ${hasSpecial ? 'text-emerald-600 dark:text-wa-green font-bold' : 'text-slate-400 dark:text-slate-500'}`}>
+                  <span>{hasSpecial ? '✓' : '○'}</span>
+                  <span>Special (!@#$)</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Confirm Password (Sign Up) */}
           {mode === 'signup' && (
             <div className="space-y-1">
               <label className="block text-xs font-bold text-slate-700 dark:text-wa-dtext">
@@ -196,16 +261,25 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
               </label>
               <div className="relative">
                 <input
-                  type="password"
+                  type={showConfirmPassword ? 'text' : 'password'}
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-slate-50 dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr rounded-xl px-3.5 py-2.5 pl-9 text-sm text-slate-900 dark:text-wa-dtext focus:outline-none focus:border-wa-teal focus:ring-1 focus:ring-wa-teal transition-all"
+                  className="w-full bg-slate-50 dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr rounded-xl px-3.5 py-2.5 pl-9 pr-10 text-sm text-slate-900 dark:text-wa-dtext focus:outline-none focus:border-wa-teal focus:ring-1 focus:ring-wa-teal transition-all"
                 />
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none select-none">
                   🛡️
                 </span>
+                {/* Eye Button Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs focus:outline-none transition-colors"
+                  title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showConfirmPassword ? '🙈' : '👁️'}
+                </button>
               </div>
             </div>
           )}
@@ -213,7 +287,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || (mode === 'signup' && !isPasswordValid)}
             className="w-full py-3 px-4 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-wa-teal to-emerald-500 hover:from-emerald-600 hover:to-wa-teal shadow-lg shadow-emerald-500/25 transition-all duration-200 disabled:opacity-50 active:scale-98 flex items-center justify-center gap-2 mt-2"
           >
             {loading ? (
@@ -222,13 +296,13 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
                 {mode === 'signup' ? 'Creating Account…' : 'Signing In…'}
               </>
             ) : (
-              <>{mode === 'signup' ? '🚀 Create Account & Continue' : '🔓 Sign In & Access'}</>
+              <>{mode === 'signup' ? '🚀 Create Account & Save Data' : '🔓 Sign In & Access'}</>
             )}
           </button>
 
           {/* Footer Note */}
           <p className="text-[11px] text-center text-slate-400 dark:text-wa-dmuted leading-tight pt-1">
-            🔒 Account data is stored securely. You won't need to log in again on this device.
+            🔒 Credentials stored securely in database. 1-time authentication.
           </p>
         </form>
       </div>
