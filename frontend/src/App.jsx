@@ -57,6 +57,26 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    // Handle redirect parameters from Google OAuth login
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    const userParam = params.get('user');
+    if (token && userParam) {
+      try {
+        const userObj = JSON.parse(decodeURIComponent(userParam));
+        localStorage.setItem('wa_auth_user', JSON.stringify(userObj));
+        localStorage.setItem('wa_auth_token', token);
+        setAuthUser(userObj);
+        setActiveView('app');
+        toast.success(`Welcome, ${userObj.name}! (Verified by Google)`);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } catch (err) {
+        console.error('Failed to parse Google login redirect:', err);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     refreshStatus();
     refreshMessages();
     const t1 = setInterval(refreshStatus, POLL_INTERVAL);

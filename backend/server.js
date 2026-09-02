@@ -54,9 +54,14 @@ app.get('/api/health', (req, res) => {
 
 // ─── Session ID Validation Middleware ─────────────────────────────────────────
 app.use((req, res, next) => {
-  const sessionId = req.headers['x-session-id'] || req.query.sessionId;
+  const sessionId = req.headers['x-session-id'] || req.query.sessionId || req.query.state;
   if (!sessionId && req.path.startsWith('/api')) {
-    if (req.path === '/api/status' || req.path === '/api/auth/google/callback' || req.path === '/api/health') {
+    if (
+      req.path === '/api/status' ||
+      req.path === '/api/health' ||
+      req.path.startsWith('/api/auth/google') ||
+      req.path.startsWith('/api/auth/google-login')
+    ) {
       return next();
     }
     return res.status(400).json({ error: 'X-Session-ID header is required.' });
@@ -157,7 +162,7 @@ app.get('/api/auth/google-login/url', (req, res) => {
 app.get('/api/auth/google-login/callback', async (req, res) => {
   const { code } = req.query;
   if (!code) {
-    return res.status(400).send('<script>window.opener.postMessage({ type: "GOOGLE_AUTH_ERROR", error: "No auth code" }, "*"); window.close();</script>');
+    return res.status(400).send('<script>if(window.opener){window.opener.postMessage({ type: "GOOGLE_AUTH_ERROR", error: "No auth code" }, "*"); window.close();}else{window.location.href="https://www.wascheduler.site";}</script>');
   }
 
   try {
@@ -184,12 +189,14 @@ app.get('/api/auth/google-login/callback', async (req, res) => {
     if (!account) {
       // Auto register account from verified Google profile
       const randomPassword = 'GoogleAuth_' + Math.random().toString(36).substring(2, 12) + '!9A';
-      const created = await db.createAuthAccount({ name, email, password: randomPassword });
+      await db.createAuthAccount({ name, email, password: randomPassword });
       account = await db.findAuthAccountByEmail(email);
     }
 
     const user = { id: account._id.toString(), name: account.name, email: account.email };
     const token = db.encrypt(JSON.stringify({ id: user.id, email: user.email, timestamp: Date.now() }));
+    const frontendUrl = process.env.FRONTEND_URL || 'https://www.wascheduler.site';
+    const redirectTarget = `${frontendUrl}/?token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(user))}`;
 
     return res.send(`
       <html>
@@ -197,14 +204,18 @@ app.get('/api/auth/google-login/callback', async (req, res) => {
           <h3 style="color: #059669;">Verified by Google!</h3>
           <p>Logged in as <strong>${email}</strong>.</p>
           <script>
-            window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS', user: ${JSON.stringify(user)}, token: '${token}' }, '*');
-            setTimeout(() => window.close(), 1200);
+            if (window.opener) {
+              window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS', user: ${JSON.stringify(user)}, token: '${token}' }, '*');
+              setTimeout(() => window.close(), 1000);
+            } else {
+              window.location.href = '${redirectTarget}';
+            }
           </script>
         </body>
       </html>
     `);
   } catch (err) {
-    return res.send(`<script>window.opener.postMessage({ type: "GOOGLE_AUTH_ERROR", error: "${err.message}" }, "*"); setTimeout(() => window.close(), 2000);</script>`);
+    return res.send(`<script>if(window.opener){window.opener.postMessage({ type: "GOOGLE_AUTH_ERROR", error: "${err.message}" }, "*"); setTimeout(() => window.close(), 2000);}else{window.location.href="https://www.wascheduler.site";}</script>`);
   }
 });
 
