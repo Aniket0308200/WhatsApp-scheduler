@@ -16,9 +16,25 @@ const API_BASE_URL = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'X-Session-ID': sessionId,
-  },
+});
+
+// Dynamic session mapping: Bind X-Session-ID to logged-in User Account ID
+api.interceptors.request.use((config) => {
+  try {
+    const savedUser = localStorage.getItem('wa_auth_user');
+    if (savedUser) {
+      const parsed = JSON.parse(savedUser);
+      if (parsed && parsed.id) {
+        config.headers['X-Session-ID'] = `user_acc_${parsed.id}`;
+        return config;
+      }
+    }
+  } catch (err) {
+    console.warn('[API] Error parsing auth user session:', err);
+  }
+  
+  config.headers['X-Session-ID'] = sessionId;
+  return config;
 });
 
 // ─── User Authentication (Sign Up & Sign In) ─────────────────────────────────

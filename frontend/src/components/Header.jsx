@@ -157,6 +157,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
       await logout();
       toast.success('Disconnected from WhatsApp.');
       onLogout?.();
+      onAuthLogout?.();
     } catch (err) {
       toast.error('Logout failed: ' + (err.response?.data?.error || err.message));
     } finally {
@@ -181,8 +182,8 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
 
   return (
     <>
-    <header className="fixed top-0 left-0 right-0 z-40 bg-wa-dark dark:bg-wa-dpanel border-b border-black/20 dark:border-wa-dbdr shadow-md transition-colors duration-200">
-      <div className={`container mx-auto px-4 py-3 ${isAppView ? 'max-w-5xl' : 'max-w-6xl'} flex items-center justify-between gap-3 transition-all duration-200`}>
+    <header className="fixed top-0 left-0 right-0 z-40 bg-wa-dark/85 dark:bg-wa-dpanel/85 backdrop-blur-md border-b border-black/20 dark:border-wa-dbdr/60 shadow-lg transition-all duration-200">
+      <div className={`container mx-auto px-4 py-3 ${isAppView ? 'max-w-5xl' : 'max-w-8xl'} flex items-center justify-between gap-3 transition-all duration-200`}>
 
         {/* ── Logo + title (Clickable link back to Home) ──────────────── */}
         <button
@@ -210,7 +211,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
 
         {/* ── Landing Navigation Links (Desktop view) ──── */}
         {!isAppView && (
-          <nav className="hidden md:flex items-center gap-1 sm:gap-2 text-xs font-semibold text-emerald-100 dark:text-wa-dmuted">
+          <nav className="hidden lg:flex items-center gap-1 sm:gap-2 text-xs font-semibold text-emerald-100 dark:text-wa-dmuted">
             <button
               onClick={() => handleNavClick('landing')}
               className="px-3 py-1.5 rounded-lg bg-white/15 text-white font-bold dark:bg-wa-dsurf dark:text-wa-dtext transition-colors"
@@ -248,7 +249,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
               if (editing) return;
               if (!isAppView) onGetStarted();
             }}
-            className={`hidden md:flex items-center gap-2.5 bg-white/10 dark:bg-wa-dsurf border border-white/15 dark:border-wa-dbdr rounded-xl px-3 py-1.5 min-w-0 flex-1 max-w-[260px] transition-all duration-200 group select-none ${
+            className={`hidden lg:flex items-center gap-2.5 bg-white/10 dark:bg-wa-dsurf border border-white/15 dark:border-wa-dbdr rounded-xl px-3 py-1.5 min-w-0 flex-1 max-w-[260px] transition-all duration-200 group select-none ${
               !isAppView ? 'cursor-pointer hover:bg-white/20 dark:hover:bg-wa-dbdr/80 hover:border-emerald-400/50 hover:shadow-md' : 'cursor-default'
             }`}
             title={!isAppView ? "Go to Messaging Workspace" : "Connected WhatsApp Profile"}
@@ -323,7 +324,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
         )}
 
         {/* ── Desktop Action Controls ───────────── */}
-        <div className="hidden md:flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+        <div className="hidden lg:flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           {/* User Account Login/Badge */}
           {authUser ? (
             <div className="flex items-center gap-2 bg-white/10 dark:bg-wa-dsurf border border-white/20 dark:border-wa-dbdr rounded-xl px-3 py-1 text-xs text-slate-100 shadow-xs">
@@ -407,7 +408,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
         {/* ── Mobile 3-Line Hamburger Button ──────────────────────── */}
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="md:hidden p-2 rounded-xl text-slate-200 hover:text-white bg-white/10 dark:bg-wa-dsurf transition-colors focus:outline-none"
+          className="lg:hidden p-2 rounded-xl text-slate-200 hover:text-white bg-white/10 dark:bg-wa-dsurf transition-colors focus:outline-none"
           aria-label="Toggle navigation menu"
         >
           <HamburgerIcon isOpen={mobileMenuOpen} />
@@ -417,7 +418,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
 
       {/* ── Mobile Hamburger Dropdown Menu Panel ───────────────────── */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-wa-dark/95 dark:bg-wa-dpanel/95 backdrop-blur-xl border-b border-black/20 dark:border-wa-dbdr px-4 py-4 space-y-3 shadow-2xl transition-all">
+        <div className="lg:hidden bg-wa-dark/95 dark:bg-wa-dpanel/95 backdrop-blur-xl border-b border-black/20 dark:border-wa-dbdr px-4 py-4 space-y-3 shadow-2xl transition-all">
           {!isAppView && (
             <div className="flex flex-col gap-1 text-xs font-semibold text-emerald-100 dark:text-wa-dmuted pb-3 border-b border-white/10 dark:border-wa-dbdr/60">
               <button
@@ -496,7 +497,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
             if (editing) return;
             if (!isAppView) onGetStarted();
           }}
-          className={`md:hidden bg-black/20 dark:bg-wa-dsurf/60 px-4 py-1.5 flex items-center gap-2 border-t border-black/10 dark:border-wa-dbdr ${
+          className={`lg:hidden bg-black/20 dark:bg-wa-dsurf/60 px-4 py-1.5 flex items-center gap-2 border-t border-black/10 dark:border-wa-dbdr ${
             !isAppView ? 'cursor-pointer hover:bg-black/30 active:bg-black/40' : ''
           }`}
           title={!isAppView ? "Tap to open Messaging Workspace" : "Connected WhatsApp Profile"}

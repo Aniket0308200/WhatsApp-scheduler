@@ -732,6 +732,33 @@ async function initWhatsApp(sessionId) {
         await updateConnectedProfile(sessionId);
         const currentPhone = session.connectedProfile.phone;
         console.log(`[WA] [${sessionId}] Connected as: ${session.connectedProfile.name || session.connectedProfile.phone} (+${currentPhone})`);
+
+        // Enforce 1 WhatsApp Phone per User Account Lock
+        if (sessionId.startsWith('user_acc_') && currentPhone) {
+          const accountId = sessionId.replace('user_acc_', '');
+          try {
+            const account = await db.AuthAccount.findById(accountId);
+            if (account) {
+              const cleanPhone = String(currentPhone).replace(/\D/g, '');
+              if (!account.linkedWhatsAppPhone) {
+                account.linkedWhatsAppPhone = cleanPhone;
+                account.linkedWhatsAppJid = session.connectedProfile.jid || `${cleanPhone}@s.whatsapp.net`;
+                await account.save();
+                console.log(`[WA] [Account Lock] Account ${accountId} successfully locked to WhatsApp phone +${cleanPhone}`);
+              } else if (account.linkedWhatsAppPhone !== cleanPhone) {
+                console.error(`[WA] [Account Lock Mismatch] Account ${accountId} locked to +${account.linkedWhatsAppPhone}, but attempted connection from +${cleanPhone}. Rejecting!`);
+                session.status = 'disconnected';
+                session.connectedProfile = { name: null, phone: null, jid: null };
+                try {
+                  await sock.logout();
+                } catch (e) {}
+                return;
+              }
+            }
+          } catch (accErr) {
+            console.error(`[WA] Error validating account phone lock for ${accountId}:`, accErr.message);
+          }
+        }
       } catch (err) {
         console.error(`[WA] [${sessionId}] Could not read connected profile:`, err.message);
       }

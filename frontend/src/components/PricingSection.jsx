@@ -42,8 +42,8 @@ export default function PricingSection({ onGetStarted }) {
               }`}
             >
               <span>Yearly Billing</span>
-              <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded-full bg-emerald-500 text-white animate-pulse">
-                Save 25%
+              <span className="px-2 pt-0.5 text-[10px] font-black uppercase rounded-md bg-white text-gray-800">
+                Save up to 16%
               </span>
             </button>
           </div>
@@ -153,12 +153,12 @@ export default function PricingSection({ onGetStarted }) {
               <div className="my-6">
                 <div className="flex items-baseline gap-1">
                   <span className="text-4xl font-extrabold text-slate-900 dark:text-white">
-                    {billingCycle === 'monthly' ? '$2' : '$1.50'}
+                    {billingCycle === 'monthly' ? '$2' : '$1.70'}
                   </span>
                   <span className="text-sm font-semibold text-slate-500 dark:text-wa-dmuted">/ month</span>
                 </div>
                 <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-semibold">
-                  {billingCycle === 'yearly' ? 'Billed annually ($18/yr)' : 'Cancel anytime · Risk-free'}
+                  {billingCycle === 'yearly' ? 'Billed annually ($20.40/yr · Save $3.60/yr)' : 'Cancel anytime · Risk-free'}
                 </p>
               </div>
 
@@ -235,12 +235,12 @@ export default function PricingSection({ onGetStarted }) {
               <div className="my-6">
                 <div className="flex items-baseline gap-1">
                   <span className="text-4xl font-extrabold text-slate-900 dark:text-white">
-                    {billingCycle === 'monthly' ? '$5' : '$3.75'}
+                    {billingCycle === 'monthly' ? '$5' : '$4.20'}
                   </span>
                   <span className="text-sm font-semibold text-slate-500 dark:text-wa-dmuted">/ month</span>
                 </div>
                 <p className="text-[11px] text-purple-600 dark:text-purple-400 mt-1 font-semibold">
-                  {billingCycle === 'yearly' ? 'Billed annually ($45/yr)' : 'Full pro suite access'}
+                  {billingCycle === 'yearly' ? 'Billed annually ($50.40/yr · Save $9.60/yr)' : 'Full pro suite access'}
                 </p>
               </div>
 

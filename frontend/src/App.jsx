@@ -143,6 +143,7 @@ export default function App() {
                         qr={qr}
                         pairingCode={pairingCode}
                         onRefresh={refreshStatus}
+                        onAuthLogout={handleAuthLogout}
                       />
                     )}
 
