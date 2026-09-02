@@ -1,6 +1,7 @@
 const express = require('express');
 const { google } = require('googleapis');
 const db = require('../db');
+const whatsapp = require('../whatsapp');
 const router = express.Router();
 
 function getOAuth2Client() {
@@ -22,6 +23,7 @@ router.get('/url', (req, res) => {
     const oauth2Client = getOAuth2Client();
     const scopes = [
       'https://www.googleapis.com/auth/contacts.readonly',
+      'https://www.googleapis.com/auth/contacts.other.readonly',
       'https://www.googleapis.com/auth/userinfo.email'
     ];
 
@@ -99,33 +101,60 @@ router.get('/callback', async (req, res) => {
 
     // Fetch contacts using People API
     const peopleService = google.people({ version: 'v1', auth: oauth2Client });
-    const response = await peopleService.people.connections.list({
-      resourceName: 'people/me',
-      personFields: 'names,phoneNumbers',
-      pageSize: 1000
-    });
-
-    const connections = response.data.connections || [];
     const parsedContacts = [];
+    const seenPhones = new Set();
 
-    for (const person of connections) {
+    const processPerson = (person) => {
       const name = person.names?.[0]?.displayName || person.names?.[0]?.givenName || '';
-      const phoneObj = person.phoneNumbers?.find(p => p.value);
-      const rawPhone = phoneObj ? phoneObj.value : '';
-      if (!rawPhone) continue;
+      const phoneList = person.phoneNumbers || [];
 
-      // Format to standard format: strip out non-digits
-      let digits = rawPhone.replace(/\D/g, '');
-      if (!digits) continue;
+      for (const phoneObj of phoneList) {
+        const rawPhone = phoneObj.canonicalForm || phoneObj.value || '';
+        if (!rawPhone) continue;
 
-      // If number is a 10-digit format (defaulting to +91 if missing)
-      if (digits.length === 10) {
-        digits = '91' + digits;
+        let digits = rawPhone.replace(/\D/g, '');
+        if (!digits) continue;
+
+        if (digits.length === 10) {
+          digits = '91' + digits;
+        }
+
+        if (digits.length >= 7 && digits.length <= 15) {
+          if (!seenPhones.has(digits)) {
+            seenPhones.add(digits);
+            parsedContacts.push({ name: name.trim() || `Contact +${digits}`, phone: digits, source: 'google_contacts' });
+          }
+        }
       }
+    };
 
-      if (digits.length >= 7 && digits.length <= 15) {
-        parsedContacts.push({ name: name.trim(), phone: digits });
+    // 1. Primary Connections
+    try {
+      const response = await peopleService.people.connections.list({
+        resourceName: 'people/me',
+        personFields: 'names,phoneNumbers',
+        pageSize: 1000
+      });
+      const connections = response.data.connections || [];
+      for (const person of connections) {
+        processPerson(person);
       }
+    } catch (primaryErr) {
+      console.warn('[Google Sync] Primary connections list warning:', primaryErr.message);
+    }
+
+    // 2. Other Contacts (frequent contacts)
+    try {
+      const otherRes = await peopleService.otherContacts.list({
+        readMask: 'names,phoneNumbers',
+        pageSize: 1000
+      });
+      const otherContacts = otherRes.data.otherContacts || [];
+      for (const person of otherContacts) {
+        processPerson(person);
+      }
+    } catch (otherErr) {
+      console.warn('[Google Sync] Other contacts list warning:', otherErr.message);
     }
 
     // Bulk upsert into MongoDB Contact model
@@ -154,6 +183,13 @@ router.get('/callback', async (req, res) => {
       });
 
       await db.Contact.bulkWrite(operations, { ordered: false });
+
+      // Update in-memory WhatsApp contact cache so UI reflects contacts immediately!
+      try {
+        whatsapp.importContactsToCache(sessionId, parsedContacts);
+      } catch (cacheErr) {
+        console.warn('[Google Sync] Import to in-memory cache warning:', cacheErr.message);
+      }
     }
 
     // Return success page to close popup
@@ -165,7 +201,7 @@ router.get('/callback', async (req, res) => {
           <p>This window will close automatically.</p>
           <script>
             window.opener.postMessage({ type: 'GOOGLE_SYNC_SUCCESS', email: '${email}', count: ${parsedContacts.length} }, '*');
-            setTimeout(() => window.close(), 2500);
+            setTimeout(() => window.close(), 2000);
           </script>
         </body>
       </html>

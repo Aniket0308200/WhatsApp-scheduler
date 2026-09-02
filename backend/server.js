@@ -74,11 +74,17 @@ const feedbackRouter = require('./routes/feedback');
 app.use('/api/feedback', feedbackRouter);
 
 // ─── User Authentication Routes (Sign Up, Sign In, Session) ────────────────────
+const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
 app.post('/api/auth/signup', async (req, res) => {
   try {
     const { name, email, password } = req.body || {};
     if (!name || !name.trim() || !email || !email.trim() || !password) {
       return res.status(400).json({ error: 'Name, email, and password are required.' });
+    }
+    const cleanEmail = email.trim().toLowerCase();
+    if (!EMAIL_REGEX.test(cleanEmail)) {
+      return res.status(400).json({ error: 'Please enter a valid Gmail / Email address (e.g. name@gmail.com).' });
     }
     if (password.length < 8) {
       return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
@@ -93,7 +99,7 @@ app.post('/api/auth/signup', async (req, res) => {
       return res.status(400).json({ error: 'Password must contain at least one special character (!@#$%^&*...).' });
     }
 
-    const user = await db.createAuthAccount({ name, email, password });
+    const user = await db.createAuthAccount({ name, email: cleanEmail, password });
     const token = db.encrypt(JSON.stringify({ id: user.id, email: user.email, timestamp: Date.now() }));
     return res.json({ success: true, user, token });
   } catch (err) {
@@ -107,19 +113,98 @@ app.post('/api/auth/login', async (req, res) => {
     if (!email || !email.trim() || !password) {
       return res.status(400).json({ error: 'Email and password are required.' });
     }
-    const account = await db.findAuthAccountByEmail(email);
-    if (!account) {
-      return res.status(400).json({ error: 'Account not found. Please sign up first.' });
+    const cleanEmail = email.trim().toLowerCase();
+    if (!EMAIL_REGEX.test(cleanEmail)) {
+      return res.status(400).json({ error: 'Please enter a valid Gmail / Email address (e.g. name@gmail.com).' });
     }
-    const isMatch = db.verifyAuthAccountPassword(password, account.passwordHash);
-    if (!isMatch) {
-      return res.status(400).json({ error: 'Invalid email or password.' });
+    const account = await db.findAuthAccountByEmail(cleanEmail);
+    if (!account) {
+      return res.status(400).json({ error: 'Account not found with this email. Please Sign Up.' });
+    }
+    const isValid = db.verifyAuthAccountPassword(password, account.passwordHash);
+    if (!isValid) {
+      return res.status(400).json({ error: 'Incorrect password. Please try again.' });
     }
     const user = { id: account._id.toString(), name: account.name, email: account.email };
     const token = db.encrypt(JSON.stringify({ id: user.id, email: user.email, timestamp: Date.now() }));
     return res.json({ success: true, user, token });
   } catch (err) {
-    return res.status(400).json({ error: err.message || 'Failed to sign in.' });
+    return res.status(400).json({ error: err.message || 'Authentication failed.' });
+  }
+});
+
+// ─── 1-Click Google Authentication (Sign Up & Sign In) ───────────────────────
+app.get('/api/auth/google-login/url', (req, res) => {
+  try {
+    const { google } = require('googleapis');
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI.replace('/api/auth/google/callback', '/api/auth/google-login/callback');
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      redirectUri
+    );
+    const url = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile'],
+      prompt: 'select_account'
+    });
+    return res.json({ url });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/auth/google-login/callback', async (req, res) => {
+  const { code } = req.query;
+  if (!code) {
+    return res.status(400).send('<script>window.opener.postMessage({ type: "GOOGLE_AUTH_ERROR", error: "No auth code" }, "*"); window.close();</script>');
+  }
+
+  try {
+    const { google } = require('googleapis');
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI.replace('/api/auth/google/callback', '/api/auth/google-login/callback');
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      redirectUri
+    );
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
+
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const userInfo = await oauth2.userinfo.get();
+    const email = userInfo.data.email;
+    const name = userInfo.data.name || email.split('@')[0];
+
+    if (!email) {
+      throw new Error('Google did not return an email address.');
+    }
+
+    let account = await db.findAuthAccountByEmail(email);
+    if (!account) {
+      // Auto register account from verified Google profile
+      const randomPassword = 'GoogleAuth_' + Math.random().toString(36).substring(2, 12) + '!9A';
+      const created = await db.createAuthAccount({ name, email, password: randomPassword });
+      account = await db.findAuthAccountByEmail(email);
+    }
+
+    const user = { id: account._id.toString(), name: account.name, email: account.email };
+    const token = db.encrypt(JSON.stringify({ id: user.id, email: user.email, timestamp: Date.now() }));
+
+    return res.send(`
+      <html>
+        <body style="font-family: sans-serif; text-align: center; padding: 40px;">
+          <h3 style="color: #059669;">Verified by Google!</h3>
+          <p>Logged in as <strong>${email}</strong>.</p>
+          <script>
+            window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS', user: ${JSON.stringify(user)}, token: '${token}' }, '*');
+            setTimeout(() => window.close(), 1200);
+          </script>
+        </body>
+      </html>
+    `);
+  } catch (err) {
+    return res.send(`<script>window.opener.postMessage({ type: "GOOGLE_AUTH_ERROR", error: "${err.message}" }, "*"); setTimeout(() => window.close(), 2000);</script>`);
   }
 });
 
