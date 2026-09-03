@@ -197,8 +197,8 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
                 <span>1-Click Google Verification</span>
               </div>
               <div className="flex items-center gap-2.5 text-xs font-semibold text-emerald-50 bg-white/10 backdrop-blur-sm px-3 py-2 rounded-xl border border-white/10">
-                <span className="text-emerald-300 text-sm">💾</span>
-                <span>MongoDB Multi-Device Sync</span>
+                <span className="text-emerald-300 text-sm">💻</span>
+                <span>Instant Multi-Device Sync</span>
               </div>
             </div>
           </div>
