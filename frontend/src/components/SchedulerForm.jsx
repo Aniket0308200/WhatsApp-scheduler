@@ -325,6 +325,15 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
   const [scheduledAt,   setScheduledAt]   = useState(getDefaultTime);
   const [timeConfirmed, setTimeConfirmed] = useState(false);  // "Done" clicked
   const [loading,       setLoading]       = useState(false);
+  const [isMobile,      setIsMobile]      = useState(() => typeof window !== 'undefined' && window.innerWidth < 640);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Auto-suggest states
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
@@ -770,9 +779,9 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
                   setPhone(e.target.value);
                   setShowSuggestions(true);
                 }}
-                placeholder="Search name or type number…"
+                placeholder={isMobile ? "Search name or no…" : "Search name or type number…"}
                 required
-                className="w-full border border-slate-200 dark:border-wa-dbdr rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white dark:bg-wa-dsurf text-gray-900 dark:text-wa-dtext focus:outline-none focus:ring-2 focus:ring-wa-teal/40 focus:border-wa-teal pr-14 transition-colors"
+                className="w-full border border-slate-200 dark:border-wa-dbdr rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white dark:bg-wa-dsurf text-gray-900 dark:text-wa-dtext focus:outline-none focus:ring-2 focus:ring-wa-teal/40 focus:border-wa-teal md:pr-14 transition-colors"
               />
               {phone && (
                 <button

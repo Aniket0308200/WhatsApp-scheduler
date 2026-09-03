@@ -130,7 +130,7 @@ export default function DateTimePicker({
         <button
           type="button"
           onClick={() => applyPreset('30s')}
-          className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-wa-dsurf text-emerald-700 dark:text-wa-green font-semibold border border-emerald-200/60 dark:border-wa-dbdr shrink-0 hover:bg-emerald-100 transition-colors"
+          className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-wa-dsurf text-emerald-700 dark:text-wa-green font-semibold border border-emerald-200/60 dark:border-wa-dbdr shrink-0 hover:bg-emerald-100 transition-colors hidden"
         >
           {/* +30 sec */}
         </button>
