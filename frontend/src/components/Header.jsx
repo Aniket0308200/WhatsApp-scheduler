@@ -57,6 +57,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
   const [editedName, setEditedName] = useState(profile?.name || '');
   const [showFeedback, setShowFeedback] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   // Avatar state persistence
   const [avatarConfig, setAvatarConfig] = useState(() => {
@@ -325,24 +326,74 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
 
         {/* ── Desktop Action Controls ───────────── */}
         <div className="hidden lg:flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-          {/* User Account Login/Badge */}
+          {/* User Account Login/Badge Dropdown */}
           {authUser ? (
-            <div className="flex items-center gap-2 bg-white/10 dark:bg-wa-dsurf border border-white/20 dark:border-wa-dbdr rounded-xl px-3 py-1 text-xs text-slate-100 shadow-xs">
-              <span className="w-6 h-6 rounded-full bg-emerald-500/25 text-emerald-300 font-bold flex items-center justify-center text-xs shrink-0 border border-emerald-400/40">
-                {authUser.name ? authUser.name.charAt(0).toUpperCase() : '👤'}
-              </span>
-              <div className="flex flex-col min-w-0 max-w-[120px]">
-                <span className="font-bold text-white truncate leading-tight">{authUser.name}</span>
-                <span className="text-[10px] text-emerald-300/80 truncate leading-tight">{authUser.email}</span>
-              </div>
+            <div className="relative">
               <button
                 type="button"
-                onClick={onAuthLogout}
-                className="ml-1 px-2 py-0.5 rounded-lg text-[10px] font-bold text-red-300 hover:text-white bg-red-500/20 hover:bg-red-500/40 transition-colors shrink-0"
-                title="Sign Out of Account"
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                className="flex items-center gap-2 bg-white/10 dark:bg-wa-dsurf hover:bg-white/20 border border-white/20 dark:border-wa-dbdr rounded-xl px-2.5 py-1 text-xs text-white shadow-xs transition-all active:scale-98"
+                aria-expanded={userMenuOpen}
+                aria-label="User Account Menu"
               >
-                Sign Out
+                <span className="w-6 h-6 rounded-full bg-emerald-500/30 text-emerald-300 font-extrabold flex items-center justify-center text-xs shrink-0 border border-emerald-400/40">
+                  {authUser.name ? authUser.name.charAt(0).toUpperCase() : '👤'}
+                </span>
+                <span className="font-bold text-white text-xs max-w-[90px] truncate hidden sm:inline">
+                  {authUser.name?.split(' ')[0] || 'Account'}
+                </span>
+                <span className={`text-[10px] text-emerald-300 transition-transform duration-200 ${userMenuOpen ? 'rotate-180' : ''}`}>
+                  ▼
+                </span>
               </button>
+
+              {/* Right-Aligned Account Dropdown Menu */}
+              {userMenuOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setUserMenuOpen(false)} 
+                  />
+
+                  <div className="absolute right-0 top-full mt-2 w-60 bg-white dark:bg-wa-dpanel text-slate-900 dark:text-wa-dtext rounded-2xl shadow-2xl border border-slate-200 dark:border-wa-dbdr p-3 z-50 animate-fade-in space-y-2">
+                    {/* User Profile Card */}
+                    <div className="flex items-center gap-2.5 p-2 bg-slate-50 dark:bg-wa-dsurf rounded-xl border border-slate-100 dark:border-wa-dbdr/60">
+                      <span className="w-9 h-9 rounded-full bg-gradient-to-br from-wa-teal to-emerald-500 text-white font-black flex items-center justify-center text-sm shrink-0 shadow-xs">
+                        {authUser.name ? authUser.name.charAt(0).toUpperCase() : '👤'}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-extrabold text-xs text-slate-900 dark:text-white truncate">
+                          {authUser.name}
+                        </div>
+                        <div className="text-[10px] text-slate-500 dark:text-wa-dmuted truncate">
+                          {authUser.email}
+                        </div>
+                        <div className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-wa-green mt-0.5">
+                          <span>✓</span> Verified Account
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-slate-100 dark:border-wa-dbdr/60 my-1" />
+
+                    {/* Sign Out Action */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        onAuthLogout?.();
+                      }}
+                      className="w-full px-3 py-2 rounded-xl text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors flex items-center justify-between group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="group-hover:scale-110 transition-transform">🚪</span>
+                        <span>Sign Out of Account</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-normal">Exit</span>
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <button
