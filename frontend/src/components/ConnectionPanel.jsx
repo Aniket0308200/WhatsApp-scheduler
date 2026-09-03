@@ -188,10 +188,10 @@ export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) 
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="e.g. +918000000000"
+                  placeholder="e.g. +91 98765 43210 or +919876543210"
                   className="w-full border border-gray-200 dark:border-wa-dbdr rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-wa-dsurf text-gray-900 dark:text-wa-dtext focus:outline-none focus:ring-2 focus:ring-wa-teal/40 focus:border-wa-teal"
                 />
-                <p className="text-xs text-gray-400 dark:text-wa-dmuted mt-1">Include country code, no + sign or spaces.</p>
+                <p className="text-xs text-gray-400 dark:text-wa-dmuted mt-1">Include country code (e.g. +91). Spaces & dashes allowed.</p>
               </div>
 
               <button

@@ -260,10 +260,10 @@ app.get('/api/status', (req, res) => {
     return res.json({ status: "ok" });
   }
 
-  // Auto-initialize WhatsApp for this session if it's completely new/untracked & not currently initializing
-  if (!whatsapp.hasSession(req.sessionId) && !initializingSessions.has(req.sessionId)) {
+  // Auto-initialize WhatsApp for this session if it's untracked or disconnected & not currently initializing
+  if (whatsapp.shouldReinitialize(req.sessionId) && !initializingSessions.has(req.sessionId)) {
     initializingSessions.add(req.sessionId);
-    console.log(`[Server] Initializing untracked session: ${req.sessionId}`);
+    console.log(`[Server] Initializing untracked or disconnected session: ${req.sessionId}`);
     whatsapp.initWhatsApp(req.sessionId)
       .catch((err) => {
         console.error(`[Server] Error initializing session ${req.sessionId}:`, err.message);

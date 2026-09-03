@@ -4,16 +4,16 @@ import { format, parseISO, isValid } from 'date-fns';
 import { cancelMessage, deleteMessage } from '../api';
 
 const STATUS_BADGE = {
-  submitted: { label: 'Submitted',      cls: 'bg-blue-100 text-blue-700 border border-blue-200' },
-  delivered: { label: 'Delivered',      cls: 'bg-green-100 text-green-700 border border-green-200' },
-  read:      { label: 'Read',           cls: 'bg-emerald-100 text-emerald-700 border border-emerald-200' },
-  pending:   { label: '⏳ Pending',    cls: 'bg-yellow-100 text-yellow-700 border border-yellow-200' },
-  sent:      { label: '✅ Sent',        cls: 'bg-green-100  text-green-700  border border-green-200'  },
-  failed:    { label: '❌ Failed',      cls: 'bg-red-100    text-red-700    border border-red-200'    },
-  cancelled: { label: '🚫 Cancelled',  cls: 'bg-gray-100   text-gray-500   border border-gray-200'   },
+  pending:   { label: '⏳ Pending',     cls: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-900/40' },
+  sent:      { label: '✓ Sent',         cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/40' },
+  submitted: { label: '✓ Sent',         cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/40' },
+  delivered: { label: '✓✓ Delivered',   cls: 'bg-teal-100 text-teal-800 dark:bg-teal-950/40 dark:text-teal-400 border border-teal-200 dark:border-teal-900/40' },
+  read:      { label: '🔵 Read',        cls: 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-200 dark:border-blue-900/40' },
+  failed:    { label: '❌ Failed',      cls: 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-900/40' },
+  cancelled: { label: '🚫 Cancelled',   cls: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700' },
 };
 
-const FILTERS = ['all', 'pending', 'submitted', 'delivered', 'read', 'sent', 'failed', 'cancelled'];
+const FILTERS = ['all', 'pending', 'sent', 'delivered', 'read', 'failed', 'cancelled'];
 
 function formatDate(val) {
   if (!val) return '—';
@@ -60,7 +60,10 @@ export default function MessageTable({ messages, loading, onRefresh }) {
 
   const filtered = filter === 'all'
     ? sortedMessages
-    : sortedMessages.filter(m => m.status === filter);
+    : sortedMessages.filter(m => {
+        if (filter === 'sent') return m.status === 'sent' || m.status === 'submitted';
+        return m.status === filter;
+      });
 
   const totalItems = filtered.length;
   const totalPages = Math.ceil(totalItems / pageSize) || 1;
@@ -77,7 +80,9 @@ export default function MessageTable({ messages, loading, onRefresh }) {
   const paginatedMessages = filtered.slice(startIndex, endIndex);
 
   const counts = FILTERS.reduce((acc, f) => {
-    acc[f] = f === 'all' ? messages.length : messages.filter(m => m.status === f).length;
+    if (f === 'all') acc[f] = messages.length;
+    else if (f === 'sent') acc[f] = messages.filter(m => m.status === 'sent' || m.status === 'submitted').length;
+    else acc[f] = messages.filter(m => m.status === f).length;
     return acc;
   }, {});
 
@@ -142,10 +147,10 @@ export default function MessageTable({ messages, loading, onRefresh }) {
             className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-t-lg capitalize transition-colors
               ${filter === f ? 'bg-wa-teal text-white' : 'text-gray-500 hover:text-gray-700 dark:text-wa-dmuted dark:hover:text-wa-dtext hover:bg-slate-50 dark:hover:bg-wa-dsurf/30'}`}
           >
-            {f}
+            {f === 'all' ? 'All' : (STATUS_BADGE[f]?.label || f)}
             {counts[f] > 0 && (
               <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold
-                ${filter === f ? 'bg-white/20 text-white' : 'bg-slate-150 text-gray-600 dark:text-wa-dmuted'}`}>
+                ${filter === f ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-wa-dsurf text-gray-700 dark:text-wa-dmuted'}`}>
                 {counts[f]}
               </span>
             )}

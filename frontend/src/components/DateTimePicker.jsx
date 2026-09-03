@@ -81,27 +81,29 @@ export default function DateTimePicker({
 
   // Presets
   const applyPreset = (presetType) => {
-    let now = new Date();
-    let target = now;
+    const now = new Date();
+    // Use currently selected time as base if valid and in future; otherwise start from current real time
+    const base = currentDate && isValid(currentDate) && currentDate > now ? currentDate : now;
+    let target = base;
 
     switch (presetType) {
       case '30s':
-        target = addSeconds(now, 30);
+        target = addSeconds(base, 30);
         break;
       case '1m':
-        target = addMinutes(now, 1);
+        target = setSeconds(addMinutes(base, 1), 0);
         break;
       case '5m':
-        target = addMinutes(now, 5);
+        target = setSeconds(addMinutes(base, 5), 0);
         break;
       case '15m':
-        target = addMinutes(now, 15);
+        target = setSeconds(addMinutes(base, 15), 0);
         break;
       case '30m':
-        target = addMinutes(now, 30);
+        target = setSeconds(addMinutes(base, 30), 0);
         break;
       case '1h':
-        target = addHours(now, 1);
+        target = setSeconds(addHours(base, 1), 0);
         break;
       case 'tomorrow-12am':
         target = setSeconds(setMinutes(setHours(addDays(now, 1), 0), 0), 0);
@@ -130,7 +132,7 @@ export default function DateTimePicker({
           onClick={() => applyPreset('30s')}
           className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-wa-dsurf text-emerald-700 dark:text-wa-green font-semibold border border-emerald-200/60 dark:border-wa-dbdr shrink-0 hover:bg-emerald-100 transition-colors"
         >
-          +30 sec
+          {/* +30 sec */}
         </button>
         <button
           type="button"

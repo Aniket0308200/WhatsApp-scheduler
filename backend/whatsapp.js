@@ -48,6 +48,17 @@ function hasSession(sessionId) {
   return sessions.has(sessionId);
 }
 
+/** Returns true if a session is untracked OR disconnected with no active socket/timer. */
+function shouldReinitialize(sessionId) {
+  if (!sessionId) return false;
+  const session = sessions.get(sessionId);
+  if (!session) return true;
+  if (session.status === 'disconnected' && !session.sock && !session.reconnectTimer) {
+    return true;
+  }
+  return false;
+}
+
 async function useMongoDBAuthState(sessionId) {
   const isProd = process.env.NODE_ENV === 'production';
   const nsSessionId = isProd ? `prod_${sessionId}` : `dev_${sessionId}`;
@@ -771,37 +782,22 @@ async function initWhatsApp(sessionId) {
       // Reset profile on disconnect
       session.connectedProfile = { name: null, phone: null, jid: null };
 
-      const { loggedOut, connectionReplaced, multideviceMismatch, timedOut } = DisconnectReason;
+      const { loggedOut } = DisconnectReason;
 
       if (code === loggedOut) {
-        console.log(`[WA] [${sessionId}] Disconnected (loggedOut/401) — clearing session credentials and data.`);
+        console.log(`[WA] [${sessionId}] Disconnected (loggedOut/401) — user explicitly unlinked or logged out.`);
         session.status = 'disconnected';
         session.isSyncing = false;
         clearSession(sessionId).catch((err) => console.error(`[WA] [${sessionId}] Error clearing loggedOut session:`, err.message));
-      } else if (code === connectionReplaced) {
-        // A 440 means another process/device has temporarily taken over this
-        // exact linked-device session. Do not delete auth/contact files here:
-        // doing so creates a re-pair loop and loses the fast local cache.
-        session.status = 'disconnected';
-        session.isSyncing = false;
-        console.warn(`[WA] [${sessionId}] Session active elsewhere (Connection replaced/440 by another instance). Gracefully halting automatic reconnection to avoid conflicts.`);
-        // Gracefully halt reconnection loops - do not set reconnectTimer
-      } else if (code === multideviceMismatch) {
-        // This is a genuine credential mismatch; data remains in the
-        // phone-keyed database even though a new pairing will be required.
-        console.log(`[WA] [${sessionId}] Connection closed with multideviceMismatch. Preserving session for retry.`);
-        session.status = 'disconnected';
-        session.isSyncing = false;
-        session.reconnectTimer = setTimeout(() => initWhatsApp(sessionId), 5_000);
-      } else if (code === timedOut || code === 408) {
-        // Handle timeout more gracefully - don't reconnect too aggressively
-        session.status = 'disconnected';
-        console.log(`[WA] [${sessionId}] Connection timeout — waiting longer before retry...`);
-        session.reconnectTimer = setTimeout(() => initWhatsApp(sessionId), 15_000); // Wait 15 seconds instead of 5
       } else {
+        // ALWAYS auto-reconnect for ALL stream resets (440/515), network glitches, server restarts, and timeouts
         session.status = 'disconnected';
-        console.log(`[WA] [${sessionId}] Transient disconnect — reconnecting in 5 s…`);
-        session.reconnectTimer = setTimeout(() => initWhatsApp(sessionId), 5_000);
+        session.isSyncing = false;
+        console.log(`[WA] [${sessionId}] Session closed (code: ${code}). Triggering auto-reconnect in 3s…`);
+        if (session.reconnectTimer) clearTimeout(session.reconnectTimer);
+        session.reconnectTimer = setTimeout(() => {
+          initWhatsApp(sessionId).catch(err => console.error(`[WA] [${sessionId}] Auto-reconnect error:`, err.message));
+        }, 3_000);
       }
     }
   });
@@ -1288,6 +1284,7 @@ function updateProfileName(sessionId, name) {
 
 module.exports = {
   hasSession,
+  shouldReinitialize,
   initWhatsApp,
   bootstrapSessions,
   sendMessage,

@@ -504,6 +504,58 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
               </div>
             )}
 
+            {/* Mobile Account Profile & Log Out */}
+            {authUser ? (
+              <div className="p-3 bg-white/10 dark:bg-wa-dsurf/80 rounded-2xl border border-white/10 dark:border-wa-dbdr space-y-2">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-8 h-8 rounded-full bg-gradient-to-br from-wa-teal to-emerald-500 text-white font-black flex items-center justify-center text-xs shrink-0 shadow-xs">
+                    {authUser.name ? authUser.name.charAt(0).toUpperCase() : '👤'}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-extrabold text-xs text-white truncate">
+                      {authUser.name}
+                    </div>
+                    <div className="text-[10px] text-emerald-100 dark:text-wa-dmuted truncate">
+                      {authUser.email}
+                    </div>
+                  </div>
+                  <span className="text-[9px] font-bold text-emerald-300 dark:text-wa-green bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-400/30 shrink-0">
+                    Verified
+                  </span>
+                </div>
+
+                <div className="border-t border-white/10 dark:border-wa-dbdr/60 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm('Are you sure you want to log out?')) {
+                        setMobileMenuOpen(false);
+                        onAuthLogout?.();
+                      }
+                    }}
+                    className="w-full px-3 py-2 rounded-xl text-xs font-bold text-red-300 dark:text-red-400 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 transition-colors flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>🚪</span>
+                      <span>Log Out</span>
+                    </div>
+                    <span className="text-[10px] text-red-200 font-normal">Exit</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenAuthModal?.();
+                }}
+                className="w-full py-2.5 px-3 rounded-xl text-xs font-extrabold text-slate-900 dark:text-white bg-emerald-400 hover:bg-emerald-300 shadow-md flex items-center justify-center gap-1.5"
+              >
+                <span>🔐 Log In / Sign Up</span>
+              </button>
+            )}
+
             {/* Mobile Actions: CTA + Status + Theme Toggle */}
             <div className="flex flex-col gap-2.5 pt-1">
               {!isAppView && (
