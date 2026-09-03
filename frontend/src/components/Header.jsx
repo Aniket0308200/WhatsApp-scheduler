@@ -183,7 +183,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-[100] bg-wa-dark/85 dark:bg-wa-dpanel/85 backdrop-blur-md border-b border-black/20 dark:border-wa-dbdr/60 shadow-lg transition-all duration-200">
+      <header className="fixed top-0 left-0 right-0 z-[50] bg-wa-dark/85 dark:bg-wa-dpanel/85 backdrop-blur-md border-b border-black/20 dark:border-wa-dbdr/60 shadow-lg transition-all duration-200">
         <div className={`container mx-auto px-4 py-3 ${isAppView ? 'max-w-5xl' : 'max-w-8xl'} flex items-center justify-between gap-3 transition-all duration-200`}>
 
           {/* ── Logo + title (Clickable link back to Home) ──────────────── */}
@@ -442,7 +442,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
               <button
                 onClick={handleLogout}
                 disabled={loggingOut}
-                className="flex items-center gap-1 text-xs bg-white/10 dark:bg-wa-dsurf hover:bg-red-500/25 dark:hover:bg-red-500/30 border border-white/20 dark:border-wa-dbdr hover:border-red-400/40 px-2.5 py-1.5 rounded-full font-bold text-white hover:text-red-200 disabled:opacity-50 transition-all shadow-2xs group"
+                className="flex items-center gap-1 text-xs bg-white/10 dark:bg-wa-dsurf hover:bg-red-500/25 dark:hover:bg-red-500/30 border border-white/20 dark:border-wa-dbdr hover:border-red-400/40 dark:hover:border-red-400/40 px-2.5 py-1.5 rounded-full font-bold text-white hover:text-red-200 disabled:opacity-50 transition-all shadow-2xs group"
                 title="Disconnect Session"
               >
                 {loggingOut ? (
