@@ -68,14 +68,15 @@ async function processAllDueMessages() {
 }
 
 function startScheduler() {
-  // Fire every minute at :00 seconds
-  cron.schedule('* * * * *', async () => {
-    const now = new Date().toISOString();
-    console.log(`[Scheduler] ── Tick at ${now} ──`);
+  // Fire high-precision check every 5 seconds
+  setInterval(async () => {
     await processAllDueMessages();
-  });
+  }, 5_000);
 
-  console.log('[Scheduler] Started — checking every minute.');
+  // Also run immediately on startup
+  processAllDueMessages();
+
+  console.log('[Scheduler] Started — high-precision check active every 5 seconds.');
 }
 
 module.exports = { startScheduler, processAllDueMessages };

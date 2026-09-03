@@ -1,5 +1,5 @@
 import React from 'react';
-import { format, parseISO, addMinutes, addHours, addDays, setHours, setMinutes, setSeconds, isValid } from 'date-fns';
+import { format, parseISO, addMinutes, addSeconds, addHours, addDays, setHours, setMinutes, setSeconds, isValid } from 'date-fns';
 import toast from 'react-hot-toast';
 
 /**
@@ -85,6 +85,9 @@ export default function DateTimePicker({
     let target = now;
 
     switch (presetType) {
+      case '30s':
+        target = addSeconds(now, 30);
+        break;
       case '1m':
         target = addMinutes(now, 1);
         break;
@@ -124,8 +127,15 @@ export default function DateTimePicker({
         </span>
         <button
           type="button"
-          onClick={() => applyPreset('1m')}
+          onClick={() => applyPreset('30s')}
           className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-wa-dsurf text-emerald-700 dark:text-wa-green font-semibold border border-emerald-200/60 dark:border-wa-dbdr shrink-0 hover:bg-emerald-100 transition-colors"
+        >
+          +30 sec
+        </button>
+        <button
+          type="button"
+          onClick={() => applyPreset('1m')}
+          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-50 dark:bg-wa-dsurf dark:hover:bg-wa-dbdr text-slate-700 dark:text-wa-dtext hover:text-emerald-600 dark:hover:text-wa-green border border-slate-200 dark:border-wa-dbdr shrink-0 transition-colors"
         >
           +1 min
         </button>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { format, addMinutes } from 'date-fns';
+import { format, addMinutes, addSeconds } from 'date-fns';
 import { scheduleMessage, fetchContactName, resolveContactLive, importContacts, fetchAllContacts, fetchGoogleAuthUrl, fetchLinkedGoogleAccounts, syncGroups, deleteGoogleAccount } from '../api';
 import DateTimePicker from './DateTimePicker';
 
@@ -307,12 +307,12 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
   };
 
   const getMinTime = () => {
-    const d = addMinutes(new Date(), 1);
+    const d = addSeconds(new Date(), 30);
     return format(d, "yyyy-MM-dd'T'HH:mm:ss");
   };
 
   const getDefaultTime = () => {
-    const d = addMinutes(new Date(), 5);
+    const d = addSeconds(new Date(), 30);
     return format(d, "yyyy-MM-dd'T'HH:mm:ss");
   };
 
