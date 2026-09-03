@@ -10,11 +10,11 @@ import { requestPairingCode } from '../api';
  *  - A "Connect via Phone Number" section for mobile/pairing-code flow
  */
 export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) {
-  const [tab, setTab]               = useState('qr');      // 'qr' | 'phone'
-  const [phone, setPhone]           = useState('');
+  const [tab, setTab] = useState('qr');      // 'qr' | 'phone'
+  const [phone, setPhone] = useState('');
   const [requesting, setRequesting] = useState(false);
-  const [localCode, setLocalCode]   = useState(null);
-  const [countdown, setCountdown]   = useState(0);
+  const [localCode, setLocalCode] = useState(null);
+  const [countdown, setCountdown] = useState(0);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -94,8 +94,8 @@ export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) 
             {status === 'connecting'
               ? 'Initialising WhatsApp client…'
               : status === 'qr_ready'
-              ? 'Ready — scan the QR or use a pairing code below.'
-              : 'Not connected — choose a method below.'}
+                ? 'Ready — scan the QR or use a pairing code below.'
+                : 'Not connected — choose a method below.'}
           </p>
         </div>
       </div>
@@ -103,8 +103,8 @@ export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) 
       {/* Tab switcher */}
       <div className="flex border-b border-slate-200 dark:border-wa-dbdr">
         {[
-          { key: 'qr',    label: '📷  QR Code',           sub: 'Scan with WhatsApp camera' },
-          { key: 'phone', label: '📱  Phone Number',       sub: 'Get a pairing code' },
+          { key: 'qr', label: '📷  QR Code', sub: 'Scan with WhatsApp camera' },
+          { key: 'phone', label: '📱  Phone Number', sub: 'Get a pairing code' },
         ].map(({ key, label, sub }) => (
           <button
             key={key}
@@ -136,7 +136,7 @@ export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) 
               <div className="flex flex-col items-center gap-3 py-8 text-gray-400 dark:text-wa-dmuted">
                 <svg className="w-12 h-12 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                    d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+                    d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                 </svg>
                 <p className="text-sm text-gray-500 dark:text-wa-dmuted">Waiting for QR code…</p>
                 <button
@@ -188,7 +188,7 @@ export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) 
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="e.g. +91 98765 43210 or +919876543210"
+                  placeholder="e.g. +91 xxxxx xxxxx"
                   className="w-full border border-gray-200 dark:border-wa-dbdr rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-wa-dsurf text-gray-900 dark:text-wa-dtext focus:outline-none focus:ring-2 focus:ring-wa-teal/40 focus:border-wa-teal"
                 />
                 <p className="text-xs text-gray-400 dark:text-wa-dmuted mt-1">Include country code (e.g. +91). Spaces & dashes allowed.</p>
