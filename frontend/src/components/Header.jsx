@@ -183,7 +183,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
 
   return (
     <>
-    <header className="fixed top-0 left-0 right-0 z-40 bg-wa-dark/85 dark:bg-wa-dpanel/85 backdrop-blur-md border-b border-black/20 dark:border-wa-dbdr/60 shadow-lg transition-all duration-200">
+    <header className="fixed top-0 left-0 right-0 z-[100] bg-wa-dark/85 dark:bg-wa-dpanel/85 backdrop-blur-md border-b border-black/20 dark:border-wa-dbdr/60 shadow-lg transition-all duration-200">
       <div className={`container mx-auto px-4 py-3 ${isAppView ? 'max-w-5xl' : 'max-w-8xl'} flex items-center justify-between gap-3 transition-all duration-200`}>
 
         {/* ── Logo + title (Clickable link back to Home) ──────────────── */}
@@ -376,18 +376,20 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
 
                     <div className="border-t border-slate-100 dark:border-wa-dbdr/60 my-1" />
 
-                    {/* Sign Out Action */}
+                    {/* Log Out Action */}
                     <button
                       type="button"
                       onClick={() => {
-                        setUserMenuOpen(false);
-                        onAuthLogout?.();
+                        if (window.confirm('Are you sure you want to log out?')) {
+                          setUserMenuOpen(false);
+                          onAuthLogout?.();
+                        }
                       }}
                       className="w-full px-3 py-2 rounded-xl text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors flex items-center justify-between group"
                     >
                       <div className="flex items-center gap-2">
                         <span className="group-hover:scale-110 transition-transform">🚪</span>
-                        <span>Sign Out of Account</span>
+                        <span>Log Out</span>
                       </div>
                       <span className="text-[10px] text-slate-400 font-normal">Exit</span>
                     </button>
@@ -441,7 +443,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
             <button
               onClick={handleLogout}
               disabled={loggingOut}
-              className="flex items-center gap-1 text-xs bg-white/10 hover:bg-white/20 dark:bg-wa-dsurf dark:hover:bg-wa-dbdr px-2.5 py-1.5 rounded-full font-medium text-slate-100 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1 text-xs bg-red-500/15 hover:bg-red-600 dark:bg-red-950/40 dark:hover:bg-red-600 border border-red-500/30 px-2.5 py-1.5 rounded-full font-bold text-red-300 hover:text-white dark:text-red-300 dark:hover:text-white disabled:opacity-50 transition-all shadow-2xs group"
               title="Disconnect Session"
             >
               {loggingOut ? (
@@ -449,7 +451,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
               ) : (
                 <>
                   <LogoutIcon />
-                  <span className="hidden sm:inline ml-0.5">Disconnect</span>
+                  <span className="hidden sm:inline ml-0.5 group-hover:font-extrabold">Disconnect</span>
                 </>
               )}
             </button>

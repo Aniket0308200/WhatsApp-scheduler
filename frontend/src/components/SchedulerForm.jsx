@@ -842,7 +842,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
           <label className="block text-sm font-medium text-gray-700 dark:text-wa-dtext mb-1.5">
             Message
           </label>
-          <div className="relative z-10 border border-slate-200 dark:border-wa-dbdr rounded-xl overflow-visible focus-within:z-[70] focus-within:ring-2 focus-within:ring-wa-teal/40 focus-within:border-wa-teal bg-slate-50 focus-within:bg-white dark:bg-wa-dsurf transition-colors">
+          <div className="relative z-10 border border-slate-200 dark:border-wa-dbdr rounded-xl overflow-visible focus-within:z-20 focus-within:ring-2 focus-within:ring-wa-teal/40 focus-within:border-wa-teal bg-slate-50 focus-within:bg-white dark:bg-wa-dsurf transition-colors">
             <textarea
               ref={textareaRef}
               value={message}
