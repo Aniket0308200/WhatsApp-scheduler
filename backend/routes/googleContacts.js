@@ -23,7 +23,8 @@ router.get('/url', (req, res) => {
     const oauth2Client = getOAuth2Client();
     const scopes = [
       'https://www.googleapis.com/auth/contacts.readonly',
-      'https://www.googleapis.com/auth/contacts.other.readonly',
+      // 'https://www.googleapis.com/auth/contacts.other.readonly',
+      'https://www.googleapis.com/auth/userinfo.profile',
       'https://www.googleapis.com/auth/userinfo.email'
     ];
 
@@ -144,18 +145,18 @@ router.get('/callback', async (req, res) => {
     }
 
     // 2. Other Contacts (frequent contacts)
-    try {
-      const otherRes = await peopleService.otherContacts.list({
-        readMask: 'names,phoneNumbers',
-        pageSize: 1000
-      });
-      const otherContacts = otherRes.data.otherContacts || [];
-      for (const person of otherContacts) {
-        processPerson(person);
-      }
-    } catch (otherErr) {
-      console.warn('[Google Sync] Other contacts list warning:', otherErr.message);
-    }
+    // try {
+    //   const otherRes = await peopleService.otherContacts.list({
+    //     readMask: 'names,phoneNumbers',
+    //     pageSize: 1000
+    //   });
+    //   const otherContacts = otherRes.data.otherContacts || [];
+    //   for (const person of otherContacts) {
+    //     processPerson(person);
+    //   }
+    // } catch (otherErr) {
+    //   console.warn('[Google Sync] Other contacts list warning:', otherErr.message);
+    // }
 
     // Bulk upsert into MongoDB Contact model
     if (parsedContacts.length > 0) {
