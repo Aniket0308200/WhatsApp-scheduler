@@ -7,10 +7,10 @@ import AvatarSelectorModal, { PRESET_AVATARS, COLOR_OPTIONS } from './AvatarSele
 import { navigateTo } from '../utils/navigation';
 
 const STATUS_CONFIG = {
-  connected:    { label: 'Connected',     bg: 'bg-green-100 dark:bg-green-900/40',   text: 'text-green-700 dark:text-green-400',  dot: 'bg-green-500',  pulse: false },
-  qr_ready:     { label: 'Awaiting Auth', bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-700 dark:text-yellow-400', dot: 'bg-yellow-400', pulse: true  },
-  connecting:   { label: 'Connecting',    bg: 'bg-blue-100 dark:bg-blue-900/30',     text: 'text-blue-700 dark:text-blue-400',     dot: 'bg-blue-400',   pulse: true  },
-  disconnected: { label: 'Disconnected',  bg: 'bg-red-100 dark:bg-red-900/30',       text: 'text-red-700 dark:text-red-400',       dot: 'bg-red-500',    pulse: false },
+  connected: { label: 'Connected', bg: 'bg-green-100 dark:bg-green-900/40', text: 'text-green-700 dark:text-green-400', dot: 'bg-green-500', pulse: false },
+  qr_ready: { label: 'Awaiting Auth', bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-700 dark:text-yellow-400', dot: 'bg-yellow-400', pulse: true },
+  connecting: { label: 'Connecting', bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-400', dot: 'bg-blue-400', pulse: true },
+  disconnected: { label: 'Disconnected', bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-400', dot: 'bg-red-500', pulse: false },
 };
 
 const WA_ICON = (
@@ -20,15 +20,15 @@ const WA_ICON = (
 // Sun icon for light mode
 const SunIcon = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <circle cx="12" cy="12" r="5"/>
-    <path strokeLinecap="round" d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+    <circle cx="12" cy="12" r="5" />
+    <path strokeLinecap="round" d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
   </svg>
 );
 
 // Moon icon for dark mode
 const MoonIcon = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
   </svg>
 );
 
@@ -99,7 +99,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
       toast.error('Failed to update name: ' + (err.response?.data?.error || err.message));
     }
   };
-  
+
   React.useEffect(() => {
     if (status === 'connected' && isSyncing) {
       const t = setTimeout(() => {
@@ -118,10 +118,10 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
   // Determine display name — prefer name, fallback to +phone
   const displayPhone = profile?.phone || null;
   const cleanPhone = displayPhone ? displayPhone.replace(/\D/g, '') : '';
-  const displayName  = profile?.name && profile.name !== 'Unknown' && profile.name !== null
+  const displayName = profile?.name && profile.name !== 'Unknown' && profile.name !== null
     ? profile.name
     : displayPhone ? `+${cleanPhone}` : null;
-  const avatarLetter = displayName ? displayName.replace('+','').trim().charAt(0).toUpperCase() : '?';
+  const avatarLetter = displayName ? displayName.replace('+', '').trim().charAt(0).toUpperCase() : '?';
 
   const showPhoneSubtitle = displayPhone && displayName.replace(/\D/g, '') !== cleanPhone;
 
@@ -183,92 +183,387 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
 
   return (
     <>
-    <header className="fixed top-0 left-0 right-0 z-[100] bg-wa-dark/85 dark:bg-wa-dpanel/85 backdrop-blur-md border-b border-black/20 dark:border-wa-dbdr/60 shadow-lg transition-all duration-200">
-      <div className={`container mx-auto px-4 py-3 ${isAppView ? 'max-w-5xl' : 'max-w-8xl'} flex items-center justify-between gap-3 transition-all duration-200`}>
+      <header className="fixed top-0 left-0 right-0 z-[100] bg-wa-dark/85 dark:bg-wa-dpanel/85 backdrop-blur-md border-b border-black/20 dark:border-wa-dbdr/60 shadow-lg transition-all duration-200">
+        <div className={`container mx-auto px-4 py-3 ${isAppView ? 'max-w-5xl' : 'max-w-8xl'} flex items-center justify-between gap-3 transition-all duration-200`}>
 
-        {/* ── Logo + title (Clickable link back to Home) ──────────────── */}
-        <button
-          onClick={() => handleNavClick('landing')}
-          className="flex items-center gap-2.5 flex-shrink-0 hover:opacity-90 active:scale-98 transition-all text-left outline-none border-0 ring-0 focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none select-none group"
-          title="Click to return to Home Page"
-        >
-          <div className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center shadow-sm overflow-hidden group-hover:scale-105 transition-transform shrink-0">
-            {WA_ICON}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-bold text-sm sm:text-base text-slate-100 leading-tight tracking-tight group-hover:text-emerald-200 transition-colors">
-                WA Scheduler
-              </h1>
-              <span className="hidden lg:inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 font-medium select-none">
-                🔒 End-to-End Encrypted
-              </span>
+          {/* ── Logo + title (Clickable link back to Home) ──────────────── */}
+          <button
+            onClick={() => handleNavClick('landing')}
+            className="flex items-center gap-2.5 flex-shrink-0 hover:opacity-90 active:scale-98 transition-all text-left outline-none border-0 ring-0 focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none select-none group"
+            title="Click to return to Home Page"
+          >
+            <div className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center shadow-sm overflow-hidden group-hover:scale-105 transition-transform shrink-0">
+              {WA_ICON}
             </div>
-            <p className="text-[10px] sm:text-[11px] text-green-300 dark:text-wa-dmuted leading-tight mt-0.5 flex items-center gap-1">
-              <span>WA Message Scheduler</span>
-            </p>
-          </div>
-        </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="font-bold text-sm sm:text-base text-slate-100 leading-tight tracking-tight group-hover:text-emerald-200 transition-colors">
+                  WA Scheduler
+                </h1>
+                <span className="hidden lg:inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 font-medium select-none">
+                  🔒 End-to-End Encrypted
+                </span>
+              </div>
+              <p className="text-[10px] sm:text-[11px] text-green-300 dark:text-wa-dmuted leading-tight mt-0.5 flex items-center gap-1">
+                <span>WA Message Scheduler</span>
+              </p>
+            </div>
+          </button>
 
-        {/* ── Landing Navigation Links (Desktop view) ──── */}
-        {!isAppView && (
-          <nav className="hidden lg:flex items-center gap-1 sm:gap-2 text-xs font-semibold text-emerald-100 dark:text-wa-dmuted">
-            <button
-              onClick={() => handleNavClick('landing')}
-              className="px-3 py-1.5 rounded-lg bg-white/15 text-white font-bold dark:bg-wa-dsurf dark:text-wa-dtext transition-colors"
+          {/* ── Landing Navigation Links (Desktop view) ──── */}
+          {!isAppView && (
+            <nav className="hidden lg:flex items-center gap-1 sm:gap-2 text-xs font-semibold text-emerald-100 dark:text-wa-dmuted">
+              <button
+                onClick={() => handleNavClick('landing')}
+                className="px-3 py-1.5 rounded-lg bg-white/15 text-white font-bold dark:bg-wa-dsurf dark:text-wa-dtext transition-colors"
+              >
+                Home
+              </button>
+              <button
+                onClick={() => handleNavClick('landing', 'features')}
+                className="px-3 py-1.5 rounded-lg hover:text-white hover:bg-white/10 dark:hover:text-wa-dtext transition-colors"
+              >
+                Features
+              </button>
+              <button
+                onClick={() => handleNavClick('landing', 'how-it-works')}
+                className="px-3 py-1.5 rounded-lg hover:text-white hover:bg-white/10 dark:hover:text-wa-dtext transition-colors"
+              >
+                How It Works
+              </button>
+              <button
+                onClick={() => handleNavClick('landing', 'pricing')}
+                className="px-3 py-1.5 rounded-lg hover:text-white hover:bg-white/10 dark:hover:text-wa-dtext transition-colors flex items-center gap-1"
+              >
+                <span>Pricing</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-emerald-500 text-white uppercase">
+                  Free
+                </span>
+              </button>
+            </nav>
+          )}
+
+          {/* ── Connected Profile Card (Clickable workspace entrance) ─────────── */}
+          {isConnected && (
+            <div
+              onClick={(e) => {
+                if (editing) return;
+                if (!isAppView) onGetStarted();
+              }}
+              className={`hidden lg:flex items-center gap-2.5 bg-white/10 dark:bg-wa-dsurf border border-white/15 dark:border-wa-dbdr rounded-xl px-3 py-1.5 min-w-0 flex-1 max-w-[260px] transition-all duration-200 group select-none ${!isAppView ? 'cursor-pointer hover:bg-white/20 dark:hover:bg-wa-dbdr/80 hover:border-emerald-400/50 hover:shadow-md' : 'cursor-default'
+                }`}
+              title={!isAppView ? "Go to Messaging Workspace" : "Connected WhatsApp Profile"}
             >
-              Home
-            </button>
-            <button
-              onClick={() => handleNavClick('landing', 'features')}
-              className="px-3 py-1.5 rounded-lg hover:text-white hover:bg-white/10 dark:hover:text-wa-dtext transition-colors"
-            >
-              Features
-            </button>
-            <button
-              onClick={() => handleNavClick('landing', 'how-it-works')}
-              className="px-3 py-1.5 rounded-lg hover:text-white hover:bg-white/10 dark:hover:text-wa-dtext transition-colors"
-            >
-              How It Works
-            </button>
-            <button
-              onClick={() => handleNavClick('landing', 'pricing')}
-              className="px-3 py-1.5 rounded-lg hover:text-white hover:bg-white/10 dark:hover:text-wa-dtext transition-colors flex items-center gap-1"
-            >
-              <span>Pricing</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-emerald-500 text-white uppercase">
-                Free
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowAvatarModal(true);
+                }}
+                className="relative group/avatar cursor-pointer shrink-0"
+                title="Click to customize avatar (Photo, 8 Avatars, Color)"
+              >
+                {renderAvatarGraphic("w-8 h-8", "text-sm")}
+                <div className="absolute -bottom-1 -right-1 bg-slate-900/90 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center border border-white/30 shadow-md group-hover/avatar:scale-110 transition-transform">
+                  📷
+                </div>
+              </div>
+              <div className="min-w-0 flex-1 flex items-center gap-1.5">
+                {editing ? (
+                  <div className="flex items-center gap-1 w-full min-w-0" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="text"
+                      value={editedName}
+                      onChange={(e) => setEditedName(e.target.value)}
+                      className="w-full text-xs bg-slate-800 dark:bg-wa-dsurf border border-wa-teal rounded-md px-1.5 py-0.5 text-slate-100 focus:outline-none"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveName();
+                        if (e.key === 'Escape') setEditing(false);
+                      }}
+                      autoFocus
+                    />
+                    <button onClick={handleSaveName} className="text-green-400 hover:text-green-300 text-xs font-semibold px-1 shrink-0">✓</button>
+                    <button onClick={() => setEditing(false)} className="text-red-400 hover:text-red-300 text-xs font-semibold px-1 shrink-0">✕</button>
+                  </div>
+                ) : (
+                  <div className="min-w-0 flex-1 group/name flex items-center gap-1">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs sm:text-sm font-semibold text-slate-100 group-hover:text-emerald-200 transition-colors truncate leading-tight">
+                        {displayName || 'Connected User'}
+                      </p>
+                      {showPhoneSubtitle ? (
+                        <p className="text-[10px] sm:text-[11px] text-green-300 dark:text-wa-dmuted leading-tight font-mono truncate">
+                          +{cleanPhone}
+                        </p>
+                      ) : (
+                        <span className="flex items-center gap-1 text-[9px] sm:text-[10px] text-green-300 dark:text-green-400 font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                          online
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditing(true);
+                        setEditedName(displayName || '');
+                      }}
+                      className="p-1 text-slate-300 hover:text-slate-100 opacity-0 group-hover/name:opacity-100 transition-opacity shrink-0 text-xs"
+                      title="Edit profile name"
+                    >
+                      ✏️
+                    </button>
+                  </div>
+                )}
+              </div>
+              {!isAppView && !editing && (
+                <span className="text-emerald-400 dark:text-emerald-300 text-xs font-extrabold opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all ml-0.5 shrink-0 hidden">
+                  →
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* ── Desktop Action Controls ───────────── */}
+          <div className="hidden lg:flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+            {/* User Account Login/Badge Dropdown */}
+            {authUser ? (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  className="flex items-center gap-2 bg-white/10 dark:bg-wa-dsurf hover:bg-white/20 border border-white/20 dark:border-wa-dbdr rounded-xl px-2.5 py-1 text-xs text-white shadow-xs transition-all active:scale-98"
+                  aria-expanded={userMenuOpen}
+                  aria-label="User Account Menu"
+                >
+                  <span className="w-6 h-6 rounded-full bg-emerald-500/30 text-emerald-300 font-extrabold flex items-center justify-center text-xs shrink-0 border border-emerald-400/40">
+                    {authUser.name ? authUser.name.charAt(0).toUpperCase() : '👤'}
+                  </span>
+                  <span className="font-bold text-white text-xs max-w-[90px] truncate hidden sm:inline">
+                    {authUser.name?.split(' ')[0] || 'Account'}
+                  </span>
+                  <span className={`text-[10px] text-emerald-300 transition-transform duration-200 ${userMenuOpen ? 'rotate-180' : ''}`}>
+                    ▼
+                  </span>
+                </button>
+
+                {/* Right-Aligned Account Dropdown Menu */}
+                {userMenuOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setUserMenuOpen(false)}
+                    />
+
+                    <div className="absolute right-0 top-full mt-2 w-60 bg-white dark:bg-wa-dpanel text-slate-900 dark:text-wa-dtext rounded-2xl shadow-2xl border border-slate-200 dark:border-wa-dbdr p-3 z-50 animate-fade-in space-y-2">
+                      {/* User Profile Card */}
+                      <div className="flex items-center gap-2.5 p-2 bg-slate-50 dark:bg-wa-dsurf rounded-xl border border-slate-100 dark:border-wa-dbdr/60">
+                        <span className="w-9 h-9 rounded-full bg-gradient-to-br from-wa-teal to-emerald-500 text-white font-black flex items-center justify-center text-sm shrink-0 shadow-xs">
+                          {authUser.name ? authUser.name.charAt(0).toUpperCase() : '👤'}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-extrabold text-xs text-slate-900 dark:text-white truncate">
+                            {authUser.name}
+                          </div>
+                          <div className="text-[10px] text-slate-500 dark:text-wa-dmuted truncate">
+                            {authUser.email}
+                          </div>
+                          <div className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-wa-green mt-0.5">
+                            <span>✓</span> Verified Account
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="border-t border-slate-100 dark:border-wa-dbdr/60 my-1" />
+
+                      {/* Log Out Action */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm('Are you sure you want to log out?')) {
+                            setUserMenuOpen(false);
+                            onAuthLogout?.();
+                          }
+                        }}
+                        className="w-full px-3 py-2 rounded-xl text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors flex items-center justify-between group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="group-hover:scale-110 transition-transform">🚪</span>
+                          <span>Log Out</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-normal">Exit</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={onOpenAuthModal}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-900 bg-white hover:bg-emerald-50 border border-slate-200 shadow-sm transition-all duration-200 flex items-center gap-1.5 active:scale-95"
+              >
+                <span>🔑</span>
+                <span>Sign In / Register</span>
+              </button>
+            )}
+
+            {!isAppView && !isConnected && (
+              <button
+                onClick={onGetStarted}
+                className="px-3.5 sm:px-4 py-1.5 rounded-xl text-xs font-extrabold text-slate-900 dark:text-white bg-white dark:bg-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500 border border-slate-200 dark:border-emerald-500/30 shadow-sm transition-all duration-300 transform hover:scale-[1.03] hover:-translate-y-0.5 flex items-center gap-1"
+              >
+                <span>Get Started</span>
+                <span className="text-emerald-600 dark:text-emerald-200 font-black">→</span>
+              </button>
+            )}
+
+            {isConnected && isSyncing && !syncTimerExceeded && (
+              <span className="flex items-center gap-1 text-[10px] sm:text-xs font-semibold px-2 py-1 rounded-full bg-blue-500/25 text-blue-200 border border-blue-400/30 animate-pulse">
+                <span className="w-2.5 h-2.5 border-2 border-blue-200 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                <span>Syncing…</span>
               </span>
+            )}
+
+            <span className={`flex items-center gap-1 text-[10px] sm:text-xs font-medium px-2.5 py-1 rounded-full ${cfg.bg} ${cfg.text}`}>
+              <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full flex-shrink-0 ${cfg.dot} ${cfg.pulse ? 'animate-pulse' : ''}`} />
+              <span>{cfg.label}</span>
+            </span>
+
+            <button
+              onClick={toggle}
+              aria-label="Toggle theme"
+              className="p-1.5 rounded-full text-slate-200/70 hover:text-slate-100 hover:bg-white/10 dark:hover:bg-wa-dsurf transition-colors"
+              title={dark ? 'Switch to Light mode' : 'Switch to Dark mode'}
+            >
+              {dark ? <SunIcon /> : <MoonIcon />}
             </button>
-          </nav>
+
+            {isConnected && (
+              <button
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="flex items-center gap-1 text-xs bg-white/10 dark:bg-wa-dsurf hover:bg-red-500/25 dark:hover:bg-red-500/30 border border-white/20 dark:border-wa-dbdr hover:border-red-400/40 px-2.5 py-1.5 rounded-full font-bold text-white hover:text-red-200 disabled:opacity-50 transition-all shadow-2xs group"
+                title="Disconnect Session"
+              >
+                {loggingOut ? (
+                  '…'
+                ) : (
+                  <>
+                    <LogoutIcon />
+                    <span className="hidden sm:inline ml-0.5">Disconnect</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+
+          {/* ── Mobile 3-Line Hamburger Button ──────────────────────── */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="lg:hidden p-2 rounded-xl text-slate-200 hover:text-white bg-white/10 dark:bg-wa-dsurf transition-colors focus:outline-none"
+            aria-label="Toggle navigation menu"
+          >
+            <HamburgerIcon isOpen={mobileMenuOpen} />
+          </button>
+
+        </div>
+
+        {/* ── Mobile Hamburger Dropdown Menu Panel ───────────────────── */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden bg-wa-dark/95 dark:bg-wa-dpanel/95 backdrop-blur-xl border-b border-black/20 dark:border-wa-dbdr px-4 py-4 space-y-3 shadow-2xl transition-all">
+            {!isAppView && (
+              <div className="flex flex-col gap-1 text-xs font-semibold text-emerald-100 dark:text-wa-dmuted pb-3 border-b border-white/10 dark:border-wa-dbdr/60">
+                <button
+                  onClick={() => { handleNavClick('landing'); setMobileMenuOpen(false); }}
+                  className="text-left px-3 py-2 rounded-lg hover:bg-white/10 dark:hover:bg-wa-dsurf text-white font-bold"
+                >
+                  Home
+                </button>
+                <button
+                  onClick={() => { handleNavClick('landing', 'features'); setMobileMenuOpen(false); }}
+                  className="text-left px-3 py-2 rounded-lg hover:bg-white/10 dark:hover:bg-wa-dsurf"
+                >
+                  Features
+                </button>
+                <button
+                  onClick={() => { handleNavClick('landing', 'how-it-works'); setMobileMenuOpen(false); }}
+                  className="text-left px-3 py-2 rounded-lg hover:bg-white/10 dark:hover:bg-wa-dsurf"
+                >
+                  How It Works
+                </button>
+                <button
+                  onClick={() => { handleNavClick('landing', 'pricing'); setMobileMenuOpen(false); }}
+                  className="text-left px-3 py-2 rounded-lg hover:bg-white/10 dark:hover:bg-wa-dsurf flex items-center justify-between"
+                >
+                  <span>Pricing</span>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500 text-white uppercase">Free</span>
+                </button>
+              </div>
+            )}
+
+            {/* Mobile Actions: CTA + Status + Theme Toggle */}
+            <div className="flex flex-col gap-2.5 pt-1">
+              {!isAppView && (
+                <button
+                  onClick={() => { onGetStarted(); setMobileMenuOpen(false); }}
+                  className="w-full py-2.5 rounded-xl text-xs font-extrabold text-slate-900 dark:text-white bg-white dark:bg-emerald-600 hover:bg-emerald-50 shadow-md flex items-center justify-center gap-1.5"
+                >
+                  <span>{isConnected ? 'Go to Messaging Workspace' : 'Get Started Free'}</span>
+                  <span>→</span>
+                </button>
+              )}
+
+              <div className="flex items-center justify-between pt-1">
+                <span className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full ${cfg.bg} ${cfg.text}`}>
+                  <span className={`w-2 h-2 rounded-full ${cfg.dot} ${cfg.pulse ? 'animate-pulse' : ''}`} />
+                  <span>{cfg.label}</span>
+                </span>
+
+                <button
+                  onClick={() => { toggle(); setMobileMenuOpen(false); }}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 dark:bg-wa-dsurf text-white"
+                >
+                  {dark ? <SunIcon /> : <MoonIcon />}
+                  <span>{dark ? 'Light Mode' : 'Dark Mode'}</span>
+                </button>
+              </div>
+
+              {isConnected && (
+                <button
+                  onClick={() => { handleLogout(); setMobileMenuOpen(false); }}
+                  disabled={loggingOut}
+                  className="w-full mt-1 flex items-center justify-center gap-1.5 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 py-2 rounded-xl font-medium"
+                >
+                  <LogoutIcon />
+                  <span>Disconnect Session</span>
+                </button>
+              )}
+            </div>
+          </div>
         )}
 
-        {/* ── Connected Profile Card (Clickable workspace entrance) ─────────── */}
+        {/* ── Mobile Profile Strip (When connected) ────────────────────── */}
         {isConnected && (
           <div
-            onClick={(e) => {
+            onClick={() => {
               if (editing) return;
               if (!isAppView) onGetStarted();
             }}
-            className={`hidden lg:flex items-center gap-2.5 bg-white/10 dark:bg-wa-dsurf border border-white/15 dark:border-wa-dbdr rounded-xl px-3 py-1.5 min-w-0 flex-1 max-w-[260px] transition-all duration-200 group select-none ${
-              !isAppView ? 'cursor-pointer hover:bg-white/20 dark:hover:bg-wa-dbdr/80 hover:border-emerald-400/50 hover:shadow-md' : 'cursor-default'
-            }`}
-            title={!isAppView ? "Go to Messaging Workspace" : "Connected WhatsApp Profile"}
+            className={`lg:hidden bg-black/20 dark:bg-wa-dsurf/60 px-4 py-1.5 flex items-center gap-2 border-t border-black/10 dark:border-wa-dbdr ${!isAppView ? 'cursor-pointer hover:bg-black/30 active:bg-black/40' : ''
+              }`}
+            title={!isAppView ? "Tap to open Messaging Workspace" : "Connected WhatsApp Profile"}
           >
             <div
               onClick={(e) => {
                 e.stopPropagation();
                 setShowAvatarModal(true);
               }}
-              className="relative group/avatar cursor-pointer shrink-0"
-              title="Click to customize avatar (Photo, 8 Avatars, Color)"
+              className="relative cursor-pointer shrink-0"
+              title="Tap to customize avatar"
             >
-              {renderAvatarGraphic("w-8 h-8", "text-sm")}
-              <div className="absolute -bottom-1 -right-1 bg-slate-900/90 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center border border-white/30 shadow-md group-hover/avatar:scale-110 transition-transform">
-                📷
-              </div>
+              {renderAvatarGraphic("w-6 h-6", "text-xs")}
             </div>
-            <div className="min-w-0 flex-1 flex items-center gap-1.5">
+            <div className="flex-1 min-w-0 flex items-center gap-1.5">
               {editing ? (
                 <div className="flex items-center gap-1 w-full min-w-0" onClick={(e) => e.stopPropagation()}>
                   <input
@@ -282,33 +577,21 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
                     }}
                     autoFocus
                   />
-                  <button onClick={handleSaveName} className="text-green-400 hover:text-green-300 text-xs font-semibold px-1 shrink-0">✓</button>
-                  <button onClick={() => setEditing(false)} className="text-red-400 hover:text-red-300 text-xs font-semibold px-1 shrink-0">✕</button>
+                  <button onClick={handleSaveName} className="text-green-400 hover:text-green-300 text-xs font-semibold px-1 shrink-0 animate-fade-in">✓</button>
+                  <button onClick={() => setEditing(false)} className="text-red-400 hover:text-red-300 text-xs font-semibold px-1 shrink-0 animate-fade-in">✕</button>
                 </div>
               ) : (
-                <div className="min-w-0 flex-1 group/name flex items-center gap-1">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs sm:text-sm font-semibold text-slate-100 group-hover:text-emerald-200 transition-colors truncate leading-tight">
-                      {displayName || 'Connected User'}
-                    </p>
-                    {showPhoneSubtitle ? (
-                      <p className="text-[10px] sm:text-[11px] text-green-300 dark:text-wa-dmuted leading-tight font-mono truncate">
-                        +{cleanPhone}
-                      </p>
-                    ) : (
-                      <span className="flex items-center gap-1 text-[9px] sm:text-[10px] text-green-300 dark:text-green-400 font-medium">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                        online
-                      </span>
-                    )}
-                  </div>
+                <div className="min-w-0 flex-1 flex items-center gap-1.5 group/mobname">
+                  <span className="text-xs font-semibold text-emerald-200 dark:text-wa-dmuted truncate">
+                    {displayName || 'Connected User'}{showPhoneSubtitle ? ` · +${cleanPhone}` : ''}
+                  </span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setEditing(true);
                       setEditedName(displayName || '');
                     }}
-                    className="p-1 text-slate-300 hover:text-slate-100 opacity-0 group-hover/name:opacity-100 transition-opacity shrink-0 text-xs"
+                    className="text-[10px] text-slate-300 opacity-60 hover:opacity-100 shrink-0"
                     title="Edit profile name"
                   >
                     ✏️
@@ -317,328 +600,43 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
               )}
             </div>
             {!isAppView && !editing && (
-              <span className="text-emerald-400 dark:text-emerald-300 text-xs font-extrabold opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all ml-0.5 shrink-0 hidden">
-                →
+              <span className="text-emerald-400 text-xs font-bold shrink-0 ml-auto">
+                Open Workspace →
+              </span>
+            )}
+            {isAppView && (
+              <span className="ml-auto flex items-center gap-1 text-[10px] text-green-300 dark:text-green-400 flex-shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                online
               </span>
             )}
           </div>
         )}
+      </header>
 
-        {/* ── Desktop Action Controls ───────────── */}
-        <div className="hidden lg:flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-          {/* User Account Login/Badge Dropdown */}
-          {authUser ? (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="flex items-center gap-2 bg-white/10 dark:bg-wa-dsurf hover:bg-white/20 border border-white/20 dark:border-wa-dbdr rounded-xl px-2.5 py-1 text-xs text-white shadow-xs transition-all active:scale-98"
-                aria-expanded={userMenuOpen}
-                aria-label="User Account Menu"
-              >
-                <span className="w-6 h-6 rounded-full bg-emerald-500/30 text-emerald-300 font-extrabold flex items-center justify-center text-xs shrink-0 border border-emerald-400/40">
-                  {authUser.name ? authUser.name.charAt(0).toUpperCase() : '👤'}
-                </span>
-                <span className="font-bold text-white text-xs max-w-[90px] truncate hidden sm:inline">
-                  {authUser.name?.split(' ')[0] || 'Account'}
-                </span>
-                <span className={`text-[10px] text-emerald-300 transition-transform duration-200 ${userMenuOpen ? 'rotate-180' : ''}`}>
-                  ▼
-                </span>
-              </button>
-
-              {/* Right-Aligned Account Dropdown Menu */}
-              {userMenuOpen && (
-                <>
-                  <div 
-                    className="fixed inset-0 z-40" 
-                    onClick={() => setUserMenuOpen(false)} 
-                  />
-
-                  <div className="absolute right-0 top-full mt-2 w-60 bg-white dark:bg-wa-dpanel text-slate-900 dark:text-wa-dtext rounded-2xl shadow-2xl border border-slate-200 dark:border-wa-dbdr p-3 z-50 animate-fade-in space-y-2">
-                    {/* User Profile Card */}
-                    <div className="flex items-center gap-2.5 p-2 bg-slate-50 dark:bg-wa-dsurf rounded-xl border border-slate-100 dark:border-wa-dbdr/60">
-                      <span className="w-9 h-9 rounded-full bg-gradient-to-br from-wa-teal to-emerald-500 text-white font-black flex items-center justify-center text-sm shrink-0 shadow-xs">
-                        {authUser.name ? authUser.name.charAt(0).toUpperCase() : '👤'}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-extrabold text-xs text-slate-900 dark:text-white truncate">
-                          {authUser.name}
-                        </div>
-                        <div className="text-[10px] text-slate-500 dark:text-wa-dmuted truncate">
-                          {authUser.email}
-                        </div>
-                        <div className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-wa-green mt-0.5">
-                          <span>✓</span> Verified Account
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-slate-100 dark:border-wa-dbdr/60 my-1" />
-
-                    {/* Log Out Action */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (window.confirm('Are you sure you want to log out?')) {
-                          setUserMenuOpen(false);
-                          onAuthLogout?.();
-                        }
-                      }}
-                      className="w-full px-3 py-2 rounded-xl text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors flex items-center justify-between group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="group-hover:scale-110 transition-transform">🚪</span>
-                        <span>Log Out</span>
-                      </div>
-                      <span className="text-[10px] text-slate-400 font-normal">Exit</span>
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={onOpenAuthModal}
-              className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-900 bg-white hover:bg-emerald-50 border border-slate-200 shadow-sm transition-all duration-200 flex items-center gap-1.5 active:scale-95"
-            >
-              <span>🔑</span>
-              <span>Sign In / Register</span>
-            </button>
-          )}
-
-          {!isAppView && !isConnected && (
-            <button
-              onClick={onGetStarted}
-              className="px-3.5 sm:px-4 py-1.5 rounded-xl text-xs font-extrabold text-slate-900 dark:text-white bg-white dark:bg-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500 border border-slate-200 dark:border-emerald-500/30 shadow-sm transition-all duration-300 transform hover:scale-[1.03] hover:-translate-y-0.5 flex items-center gap-1"
-            >
-              <span>Get Started</span>
-              <span className="text-emerald-600 dark:text-emerald-200 font-black">→</span>
-            </button>
-          )}
-
-          {isConnected && isSyncing && !syncTimerExceeded && (
-            <span className="flex items-center gap-1 text-[10px] sm:text-xs font-semibold px-2 py-1 rounded-full bg-blue-500/25 text-blue-200 border border-blue-400/30 animate-pulse">
-              <span className="w-2.5 h-2.5 border-2 border-blue-200 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-              <span>Syncing…</span>
-            </span>
-          )}
-
-          <span className={`flex items-center gap-1 text-[10px] sm:text-xs font-medium px-2.5 py-1 rounded-full ${cfg.bg} ${cfg.text}`}>
-            <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full flex-shrink-0 ${cfg.dot} ${cfg.pulse ? 'animate-pulse' : ''}`} />
-            <span>{cfg.label}</span>
-          </span>
-
-          <button
-            onClick={toggle}
-            aria-label="Toggle theme"
-            className="p-1.5 rounded-full text-slate-200/70 hover:text-slate-100 hover:bg-white/10 dark:hover:bg-wa-dsurf transition-colors"
-            title={dark ? 'Switch to Light mode' : 'Switch to Dark mode'}
-          >
-            {dark ? <SunIcon /> : <MoonIcon />}
-          </button>
-
-          {isConnected && (
-            <button
-              onClick={handleLogout}
-              disabled={loggingOut}
-              className="flex items-center gap-1 text-xs bg-white/10 dark:bg-wa-dsurf hover:bg-red-500/25 dark:hover:bg-red-500/30 border border-white/20 dark:border-wa-dbdr hover:border-red-400/40 px-2.5 py-1.5 rounded-full font-bold text-white hover:text-red-200 disabled:opacity-50 transition-all shadow-2xs group"
-              title="Disconnect Session"
-            >
-              {loggingOut ? (
-                '…'
-              ) : (
-                <>
-                  <LogoutIcon />
-                  <span className="hidden sm:inline ml-0.5 group-hover:font-extrabold">Disconnect</span>
-                </>
-              )}
-            </button>
-          )}
+      {/* Floating Feedback & Support Button */}
+      <div className="fixed bottom-6 right-6 z-[99] group">
+        <div className="absolute bottom-16 right-0 mb-1 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 bg-slate-950/90 dark:bg-wa-dpanel/95 backdrop-blur-sm text-slate-100 text-xs font-semibold px-3 py-1.5 rounded-xl shadow-xl border border-slate-800 dark:border-wa-dbdr whitespace-nowrap">
+          Feedback & Support Box
         </div>
-
-        {/* ── Mobile 3-Line Hamburger Button ──────────────────────── */}
         <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="lg:hidden p-2 rounded-xl text-slate-200 hover:text-white bg-white/10 dark:bg-wa-dsurf transition-colors focus:outline-none"
-          aria-label="Toggle navigation menu"
+          onClick={() => setShowFeedback(true)}
+          className="w-14 h-14 rounded-full bg-wa-teal hover:bg-wa-teal/90 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 border border-teal-400/20"
+          aria-label="Feedback & Support"
         >
-          <HamburgerIcon isOpen={mobileMenuOpen} />
+          <span className="text-2xl leading-none select-none">💬</span>
         </button>
-
       </div>
-
-      {/* ── Mobile Hamburger Dropdown Menu Panel ───────────────────── */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden bg-wa-dark/95 dark:bg-wa-dpanel/95 backdrop-blur-xl border-b border-black/20 dark:border-wa-dbdr px-4 py-4 space-y-3 shadow-2xl transition-all">
-          {!isAppView && (
-            <div className="flex flex-col gap-1 text-xs font-semibold text-emerald-100 dark:text-wa-dmuted pb-3 border-b border-white/10 dark:border-wa-dbdr/60">
-              <button
-                onClick={() => { handleNavClick('landing'); setMobileMenuOpen(false); }}
-                className="text-left px-3 py-2 rounded-lg hover:bg-white/10 dark:hover:bg-wa-dsurf text-white font-bold"
-              >
-                Home
-              </button>
-              <button
-                onClick={() => { handleNavClick('landing', 'features'); setMobileMenuOpen(false); }}
-                className="text-left px-3 py-2 rounded-lg hover:bg-white/10 dark:hover:bg-wa-dsurf"
-              >
-                Features
-              </button>
-              <button
-                onClick={() => { handleNavClick('landing', 'how-it-works'); setMobileMenuOpen(false); }}
-                className="text-left px-3 py-2 rounded-lg hover:bg-white/10 dark:hover:bg-wa-dsurf"
-              >
-                How It Works
-              </button>
-              <button
-                onClick={() => { handleNavClick('landing', 'pricing'); setMobileMenuOpen(false); }}
-                className="text-left px-3 py-2 rounded-lg hover:bg-white/10 dark:hover:bg-wa-dsurf flex items-center justify-between"
-              >
-                <span>Pricing</span>
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500 text-white uppercase">Free</span>
-              </button>
-            </div>
-          )}
-
-          {/* Mobile Actions: CTA + Status + Theme Toggle */}
-          <div className="flex flex-col gap-2.5 pt-1">
-            {!isAppView && (
-              <button
-                onClick={() => { onGetStarted(); setMobileMenuOpen(false); }}
-                className="w-full py-2.5 rounded-xl text-xs font-extrabold text-slate-900 dark:text-white bg-white dark:bg-emerald-600 hover:bg-emerald-50 shadow-md flex items-center justify-center gap-1.5"
-              >
-                <span>{isConnected ? 'Go to Messaging Workspace' : 'Get Started Free'}</span>
-                <span>→</span>
-              </button>
-            )}
-
-            <div className="flex items-center justify-between pt-1">
-              <span className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full ${cfg.bg} ${cfg.text}`}>
-                <span className={`w-2 h-2 rounded-full ${cfg.dot} ${cfg.pulse ? 'animate-pulse' : ''}`} />
-                <span>{cfg.label}</span>
-              </span>
-
-              <button
-                onClick={() => { toggle(); setMobileMenuOpen(false); }}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 dark:bg-wa-dsurf text-white"
-              >
-                {dark ? <SunIcon /> : <MoonIcon />}
-                <span>{dark ? 'Light Mode' : 'Dark Mode'}</span>
-              </button>
-            </div>
-
-            {isConnected && (
-              <button
-                onClick={() => { handleLogout(); setMobileMenuOpen(false); }}
-                disabled={loggingOut}
-                className="w-full mt-1 flex items-center justify-center gap-1.5 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 py-2 rounded-xl font-medium"
-              >
-                <LogoutIcon />
-                <span>Disconnect Session</span>
-              </button>
-            )}
-          </div>
-        </div>
+      {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
+      {showAvatarModal && (
+        <AvatarSelectorModal
+          isOpen={showAvatarModal}
+          onClose={() => setShowAvatarModal(false)}
+          currentAvatar={avatarConfig}
+          onSave={handleSaveAvatar}
+          userName={displayName}
+        />
       )}
-
-      {/* ── Mobile Profile Strip (When connected) ────────────────────── */}
-      {isConnected && (
-        <div
-          onClick={() => {
-            if (editing) return;
-            if (!isAppView) onGetStarted();
-          }}
-          className={`lg:hidden bg-black/20 dark:bg-wa-dsurf/60 px-4 py-1.5 flex items-center gap-2 border-t border-black/10 dark:border-wa-dbdr ${
-            !isAppView ? 'cursor-pointer hover:bg-black/30 active:bg-black/40' : ''
-          }`}
-          title={!isAppView ? "Tap to open Messaging Workspace" : "Connected WhatsApp Profile"}
-        >
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowAvatarModal(true);
-            }}
-            className="relative cursor-pointer shrink-0"
-            title="Tap to customize avatar"
-          >
-            {renderAvatarGraphic("w-6 h-6", "text-xs")}
-          </div>
-          <div className="flex-1 min-w-0 flex items-center gap-1.5">
-            {editing ? (
-              <div className="flex items-center gap-1 w-full min-w-0" onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="text"
-                  value={editedName}
-                  onChange={(e) => setEditedName(e.target.value)}
-                  className="w-full text-xs bg-slate-800 dark:bg-wa-dsurf border border-wa-teal rounded-md px-1.5 py-0.5 text-slate-100 focus:outline-none"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveName();
-                    if (e.key === 'Escape') setEditing(false);
-                  }}
-                  autoFocus
-                />
-                <button onClick={handleSaveName} className="text-green-400 hover:text-green-300 text-xs font-semibold px-1 shrink-0 animate-fade-in">✓</button>
-                <button onClick={() => setEditing(false)} className="text-red-400 hover:text-red-300 text-xs font-semibold px-1 shrink-0 animate-fade-in">✕</button>
-              </div>
-            ) : (
-              <div className="min-w-0 flex-1 flex items-center gap-1.5 group/mobname">
-                <span className="text-xs font-semibold text-emerald-200 dark:text-wa-dmuted truncate">
-                  {displayName || 'Connected User'}{showPhoneSubtitle ? ` · +${cleanPhone}` : ''}
-                </span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditing(true);
-                    setEditedName(displayName || '');
-                  }}
-                  className="text-[10px] text-slate-300 opacity-60 hover:opacity-100 shrink-0"
-                  title="Edit profile name"
-                >
-                  ✏️
-                </button>
-              </div>
-            )}
-          </div>
-          {!isAppView && !editing && (
-            <span className="text-emerald-400 text-xs font-bold shrink-0 ml-auto">
-              Open Workspace →
-            </span>
-          )}
-          {isAppView && (
-            <span className="ml-auto flex items-center gap-1 text-[10px] text-green-300 dark:text-green-400 flex-shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-              online
-            </span>
-          )}
-        </div>
-      )}
-    </header>
-
-    {/* Floating Feedback & Support Button */}
-    <div className="fixed bottom-6 right-6 z-[99] group">
-      <div className="absolute bottom-16 right-0 mb-1 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 bg-slate-950/90 dark:bg-wa-dpanel/95 backdrop-blur-sm text-slate-100 text-xs font-semibold px-3 py-1.5 rounded-xl shadow-xl border border-slate-800 dark:border-wa-dbdr whitespace-nowrap">
-        Feedback & Support Box
-      </div>
-      <button
-        onClick={() => setShowFeedback(true)}
-        className="w-14 h-14 rounded-full bg-wa-teal hover:bg-wa-teal/90 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 border border-teal-400/20"
-        aria-label="Feedback & Support"
-      >
-        <span className="text-2xl leading-none select-none">💬</span>
-      </button>
-    </div>
-    {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
-    {showAvatarModal && (
-      <AvatarSelectorModal
-        isOpen={showAvatarModal}
-        onClose={() => setShowAvatarModal(false)}
-        currentAvatar={avatarConfig}
-        onSave={handleSaveAvatar}
-        userName={displayName}
-      />
-    )}
-  </>
+    </>
   );
 }
