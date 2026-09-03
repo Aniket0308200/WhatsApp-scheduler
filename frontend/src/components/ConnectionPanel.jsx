@@ -15,6 +15,7 @@ export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) 
   const [requesting, setRequesting] = useState(false);
   const [localCode, setLocalCode] = useState(null);
   const [countdown, setCountdown] = useState(0);
+  const [copied, setCopied]       = useState(false);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -47,6 +48,7 @@ export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) 
     setTab(newTab);
     setLocalCode(null);
     setCountdown(0);
+    setCopied(false);
   };
 
   const handleRequestCode = async (e) => {
@@ -60,6 +62,7 @@ export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) 
     setRequesting(true);
     setLocalCode(null);
     setCountdown(0);
+    setCopied(false);
     try {
       const data = await requestPairingCode(cleaned);
       setLocalCode(data.code);
@@ -81,6 +84,20 @@ export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) 
   };
 
   const activeCode = localCode || pairingCode;
+
+  const handleCopyCode = () => {
+    if (!activeCode) return;
+    const rawCode = activeCode.replace(/-/g, '');
+    navigator.clipboard.writeText(rawCode).then(() => {
+      setCopied(true);
+      toast.success('Pairing code copied!');
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      setCopied(true);
+      toast.success('Pairing code ready!');
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
 
   return (
     <div className="bg-white dark:bg-wa-dpanel rounded-2xl shadow-sm border border-slate-200 dark:border-wa-dbdr overflow-hidden transition-colors duration-200">
@@ -208,12 +225,26 @@ export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) 
 
             {/* Display the pairing code */}
             {activeCode && (
-              <div className="text-center">
-                <p className="text-xs text-gray-500 dark:text-wa-dmuted mb-2">Enter this code in WhatsApp:</p>
-                <div className="inline-flex items-center gap-1 bg-wa-light dark:bg-wa-dark/20 border border-wa-teal/30 dark:border-wa-dbdr rounded-xl px-4 py-2 sm:px-6 sm:py-3 max-w-full overflow-hidden">
-                  <span className="text-lg sm:text-2xl font-bold tracking-[0.1em] sm:tracking-[0.25em] text-wa-dark dark:text-wa-green font-mono">
-                    {displayCode(activeCode)}
-                  </span>
+              <div className="text-center space-y-2">
+                <p className="text-xs text-gray-500 dark:text-wa-dmuted">Enter this code in WhatsApp:</p>
+                <div className="flex items-center justify-center gap-2 flex-wrap">
+                  <div className="inline-flex items-center gap-1 bg-wa-light dark:bg-wa-dark/20 border border-wa-teal/30 dark:border-wa-dbdr rounded-xl px-4 py-2 sm:px-6 sm:py-3 max-w-full overflow-hidden shadow-inner">
+                    <span className="text-lg sm:text-2xl font-bold tracking-[0.1em] sm:tracking-[0.25em] text-wa-dark dark:text-wa-green font-mono select-all">
+                      {displayCode(activeCode)}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyCode}
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 sm:py-3 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 border ${
+                      copied
+                        ? 'bg-emerald-500 text-white border-emerald-600'
+                        : 'bg-white dark:bg-wa-dsurf text-wa-teal dark:text-wa-green hover:bg-teal-50 dark:hover:bg-wa-dbdr border-wa-teal/40 dark:border-wa-dbdr'
+                    }`}
+                    title="Copy pairing code to clipboard"
+                  >
+                    {copied ? '✓ Copied' : '📋 Copy Code'}
+                  </button>
                 </div>
                 {countdown > 0 ? (
                   <p className="text-xs text-gray-400 dark:text-wa-dmuted mt-2 flex items-center justify-center gap-1.5">
