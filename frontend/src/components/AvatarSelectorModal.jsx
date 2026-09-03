@@ -575,6 +575,9 @@ export default function AvatarSelectorModal({ isOpen, onClose, currentAvatar, on
                     <div className="flex items-center gap-3 text-xs text-slate-300">
                       <span>Zoom:</span>
                       <input
+                        id="avatar-zoom-range"
+                        name="zoom"
+                        aria-label="Zoom avatar picture"
                         type="range"
                         min="0.5"
                         max="3"
@@ -605,6 +608,9 @@ export default function AvatarSelectorModal({ isOpen, onClose, currentAvatar, on
               )}
 
               <input
+                id="avatar-photo-file-input"
+                name="avatarFile"
+                aria-label="Upload custom avatar image"
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileChange}

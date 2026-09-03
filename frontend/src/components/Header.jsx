@@ -271,6 +271,9 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
                 {editing ? (
                   <div className="flex items-center gap-1 w-full min-w-0" onClick={(e) => e.stopPropagation()}>
                     <input
+                      id="header-desktop-edit-name"
+                      name="editedName"
+                      aria-label="Edit user name"
                       type="text"
                       value={editedName}
                       onChange={(e) => setEditedName(e.target.value)}
@@ -567,6 +570,9 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
               {editing ? (
                 <div className="flex items-center gap-1 w-full min-w-0" onClick={(e) => e.stopPropagation()}>
                   <input
+                    id="header-mobile-edit-name"
+                    name="editedName"
+                    aria-label="Edit user name"
                     type="text"
                     value={editedName}
                     onChange={(e) => setEditedName(e.target.value)}

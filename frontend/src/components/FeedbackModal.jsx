@@ -247,6 +247,9 @@ export default function FeedbackModal({ onClose }) {
           className="p-4 border-t border-slate-200 dark:border-wa-dbdr bg-slate-50/80 dark:bg-gray-900 flex gap-2 items-center relative z-10"
         >
           <input
+            id="feedback-message-input"
+            name="message"
+            aria-label="Write feedback or support message"
             type="text"
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}

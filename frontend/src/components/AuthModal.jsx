@@ -299,11 +299,13 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
             <form onSubmit={handleSubmit} className="space-y-3">
               {mode === 'signup' && (
                 <div className="space-y-1">
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-wa-dtext">
+                  <label htmlFor="auth-fullname" className="block text-[11px] font-bold text-slate-700 dark:text-wa-dtext">
                     Full Name
                   </label>
                   <div className="relative">
                     <input
+                      id="auth-fullname"
+                      name="fullName"
                       type="text"
                       required
                       value={name}
@@ -320,7 +322,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
 
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-wa-dtext">
+                  <label htmlFor="auth-email" className="block text-[11px] font-bold text-slate-700 dark:text-wa-dtext">
                     Email Address
                   </label>
                   {cleanEmail.length > 0 && (
@@ -331,6 +333,8 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
                 </div>
                 <div className="relative">
                   <input
+                    id="auth-email"
+                    name="email"
                     type="email"
                     required
                     value={email}
@@ -348,11 +352,13 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
 
               {/* Password */}
               <div className="space-y-1">
-                <label className="block text-[11px] font-bold text-slate-700 dark:text-wa-dtext">
+                <label htmlFor="auth-password" className="block text-[11px] font-bold text-slate-700 dark:text-wa-dtext">
                   Password
                 </label>
                 <div className="relative">
                   <input
+                    id="auth-password"
+                    name="password"
                     type={showPassword ? 'text' : 'password'}
                     required
                     value={password}
@@ -404,11 +410,13 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
               {/* Confirm Password (Sign Up) */}
               {mode === 'signup' && (
                 <div className="space-y-1">
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-wa-dtext">
+                  <label htmlFor="auth-confirm-password" className="block text-[11px] font-bold text-slate-700 dark:text-wa-dtext">
                     Confirm Password
                   </label>
                   <div className="relative">
                     <input
+                      id="auth-confirm-password"
+                      name="confirmPassword"
                       type={showConfirmPassword ? 'text' : 'password'}
                       required
                       value={confirmPassword}

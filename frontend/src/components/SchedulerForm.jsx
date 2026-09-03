@@ -144,6 +144,9 @@ function CountryPicker({ value, onChange, disabled }) {
           {/* Search box */}
           <div className="p-2 border-b border-gray-100 dark:border-wa-dbdr">
             <input
+              id="country-search-input"
+              name="countrySearch"
+              aria-label="Search country or code"
               autoFocus
               type="text"
               value={search}
@@ -251,7 +254,7 @@ function ContactsImportModal({ onClose, onImported }) {
             <span className="block text-xs text-gray-400 mt-1">or click to select a file</span>
             {file && <span className="block mt-3 text-xs text-wa-teal dark:text-wa-green font-semibold">Selected: {file.name}</span>}
           </button>
-          <input ref={inputRef} type="file" accept=".vcf,.csv,text/vcard,text/csv" className="hidden" onChange={e => chooseFile(e.target.files?.[0])} />
+          <input id="contacts-file-input" name="contactsFile" aria-label="Upload .vcf or .csv contacts file" ref={inputRef} type="file" accept=".vcf,.csv,text/vcard,text/csv" className="hidden" onChange={e => chooseFile(e.target.files?.[0])} />
           <div className="rounded-xl bg-gray-50 dark:bg-wa-dsurf p-3 text-xs text-gray-600 dark:text-wa-dmuted space-y-2">
             <p className="font-semibold text-gray-700 dark:text-wa-dtext">How to export contacts</p>
             <p><strong>Android:</strong> Contacts app → Fix &amp; manage / Settings → Export → save as .vcf.</p>
@@ -750,7 +753,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
         {/* ── Recipient ─────────────────────────────────────────────────── */}
         <div>
           <div className="mb-2.5">
-            <label className="block text-sm font-medium text-gray-700 dark:text-wa-dtext">
+            <label htmlFor="scheduler-recipient-input" className="block text-sm font-medium text-gray-700 dark:text-wa-dtext">
               Recipient Phone Number or Contact Name
             </label>
           </div>
@@ -758,6 +761,8 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
             <CountryPicker value={countryCode} onChange={setCountryCode} disabled={phone && phone.endsWith('@g.us')} />
             <div className="flex-1 relative" ref={formRef}>
               <input
+                id="scheduler-recipient-input"
+                name="recipient"
                 type="text"
                 value={phone}
                 onFocus={() => setShowSuggestions(true)}
@@ -839,11 +844,13 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
 
         {/* ── Message ───────────────────────────────────────────────────── */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-wa-dtext mb-1.5">
+          <label htmlFor="scheduler-message-textarea" className="block text-sm font-medium text-gray-700 dark:text-wa-dtext mb-1.5">
             Message
           </label>
           <div className="relative z-10 border border-slate-200 dark:border-wa-dbdr rounded-xl overflow-visible focus-within:z-20 focus-within:ring-2 focus-within:ring-wa-teal/40 focus-within:border-wa-teal bg-slate-50 focus-within:bg-white dark:bg-wa-dsurf transition-colors">
             <textarea
+              id="scheduler-message-textarea"
+              name="message"
               ref={textareaRef}
               value={message}
               onChange={e => setMessage(e.target.value)}
@@ -1101,6 +1108,9 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
             <div className="p-4 pb-2 bg-slate-50/20 dark:bg-transparent">
               <div className="relative">
                 <input
+                  id="directory-search-input"
+                  name="directorySearch"
+                  aria-label="Search by name or number"
                   type="text"
                   value={directorySearch}
                   onChange={e => setDirectorySearch(e.target.value)}

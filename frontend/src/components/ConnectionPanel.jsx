@@ -179,10 +179,12 @@ export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) 
 
             <form onSubmit={handleRequestCode} className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-wa-dtext mb-1">
+                <label htmlFor="pairing-phone-input" className="block text-sm font-medium text-gray-700 dark:text-wa-dtext mb-1">
                   Phone Number
                 </label>
                 <input
+                  id="pairing-phone-input"
+                  name="phone"
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}

@@ -179,10 +179,12 @@ export default function DateTimePicker({
 
           {/* Calendar Date Picker */}
           <div className="space-y-1">
-            <label className="block text-xs font-bold text-slate-700 dark:text-wa-dtext flex items-center gap-1.5">
+            <label htmlFor="datetime-date-input" className="block text-xs font-bold text-slate-700 dark:text-wa-dtext flex items-center gap-1.5">
               📅 Select Date (MM/DD/YYYY)
             </label>
             <input
+              id="datetime-date-input"
+              name="scheduledDate"
               type="date"
               value={dateStr}
               min={min ? min.split('T')[0] : undefined}
@@ -193,10 +195,12 @@ export default function DateTimePicker({
 
           {/* Time Picker with Seconds & AM/PM */}
           <div className="space-y-1">
-            <label className="block text-xs font-bold text-slate-700 dark:text-wa-dtext flex items-center justify-between">
+            <label htmlFor="datetime-time-input" className="block text-xs font-bold text-slate-700 dark:text-wa-dtext flex items-center justify-between">
               <span className="flex items-center gap-1.5">⏰ Select Time (HH:MM:SS)</span>
             </label>
             <input
+              id="datetime-time-input"
+              name="scheduledTime"
               type="time"
               step="1"
               value={timeStr}
@@ -208,10 +212,12 @@ export default function DateTimePicker({
 
         {/* Combined Mobile/Desktop Full DateTime Selector */}
         <div className="pt-1">
-          <label className="block text-[11px] font-bold text-slate-400 dark:text-wa-dmuted mb-1">
+          <label htmlFor="datetime-combined-input" className="block text-[11px] font-bold text-slate-400 dark:text-wa-dmuted mb-1">
             🗓️ Combined Date & Time Picker (Alternative)
           </label>
           <input
+            id="datetime-combined-input"
+            name="scheduledDateTime"
             type="datetime-local"
             step="1"
             value={datetimeLocalStr}

@@ -248,6 +248,8 @@ app.get('/api/auth/me', async (req, res) => {
 
 // ─── WhatsApp status ──────────────────────────────────────────────────────────
 
+const initializingSessions = new Set();
+
 /**
  * GET /api/status
  * Returns connection state, QR, pairing code, and connected profile info.
@@ -258,12 +260,17 @@ app.get('/api/status', (req, res) => {
     return res.json({ status: "ok" });
   }
 
-  // Auto-initialize WhatsApp for this session if it's completely new/untracked
-  if (!whatsapp.hasSession(req.sessionId)) {
+  // Auto-initialize WhatsApp for this session if it's completely new/untracked & not currently initializing
+  if (!whatsapp.hasSession(req.sessionId) && !initializingSessions.has(req.sessionId)) {
+    initializingSessions.add(req.sessionId);
     console.log(`[Server] Initializing untracked session: ${req.sessionId}`);
-    whatsapp.initWhatsApp(req.sessionId).catch((err) => {
-      console.error(`[Server] Error initializing session ${req.sessionId}:`, err.message);
-    });
+    whatsapp.initWhatsApp(req.sessionId)
+      .catch((err) => {
+        console.error(`[Server] Error initializing session ${req.sessionId}:`, err.message);
+      })
+      .finally(() => {
+        initializingSessions.delete(req.sessionId);
+      });
   }
 
   const profile = whatsapp.getConnectedProfile(req.sessionId);

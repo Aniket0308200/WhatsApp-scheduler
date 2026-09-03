@@ -635,7 +635,7 @@ async function initWhatsApp(sessionId) {
     // Desktop identity is required by WhatsApp to deliver the largest history
     // sync available to a linked device.
     browser: ['macOS', 'Chrome', '120.0.6099.109'],
-    syncFullHistory: true,
+    syncFullHistory: false,
     generateHighQualityLinkPreview: false,
     keepAliveIntervalMs: 25_000,
     retryRequestDelayMs: 5_000,

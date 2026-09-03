@@ -260,6 +260,9 @@ export default function MessageTable({ messages, loading, onRefresh }) {
           <div className="flex items-center flex-wrap justify-center sm:justify-start gap-2.5 text-xs text-gray-500 dark:text-wa-dmuted">
             <span className="hidden sm:inline">Show:</span>
             <select
+              id="messages-page-size-select"
+              name="pageSize"
+              aria-label="Select rows per page"
               value={pageSize}
               onChange={(e) => {
                 setPageSize(Number(e.target.value));
