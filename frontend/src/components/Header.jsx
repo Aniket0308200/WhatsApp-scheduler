@@ -443,7 +443,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
             <button
               onClick={handleLogout}
               disabled={loggingOut}
-              className="flex items-center gap-1 text-xs bg-red-500/15 hover:bg-red-600 dark:bg-red-950/40 dark:hover:bg-red-600 border border-red-500/30 px-2.5 py-1.5 rounded-full font-bold text-red-300 hover:text-white dark:text-red-300 dark:hover:text-white disabled:opacity-50 transition-all shadow-2xs group"
+              className="flex items-center gap-1 text-xs bg-white/10 dark:bg-wa-dsurf hover:bg-red-500/25 dark:hover:bg-red-500/30 border border-white/20 dark:border-wa-dbdr hover:border-red-400/40 px-2.5 py-1.5 rounded-full font-bold text-white hover:text-red-200 disabled:opacity-50 transition-all shadow-2xs group"
               title="Disconnect Session"
             >
               {loggingOut ? (
