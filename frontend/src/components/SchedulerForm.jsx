@@ -367,7 +367,6 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
   }, [isConnected, showDirectory]);
 
   const loadContactsList = useCallback(async () => {
-    if (!isConnected) return;
     setLoadingContacts(true);
     try {
       const data = await fetchAllContacts();
@@ -377,17 +376,16 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
     } finally {
       setLoadingContacts(false);
     }
-  }, [isConnected]);
+  }, []);
 
   const loadLinkedGoogleAccounts = useCallback(async () => {
-    if (!isConnected) return;
     try {
       const data = await fetchLinkedGoogleAccounts();
       setLinkedEmails(data.linkedEmails || []);
     } catch (err) {
       console.error('Failed to load linked Google accounts:', err);
     }
-  }, [isConnected]);
+  }, []);
 
   const handleDisconnectGmail = async (email) => {
     if (!window.confirm(`Are you sure you want to disconnect this Gmail account (${email})? Unsynced contacts will be removed.`)) {
@@ -450,15 +448,9 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
   }, [loadContactsList, loadLinkedGoogleAccounts]);
 
   useEffect(() => {
-    if (!isConnected) {
-      setContactsList({ all: [], personal: [], groups: [] });
-      setLinkedEmails([]);
-      return;
-    }
-
     loadContactsList();
     loadLinkedGoogleAccounts();
-  }, [isConnected, isSyncing, loadContactsList, loadLinkedGoogleAccounts]);
+  }, [loadContactsList, loadLinkedGoogleAccounts]);
 
   // Emoji picker states & refs
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);

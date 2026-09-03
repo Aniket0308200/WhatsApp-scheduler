@@ -116,6 +116,12 @@ router.get('/callback', async (req, res) => {
         let digits = rawPhone.replace(/\D/g, '');
         if (!digits) continue;
 
+        // Strip leading '0' for 11-digit numbers (e.g. 09876543210 -> 9876543210)
+        if (digits.startsWith('0') && digits.length === 11) {
+          digits = digits.substring(1);
+        }
+
+        // Prefix 10-digit numbers with 91 for India default
         if (digits.length === 10) {
           digits = '91' + digits;
         }
