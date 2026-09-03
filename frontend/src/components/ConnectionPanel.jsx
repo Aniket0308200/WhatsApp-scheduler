@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { requestPairingCode } from '../api';
+import { requestPairingCode, forceReconnectSession } from '../api';
 
 /**
  * ConnectionPanel
@@ -16,6 +16,16 @@ export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) 
   const [localCode, setLocalCode] = useState(null);
   const [countdown, setCountdown] = useState(0);
   const [copied, setCopied]       = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefreshQR = async () => {
+    setRefreshing(true);
+    try {
+      await forceReconnectSession();
+    } catch (_) {}
+    onRefresh?.();
+    setTimeout(() => setRefreshing(false), 1500);
+  };
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -142,30 +152,7 @@ export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) 
         {/* ── QR Code Tab ─────────────────────────────────────────────────────── */}
         {tab === 'qr' && (
           <div className="flex flex-col items-center gap-4">
-            {status === 'connecting' && (
-              <div className="flex flex-col items-center gap-3 py-8 text-gray-500 dark:text-wa-dmuted">
-                <div className="w-10 h-10 border-4 border-wa-teal border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm">Starting WhatsApp client…</p>
-              </div>
-            )}
-
-            {status !== 'connecting' && !qr && (
-              <div className="flex flex-col items-center gap-3 py-8 text-gray-400 dark:text-wa-dmuted">
-                <svg className="w-12 h-12 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                    d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                </svg>
-                <p className="text-sm text-gray-500 dark:text-wa-dmuted">Waiting for QR code…</p>
-                <button
-                  onClick={onRefresh}
-                  className="text-xs text-wa-teal hover:underline"
-                >
-                  Refresh
-                </button>
-              </div>
-            )}
-
-            {qr && (
+            {qr ? (
               <>
                 <div className="p-3 bg-white border border-wa-teal/30 dark:border-wa-dbdr rounded-xl shadow-inner">
                   <img src={qr} alt="WhatsApp QR Code" className="w-52 h-52 sm:w-64 sm:h-64" />
@@ -177,6 +164,29 @@ export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) 
                   </p>
                 </div>
               </>
+            ) : status === 'connecting' ? (
+              <div className="flex flex-col items-center gap-3 py-8 text-gray-500 dark:text-wa-dmuted">
+                <div className="w-10 h-10 border-4 border-wa-teal border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm font-semibold">Generating QR Code…</p>
+                <p className="text-xs text-gray-400">Connecting to WhatsApp servers, please wait a moment.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3 py-8 text-gray-400 dark:text-wa-dmuted">
+                <svg className="w-12 h-12 opacity-40 animate-pulse text-wa-teal" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                </svg>
+                <p className="text-sm text-gray-500 dark:text-wa-dmuted">Preparing QR code…</p>
+                <button
+                  type="button"
+                  onClick={handleRefreshQR}
+                  disabled={refreshing}
+                  className="px-4 py-2 bg-wa-teal hover:bg-wa-dark text-white text-xs font-semibold rounded-xl transition-all shadow-xs disabled:opacity-60 flex items-center gap-1.5"
+                >
+                  {refreshing && <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                  <span>{refreshing ? 'Refreshing…' : '🔄 Refresh QR Code'}</span>
+                </button>
+              </div>
             )}
           </div>
         )}

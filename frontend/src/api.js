@@ -45,6 +45,7 @@ export const fetchGoogleLoginUrl = () => api.get('/auth/google-login/url').then(
 
 // ─── WhatsApp ─────────────────────────────────────────────────────────────────
 export const fetchStatus        = ()       => api.get('/status').then(r => r.data);
+export const forceReconnectSession = ()   => api.post('/reconnect').then(r => r.data);
 export const requestPairingCode = (phone)  => api.post('/pairing-code', { phone }).then(r => r.data);
 export const logout             = ()       => api.post('/logout').then(r => r.data);
 export const syncGroups         = ()       => api.post('/contacts/sync-groups').then(r => r.data);

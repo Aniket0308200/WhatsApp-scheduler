@@ -48,12 +48,12 @@ function hasSession(sessionId) {
   return sessions.has(sessionId);
 }
 
-/** Returns true if a session is untracked OR disconnected with no active socket/timer. */
+/** Returns true if a session is untracked OR disconnected with no active socket. */
 function shouldReinitialize(sessionId) {
   if (!sessionId) return false;
   const session = sessions.get(sessionId);
   if (!session) return true;
-  if (session.status === 'disconnected' && !session.sock && !session.reconnectTimer) {
+  if (session.status === 'disconnected' && !session.sock) {
     return true;
   }
   return false;

@@ -291,6 +291,28 @@ app.get('/api/status', (req, res) => {
 });
 
 /**
+ * POST /api/reconnect
+ * Force-reinitializes WhatsApp session to generate a fresh QR code immediately.
+ */
+app.post('/api/reconnect', async (req, res) => {
+  if (!req.sessionId) {
+    return res.status(400).json({ error: 'X-Session-ID header is required.' });
+  }
+
+  console.log(`[Server] Force-reconnecting session on user request: ${req.sessionId}`);
+  try {
+    await whatsapp.initWhatsApp(req.sessionId);
+    res.json({
+      status: whatsapp.getStatus(req.sessionId),
+      qr: whatsapp.getQR(req.sessionId),
+      pairingCode: whatsapp.getPairingCode(req.sessionId)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /api/pairing-code
  * Body: { phone: "628123456789" }
  */
