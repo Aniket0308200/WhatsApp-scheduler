@@ -32,14 +32,17 @@ app.use(express.json());
 function toVerifiedContact(document) {
   const jid = document.jid;
   const phone = db.decrypt(document.encryptedNumberOrJid);
-  const name = db.decrypt(document.encryptedName);
+  let name = db.decrypt(document.encryptedName);
+  if (!name && phone) {
+    name = `Contact +${phone}`;
+  }
   const isGroup = document.type === 'group';
-  if (!jid || !phone || !name) return null;
-  if (!isGroup && !db.isValidPersonalContactName(name, phone)) return null;
+  if (!jid || !phone) return null;
+  if (!isGroup && document.source !== 'google_contacts' && name && !db.isValidPersonalContactName(name, phone)) return null;
   return {
     phone,
     jid,
-    name,
+    name: name || phone,
     isGroup,
     is_group: isGroup ? 1 : 0,
     type: document.type,

@@ -72,9 +72,24 @@ export const importContacts = (file) =>
     headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-File-Name': file.name },
   }).then(r => r.data);
 
+export function getActiveSessionId() {
+  try {
+    const savedUser = localStorage.getItem('wa_auth_user');
+    if (savedUser) {
+      const parsed = JSON.parse(savedUser);
+      if (parsed && parsed.id) {
+        return `user_acc_${parsed.id}`;
+      }
+    }
+  } catch (err) {
+    console.warn('[API] Error reading active session ID:', err);
+  }
+  return sessionId;
+}
+
 // ─── Google Contacts ─────────────────────────────────────────────────────────
 export const fetchGoogleAuthUrl = () =>
-  api.get(`/auth/google/url?sessionId=${sessionId}`).then(r => r.data);
+  api.get(`/auth/google/url?sessionId=${getActiveSessionId()}`).then(r => r.data);
 
 export const fetchLinkedGoogleAccounts = () =>
   api.get('/auth/google/linked').then(r => r.data);
