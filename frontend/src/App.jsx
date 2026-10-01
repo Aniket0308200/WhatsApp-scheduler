@@ -4,7 +4,7 @@ import { fetchStatus, fetchMessages, fetchUserQuota } from './api';
 import ConnectionPanel from './components/ConnectionPanel';
 import SchedulerForm from './components/SchedulerForm';
 import MessageTable from './components/MessageTable';
-import QuotaDashboard from './components/QuotaDashboard';
+import QuotaPage from './components/QuotaPage';
 import Header from './components/Header';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import TermsOfService from './components/TermsOfService';
@@ -172,16 +172,17 @@ export default function App() {
                     waStatus={waStatus}
                     profile={profile}
                   />
+                ) : activeView === 'quota' ? (
+                  <QuotaPage
+                    quota={quota}
+                    loading={loadingQuota}
+                    onRefresh={refreshQuota}
+                    onNavigate={handleNavigate}
+                    authUser={authUser}
+                    onOpenAuthModal={() => setShowAuthModal(true)}
+                  />
                 ) : (
                   <div className="space-y-6">
-                    {/* Monthly Quota & Usage Dashboard */}
-                    <QuotaDashboard
-                      quota={quota}
-                      loading={loadingQuota}
-                      onUpgrade={() => handleNavigate('landing', 'pricing')}
-                      onRefresh={refreshQuota}
-                    />
-
                     {!isConnected && (
                       <ConnectionPanel
                         status={waStatus}
@@ -200,6 +201,7 @@ export default function App() {
                       }}
                       isSyncing={isSyncing}
                       quota={quota}
+                      onViewQuota={() => setActiveView('quota')}
                     />
 
                     <MessageTable
