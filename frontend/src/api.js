@@ -42,6 +42,7 @@ export const signUpUser  = (data) => api.post('/auth/signup', data).then(r => r.
 export const signInUser  = (data) => api.post('/auth/login', data).then(r => r.data);
 export const fetchAuthUser = (token) => api.get('/auth/me', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
 export const fetchGoogleLoginUrl = () => api.get('/auth/google-login/url').then(r => r.data);
+export const fetchUserQuota = () => api.get('/user/quota').then(r => r.data);
 
 // ─── WhatsApp ─────────────────────────────────────────────────────────────────
 export const fetchStatus        = ()       => api.get('/status').then(r => r.data);

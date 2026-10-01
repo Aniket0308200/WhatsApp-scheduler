@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Routes, Route, useNavigate, Link, useLocation } from 'react-router-dom';
-import { fetchStatus, fetchMessages } from './api';
+import { fetchStatus, fetchMessages, fetchUserQuota } from './api';
 import ConnectionPanel from './components/ConnectionPanel';
 import SchedulerForm from './components/SchedulerForm';
 import MessageTable from './components/MessageTable';
+import QuotaDashboard from './components/QuotaDashboard';
 import Header from './components/Header';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import TermsOfService from './components/TermsOfService';
@@ -34,6 +35,8 @@ export default function App() {
     }
   });
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [quota, setQuota] = useState(null);
+  const [loadingQuota, setLoadingQuota] = useState(false);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -46,6 +49,18 @@ export default function App() {
     } catch {
       setWaStatus('disconnected');
       setIsSyncing(false);
+    }
+  }, []);
+
+  const refreshQuota = useCallback(async () => {
+    setLoadingQuota(true);
+    try {
+      const q = await fetchUserQuota();
+      setQuota(q);
+    } catch (err) {
+      console.warn('Failed to load quota:', err);
+    } finally {
+      setLoadingQuota(false);
     }
   }, []);
 
@@ -79,10 +94,12 @@ export default function App() {
   useEffect(() => {
     refreshStatus();
     refreshMessages();
+    refreshQuota();
     const t1 = setInterval(refreshStatus, POLL_INTERVAL);
     const t2 = setInterval(refreshMessages, MSG_POLL_INTERVAL);
-    return () => { clearInterval(t1); clearInterval(t2); };
-  }, [refreshStatus, refreshMessages]);
+    const t3 = setInterval(refreshQuota, MSG_POLL_INTERVAL);
+    return () => { clearInterval(t1); clearInterval(t2); clearInterval(t3); };
+  }, [refreshStatus, refreshMessages, refreshQuota]);
 
   const isConnected = waStatus === 'connected';
 
@@ -157,6 +174,14 @@ export default function App() {
                   />
                 ) : (
                   <div className="space-y-6">
+                    {/* Monthly Quota & Usage Dashboard */}
+                    <QuotaDashboard
+                      quota={quota}
+                      loading={loadingQuota}
+                      onUpgrade={() => handleNavigate('landing', 'pricing')}
+                      onRefresh={refreshQuota}
+                    />
+
                     {!isConnected && (
                       <ConnectionPanel
                         status={waStatus}
@@ -167,9 +192,24 @@ export default function App() {
                       />
                     )}
 
-                    <SchedulerForm isConnected={isConnected} onScheduled={refreshMessages} isSyncing={isSyncing} />
+                    <SchedulerForm
+                      isConnected={isConnected}
+                      onScheduled={() => {
+                        refreshMessages();
+                        refreshQuota();
+                      }}
+                      isSyncing={isSyncing}
+                      quota={quota}
+                    />
 
-                    <MessageTable messages={messages} loading={loadingMsgs} onRefresh={refreshMessages} />
+                    <MessageTable
+                      messages={messages}
+                      loading={loadingMsgs}
+                      onRefresh={() => {
+                        refreshMessages();
+                        refreshQuota();
+                      }}
+                    />
                   </div>
                 )
               }

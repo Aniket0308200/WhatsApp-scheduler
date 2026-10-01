@@ -81,7 +81,7 @@ export default function LandingPage({ onGetStarted, isConnected, waStatus, profi
 
               {/* Right Interactive Mockup Showcase */}
               <div className="lg:col-span-5 flex justify-center">
-                <div className="w-full max-w-[340px] sm:max-w-[380px] bg-white dark:bg-wa-dpanel/90 backdrop-blur-md rounded-3xl p-5 border border-slate-200 dark:border-white/10 shadow-xl dark:shadow-2xl relative overflow-hidden group transition-transform duration-300 hover:scale-[1.02]">
+                <div className="w-full max-w-[340px] sm:max-w-[380px] bg-white dark:bg-wa-dpanel/90 backdrop-blur-md rounded-3xl p-5 border border-slate-200 dark:border-white/10 shadow-xl dark:shadow-2xl relative overflow-hidden group transition duration-700 hover:scale-[1.04]">
                   
                   {/* Mock Card Header */}
                   <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/10">

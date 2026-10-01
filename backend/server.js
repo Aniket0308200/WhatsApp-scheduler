@@ -239,10 +239,20 @@ app.get('/api/auth/me', async (req, res) => {
       return res.status(401).json({ error: 'Account not found' });
     }
     return res.json({
-      user: { id: account._id.toString(), name: account.name, email: account.email }
+      user: { id: account._id.toString(), name: account.name, email: account.email, plan: account.plan || 'free' }
     });
   } catch (err) {
     return res.status(401).json({ error: 'Session expired or invalid.' });
+  }
+});
+
+// ─── User Plan & Monthly Message Quota ────────────────────────────────────────
+app.get('/api/user/quota', async (req, res) => {
+  try {
+    const quota = await db.getUserMonthlyQuota(req.sessionId);
+    res.json(quota);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -577,6 +587,16 @@ app.post('/api/messages', async (req, res) => {
   }
 
   try {
+    // ─── Enforce Monthly Message Limit (50 for Free, 250 for Starter, 1000 for Pro) ───
+    const quota = await db.getUserMonthlyQuota(req.sessionId);
+    if (quota && quota.remaining <= 0) {
+      return res.status(403).json({
+        error: `Monthly quota reached (${quota.monthlyLimit}/${quota.monthlyLimit} scheduled messages used for ${quota.monthName}). Your quota resets on ${quota.resetsOnFormatted}. Upgrade your plan for higher limits.`,
+        quotaExceeded: true,
+        quota
+      });
+    }
+
     const senderPhone = await getSenderPhoneFromSession(req);
     if (!senderPhone) {
       return res.status(400).json({ error: 'Connected WhatsApp number could not be identified.' });

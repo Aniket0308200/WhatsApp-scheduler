@@ -109,6 +109,8 @@ const AuthAccountSchema = new mongoose.Schema({
   passwordHash: { type: String, required: true },
   linkedWhatsAppPhone: { type: String, default: null },
   linkedWhatsAppJid: { type: String, default: null },
+  plan: { type: String, enum: ['free', 'starter', 'pro'], default: 'free' },
+  customMonthlyLimit: { type: Number, default: null },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -233,14 +235,22 @@ ScheduledMessageSchema.index({ status: 1, scheduledAt: 1 });
 
 const ScheduledMessage = mongoose.model('ScheduledMessage', ScheduledMessageSchema);
 
-// ─── Rolling Cap Helper ───────────────────────────────────────────────────────
+// ─── Plan Limits & Quota Helpers ──────────────────────────────────────────────
+const PLAN_LIMITS = {
+  free: 50,
+  starter: 250,
+  pro: 1000
+};
+
+// ─── Rolling Cap Helper (retains recent history safely without deleting monthly allocations) ──
 async function enforceRollingCap(sessionId) {
   try {
     const count = await ScheduledMessage.countDocuments({ sessionId });
-    if (count > 50) {
+    // Keep up to 500 messages so users can review history and not lose active month quota
+    if (count > 500) {
       const keepList = await ScheduledMessage.find({ sessionId })
         .sort({ createdAt: -1 })
-        .limit(50)
+        .limit(500)
         .select('_id')
         .lean();
       const keepIds = keepList.map(m => m._id);
@@ -252,6 +262,98 @@ async function enforceRollingCap(sessionId) {
   } catch (err) {
     console.error('[DB] Error enforcing rolling cap:', err.message);
   }
+}
+
+/**
+ * Calculates current month's scheduled messages usage, limits, and status breakdown.
+ */
+async function getUserMonthlyQuota(sessionId) {
+  let plan = 'free';
+  let limit = PLAN_LIMITS.free;
+  let userAccount = null;
+
+  if (sessionId && sessionId.startsWith('user_acc_')) {
+    const accountId = sessionId.replace('user_acc_', '');
+    try {
+      if (mongoose.Types.ObjectId.isValid(accountId)) {
+        userAccount = await AuthAccount.findById(accountId).lean();
+        if (userAccount) {
+          plan = userAccount.plan || 'free';
+          limit = userAccount.customMonthlyLimit || PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+        }
+      }
+    } catch (e) {
+      console.error('[DB] Error fetching account for quota:', e.message);
+    }
+  }
+
+  const now = new Date();
+  // Start of current calendar month in UTC
+  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+  const endOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+  const nextMonthReset = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+
+  const monthMessages = await ScheduledMessage.find({
+    sessionId,
+    createdAt: { $gte: startOfMonth, $lte: endOfMonth }
+  }).lean();
+
+  let pendingCount = 0;
+  let sentCount = 0;
+  let failedCount = 0;
+  let cancelledCount = 0;
+
+  for (const m of monthMessages) {
+    if (m.status === 'pending') {
+      pendingCount++;
+    } else if (m.status === 'sent' || m.status === 'submitted' || m.status === 'delivered' || m.status === 'read') {
+      sentCount++;
+    } else if (m.status === 'failed') {
+      failedCount++;
+    } else if (m.status === 'cancelled') {
+      cancelledCount++;
+    }
+  }
+
+  // Active messages (excluding cancelled) count toward user's monthly quota
+  const activeCount = monthMessages.filter(m => m.status !== 'cancelled').length;
+  const used = activeCount;
+  const remaining = Math.max(0, limit - used);
+  const percentUsed = Math.min(100, Math.round((used / limit) * 100));
+
+  const monthName = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const resetsOnFormatted = nextMonthReset.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  return {
+    plan,
+    planName: plan === 'starter' ? 'Starter Plan' : (plan === 'pro' ? 'Pro Plan' : 'Free Plan'),
+    monthlyLimit: limit,
+    used,
+    remaining,
+    percentUsed,
+    resetsAt: nextMonthReset.toISOString(),
+    resetsOnFormatted,
+    monthName,
+    breakdown: {
+      pending: pendingCount,
+      sent: sentCount,
+      failed: failedCount,
+      cancelled: cancelledCount,
+      totalThisMonth: monthMessages.length
+    }
+  };
+}
+
+async function updateUserPlan(emailOrId, plan, customMonthlyLimit = null) {
+  const query = mongoose.Types.ObjectId.isValid(emailOrId)
+    ? { _id: emailOrId }
+    : { email: String(emailOrId).toLowerCase().trim() };
+
+  const update = { plan };
+  if (customMonthlyLimit !== null && customMonthlyLimit !== undefined) {
+    update.customMonthlyLimit = customMonthlyLimit;
+  }
+  return await AuthAccount.findOneAndUpdate(query, { $set: update }, { new: true });
 }
 
 // ─── Convert Date to UTC string for compatibility ────────────────────────────
@@ -405,4 +507,7 @@ module.exports = {
   isValidPersonalContactName,
   getCleanContactName,
   cleanInvalidContactsFromDb,
+  PLAN_LIMITS,
+  getUserMonthlyQuota,
+  updateUserPlan,
 };

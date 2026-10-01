@@ -8,7 +8,7 @@ const STATUS_BADGE = {
   sent:      { label: '✓ Sent',         cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/40' },
   submitted: { label: '✓ Sent',         cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/40' },
   delivered: { label: '✓✓ Delivered',   cls: 'bg-teal-100 text-teal-800 dark:bg-teal-950/40 dark:text-teal-400 border border-teal-200 dark:border-teal-900/40' },
-  read:      { label: '🔵 Read',        cls: 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-200 dark:border-blue-900/40' },
+  read:      { label: '✅ Read',        cls: 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-200 dark:border-blue-900/40' },
   failed:    { label: '❌ Failed',      cls: 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-900/40' },
   cancelled: { label: '🚫 Cancelled',   cls: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700' },
 };

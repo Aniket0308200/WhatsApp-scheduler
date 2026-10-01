@@ -271,7 +271,7 @@ function ContactsImportModal({ onClose, onImported }) {
   );
 }
 
-export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
+export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quota }) {
   const getFullPhone = (cc, ph) => {
     if (ph && ph.endsWith('@g.us')) {
       return ph;
@@ -657,6 +657,11 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
       return;
     }
 
+    if (quota && quota.remaining <= 0) {
+      toast.error(`Monthly quota limit reached (${quota.monthlyLimit}/${quota.monthlyLimit} used). Please upgrade your plan or wait for reset on ${quota.resetsOnFormatted}.`);
+      return;
+    }
+
     const fullPhone = getFullPhone(countryCode, phone);
     if (!fullPhone || fullPhone.length < 7) {
       toast.error('Enter a valid phone number.');
@@ -938,19 +943,33 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing }) {
           />
         </div>
 
+        {/* ── Quota Exhausted Warning ───────────────────────────────────── */}
+        {quota && quota.remaining <= 0 && (
+          <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 flex items-center gap-2.5 text-xs text-rose-800 dark:text-rose-300">
+            <span className="text-base shrink-0">🚫</span>
+            <div className="flex-1">
+              <span className="font-bold">Monthly Quota Exhausted:</span> You have reached your limit of {quota.monthlyLimit} scheduled messages for {quota.monthName || 'this month'}. Quota resets on {quota.resetsOnFormatted}.
+            </div>
+          </div>
+        )}
+
         {/* ── Submit ────────────────────────────────────────────────────── */}
         <button
           type="submit"
-          disabled={loading || !isConnected || !timeConfirmed}
+          disabled={loading || !isConnected || !timeConfirmed || (quota && quota.remaining <= 0)}
           className={`w-full font-semibold py-3 rounded-xl text-sm shadow-sm flex items-center justify-center gap-2 transition-colors
-            ${timeConfirmed && isConnected
+            ${timeConfirmed && isConnected && !(quota && quota.remaining <= 0)
               ? 'bg-wa-green hover:bg-wa-teal text-white'
               : 'bg-gray-200 dark:bg-wa-dsurf text-gray-400 dark:text-wa-dmuted cursor-not-allowed border dark:border-wa-dbdr'}`}
         >
           {loading && (
             <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
           )}
-          {loading ? 'Scheduling…' : '📅  Schedule Message'}
+          {loading
+            ? 'Scheduling…'
+            : (quota && quota.remaining <= 0)
+            ? '🚫 Monthly Limit Reached (50/50)'
+            : '📅  Schedule Message'}
         </button>
       </form>
       {showImportModal && (
