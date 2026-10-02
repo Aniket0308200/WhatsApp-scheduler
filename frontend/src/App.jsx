@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Routes, Route, useNavigate, Link, useLocation } from 'react-router-dom';
 import { fetchStatus, fetchMessages, fetchUserQuota } from './api';
 import ConnectionPanel from './components/ConnectionPanel';
@@ -12,13 +12,15 @@ import toast from 'react-hot-toast';
 import LandingPage from './components/LandingPage';
 import AuthModal from './components/AuthModal';
 
-const POLL_INTERVAL = 4_000;
+const POLL_INTERVAL_DISCONNECTED = 5_000;  // fast poll when waiting for QR/connection
+const POLL_INTERVAL_CONNECTED    = 15_000;  // slow poll when already connected (stable)
 const MSG_POLL_INTERVAL = 20_000;
 
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const [waStatus, setWaStatus] = useState('connecting');
+  const waStatusRef = useRef('connecting'); // keeps latest status accessible inside polling closures
   const [qr, setQr] = useState(null);
   const [pairingCode, setPairingCode] = useState(null);
   const [profile, setProfile] = useState({ name: null, phone: null });
@@ -42,12 +44,14 @@ export default function App() {
     try {
       const data = await fetchStatus();
       setWaStatus(data.status);
+      waStatusRef.current = data.status; // keep ref in sync for polling interval
       setQr(data.qr);
       setPairingCode(data.pairingCode);
       setProfile(data.profile || { name: null, phone: null });
       setIsSyncing(Boolean(data.isSyncing));
     } catch {
       setWaStatus('disconnected');
+      waStatusRef.current = 'disconnected';
       setIsSyncing(false);
     }
   }, []);
@@ -95,10 +99,27 @@ export default function App() {
     refreshStatus();
     refreshMessages();
     refreshQuota();
-    const t1 = setInterval(refreshStatus, POLL_INTERVAL);
+
+    // Adaptive polling: fast when waiting for connection, slow when stable.
+    // This prevents unnecessary server wakeups on Render.com (which sleeps after 15 min idle).
+    // waStatusRef is used instead of waStatus to avoid stale closure bug.
+    let statusTimer = null;
+    const scheduleStatusPoll = () => {
+      const interval = (waStatusRef.current === 'connected') ? POLL_INTERVAL_CONNECTED : POLL_INTERVAL_DISCONNECTED;
+      statusTimer = setTimeout(async () => {
+        await refreshStatus();
+        scheduleStatusPoll(); // reschedule with updated interval based on latest status
+      }, interval);
+    };
+    scheduleStatusPoll();
+
     const t2 = setInterval(refreshMessages, MSG_POLL_INTERVAL);
     const t3 = setInterval(refreshQuota, MSG_POLL_INTERVAL);
-    return () => { clearInterval(t1); clearInterval(t2); clearInterval(t3); };
+    return () => {
+      clearTimeout(statusTimer);
+      clearInterval(t2);
+      clearInterval(t3);
+    };
   }, [refreshStatus, refreshMessages, refreshQuota]);
 
   const isConnected = waStatus === 'connected';

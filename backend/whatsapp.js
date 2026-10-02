@@ -41,6 +41,30 @@ const ENABLE_PERSONAL_CONTACT_SYNC = false;
 let messageStatusListener = null;
 const logger = pino({ level: 'silent' });
 
+// ─── Baileys Version Cache ───────────────────────────────────────────────────
+// Cache the Baileys version globally so we don't make a network call on every
+// reconnect attempt. This prevents failures on Render.com cold starts.
+let cachedBaileysVersion = null;
+async function getOrFetchBaileysVersion() {
+  if (cachedBaileysVersion) return cachedBaileysVersion;
+  try {
+    const { version } = await fetchLatestBaileysVersion();
+    cachedBaileysVersion = version;
+    console.log(`[WA] Baileys version cached: ${version.join('.')}`);
+    return version;
+  } catch (err) {
+    console.error('[WA] fetchLatestBaileysVersion failed, using fallback:', err.message);
+    // Stable fallback version — avoids crash when offline during startup
+    cachedBaileysVersion = [2, 3000, 1015901307];
+    return cachedBaileysVersion;
+  }
+}
+
+// ─── Reconnect Backoff Config ────────────────────────────────────────────────
+// Exponential backoff: 3s → 6s → 12s → 24s → 60s (capped)
+const RECONNECT_BASE_DELAY_MS = 3_000;
+const RECONNECT_MAX_DELAY_MS  = 60_000;
+
 // ─── Helper Functions ────────────────────────────────────────────────────────
 
 /** Returns true if a session is currently initialized in memory. */
@@ -582,6 +606,7 @@ async function initWhatsApp(sessionId) {
       qrBase64: null,
       pairingCode: null,
       reconnectTimer: null,
+      reconnectAttempts: 0,       // tracks backoff state
       status: 'disconnected',
       connectedProfile: { name: null, phone: null, jid: null },
       contactCache: {},
@@ -633,7 +658,7 @@ async function initWhatsApp(sessionId) {
   if (state.creds?.me?.id) {
     session.connectedProfile.phone = state.creds.me.id.split('@')[0].split(':')[0];
   }
-  const { version } = await fetchLatestBaileysVersion();
+  const version = await getOrFetchBaileysVersion();
 
   const sock = makeWASocket({
     version,
@@ -648,10 +673,13 @@ async function initWhatsApp(sessionId) {
     browser: ['macOS', 'Chrome', '120.0.6099.109'],
     syncFullHistory: false,
     generateHighQualityLinkPreview: false,
-    keepAliveIntervalMs: 25_000,
+    // Aggressive keep-alive to prevent socket drops on hosted platforms (Render.com)
+    keepAliveIntervalMs: 10_000,
     retryRequestDelayMs: 5_000,
     connectTimeoutMs: 60_000,
     defaultQueryTimeoutMs: 0,
+    // Prevent WhatsApp from treating us as inactive
+    emitOwnEvents: false,
   });
 
   session.sock = sock;
@@ -693,6 +721,8 @@ async function initWhatsApp(sessionId) {
       session.qrBase64 = null;
       session.pairingCode = null;
       session.isSyncing = true;
+      // Reset backoff counter on successful connection
+      session.reconnectAttempts = 0;
 
       if (session.contactsBuffer) {
         session.contactsBuffer.clear();
@@ -785,19 +815,31 @@ async function initWhatsApp(sessionId) {
       const { loggedOut } = DisconnectReason;
 
       if (code === loggedOut) {
+        // User explicitly logged out — do NOT reconnect, clear session
         console.log(`[WA] [${sessionId}] Disconnected (loggedOut/401) — user explicitly unlinked or logged out.`);
         session.status = 'disconnected';
         session.isSyncing = false;
+        session.reconnectAttempts = 0;
         clearSession(sessionId).catch((err) => console.error(`[WA] [${sessionId}] Error clearing loggedOut session:`, err.message));
       } else {
-        // ALWAYS auto-reconnect for ALL stream resets (440/515), network glitches, server restarts, and timeouts
+        // Auto-reconnect with exponential backoff for ALL other disconnects:
+        // stream resets (440/515), network glitches, server restarts, timeouts, etc.
         session.status = 'disconnected';
         session.isSyncing = false;
-        console.log(`[WA] [${sessionId}] Session closed (code: ${code}). Triggering auto-reconnect in 3s…`);
+
+        // Increment backoff counter and compute delay
+        session.reconnectAttempts = (session.reconnectAttempts || 0) + 1;
+        const backoffDelay = Math.min(
+          RECONNECT_BASE_DELAY_MS * Math.pow(2, session.reconnectAttempts - 1),
+          RECONNECT_MAX_DELAY_MS
+        );
+
+        console.log(`[WA] [${sessionId}] Session closed (code: ${code}). Reconnect attempt #${session.reconnectAttempts} in ${backoffDelay / 1000}s…`);
+
         if (session.reconnectTimer) clearTimeout(session.reconnectTimer);
         session.reconnectTimer = setTimeout(() => {
           initWhatsApp(sessionId).catch(err => console.error(`[WA] [${sessionId}] Auto-reconnect error:`, err.message));
-        }, 3_000);
+        }, backoffDelay);
       }
     }
   });

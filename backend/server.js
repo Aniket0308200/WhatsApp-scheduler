@@ -55,6 +55,29 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok', message: 'Server is awake' });
 });
 
+// ─── Server-side keep-alive: ping self every 10 minutes to prevent Render sleep ─
+// Render.com free tier spins down services after 15 minutes of no inbound HTTP traffic.
+// Render injects RENDER=true and RENDER_EXTERNAL_URL automatically.
+const isRenderOrProd = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER) || Boolean(process.env.RENDER_EXTERNAL_URL);
+if (isRenderOrProd) {
+  const selfPingUrl = process.env.SELF_PING_URL || 
+    (process.env.RENDER_EXTERNAL_URL ? `${process.env.RENDER_EXTERNAL_URL}/api/health` : 'https://whatsapp-scheduler-backend-ubkz.onrender.com/api/health');
+  
+  setInterval(async () => {
+    try {
+      const http = require('https');
+      http.get(selfPingUrl, (res) => {
+        console.log(`[KeepAlive] Self-ping OK: ${res.statusCode}`);
+      }).on('error', (err) => {
+        console.warn(`[KeepAlive] Self-ping failed: ${err.message}`);
+      });
+    } catch (err) {
+      console.warn('[KeepAlive] Self-ping error:', err.message);
+    }
+  }, 10 * 60 * 1000); // every 10 minutes
+  console.log(`[KeepAlive] Self-ping scheduler active (every 10 min) for: ${selfPingUrl}`);
+}
+
 // ─── Session ID Validation Middleware ─────────────────────────────────────────
 app.use((req, res, next) => {
   const sessionId = req.headers['x-session-id'] || req.query.sessionId || req.query.state;
@@ -259,6 +282,10 @@ app.get('/api/user/quota', async (req, res) => {
 // ─── WhatsApp status ──────────────────────────────────────────────────────────
 
 const initializingSessions = new Set();
+// Tracks last time a session was auto-initialized from status polling
+// to prevent re-init storm when frontend polls every 4 seconds.
+const lastAutoInitTime = new Map();
+const AUTO_INIT_THROTTLE_MS = 15_000; // minimum 15 seconds between auto-inits
 
 /**
  * GET /api/status
@@ -270,9 +297,15 @@ app.get('/api/status', (req, res) => {
     return res.json({ status: "ok" });
   }
 
-  // Auto-initialize WhatsApp for this session if it's untracked or disconnected & not currently initializing
-  if (whatsapp.shouldReinitialize(req.sessionId) && !initializingSessions.has(req.sessionId)) {
+  // Auto-initialize WhatsApp for this session if it's untracked or disconnected.
+  // Throttled to once per AUTO_INIT_THROTTLE_MS to prevent init storm from frontend polling.
+  const now = Date.now();
+  const lastInit = lastAutoInitTime.get(req.sessionId) || 0;
+  const isThrottled = (now - lastInit) < AUTO_INIT_THROTTLE_MS;
+
+  if (whatsapp.shouldReinitialize(req.sessionId) && !initializingSessions.has(req.sessionId) && !isThrottled) {
     initializingSessions.add(req.sessionId);
+    lastAutoInitTime.set(req.sessionId, now);
     console.log(`[Server] Initializing untracked or disconnected session: ${req.sessionId}`);
     whatsapp.initWhatsApp(req.sessionId)
       .catch((err) => {
