@@ -27,7 +27,14 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [messages, setMessages] = useState([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
-  const [activeView, setActiveView] = useState('landing'); // 'landing' | 'app'
+  const [activeView, setActiveView] = useState(() => {
+    try {
+      const saved = localStorage.getItem('wa_auth_user');
+      return saved ? 'app' : 'landing';
+    } catch {
+      return 'landing';
+    }
+  }); // 'landing' | 'app'
   const [authUser, setAuthUser] = useState(() => {
     try {
       const saved = localStorage.getItem('wa_auth_user');
@@ -97,32 +104,38 @@ export default function App() {
 
   useEffect(() => {
     refreshStatus();
-    refreshMessages();
-    refreshQuota();
 
     // Adaptive polling: fast when waiting for connection, slow when stable.
-    // This prevents unnecessary server wakeups on Render.com (which sleeps after 15 min idle).
-    // waStatusRef is used instead of waStatus to avoid stale closure bug.
     let statusTimer = null;
     const scheduleStatusPoll = () => {
       const interval = (waStatusRef.current === 'connected') ? POLL_INTERVAL_CONNECTED : POLL_INTERVAL_DISCONNECTED;
       statusTimer = setTimeout(async () => {
         await refreshStatus();
-        scheduleStatusPoll(); // reschedule with updated interval based on latest status
+        scheduleStatusPoll();
       }, interval);
     };
     scheduleStatusPoll();
 
-    const t2 = setInterval(refreshMessages, MSG_POLL_INTERVAL);
-    const t3 = setInterval(refreshQuota, MSG_POLL_INTERVAL);
+    // Only poll messages & quota if user is authenticated or in app dashboard
+    let t2 = null;
+    let t3 = null;
+    if (authUser || activeView !== 'landing') {
+      refreshMessages();
+      refreshQuota();
+      t2 = setInterval(refreshMessages, MSG_POLL_INTERVAL);
+      t3 = setInterval(refreshQuota, MSG_POLL_INTERVAL);
+    }
+
     return () => {
       clearTimeout(statusTimer);
-      clearInterval(t2);
-      clearInterval(t3);
+      if (t2) clearInterval(t2);
+      if (t3) clearInterval(t3);
     };
-  }, [refreshStatus, refreshMessages, refreshQuota]);
+  }, [refreshStatus, refreshMessages, refreshQuota, authUser, activeView]);
 
   const isConnected = waStatus === 'connected';
+  const isLinked = Boolean(profile?.phone);
+  const isReconnecting = waStatus === 'connecting' && isLinked;
 
   const handleNavigate = (view, sectionId) => {
     navigate('/');
@@ -204,7 +217,7 @@ export default function App() {
                   />
                 ) : (
                   <div className="space-y-6">
-                    {!isConnected && (
+                    {!isConnected && !isReconnecting && (
                       <ConnectionPanel
                         status={waStatus}
                         qr={qr}
@@ -212,6 +225,13 @@ export default function App() {
                         onRefresh={refreshStatus}
                         onAuthLogout={handleAuthLogout}
                       />
+                    )}
+
+                    {isReconnecting && (
+                      <div className="flex items-center gap-3 p-4 bg-teal-50/70 dark:bg-wa-dsurf border border-teal-200 dark:border-teal-800/40 rounded-2xl text-xs sm:text-sm text-teal-800 dark:text-emerald-200 shadow-xs animate-pulse">
+                        <span className="w-4 h-4 border-2 border-wa-teal border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                        <span>Connecting to WhatsApp for <strong>+{profile.phone}</strong>… Your session and scheduled messages are safe.</span>
+                      </div>
                     )}
 
                     <SchedulerForm

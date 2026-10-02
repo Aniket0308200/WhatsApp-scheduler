@@ -751,7 +751,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
               <button
                 type="button"
                 onClick={onViewQuota}
-                title="View your monthly scheduling quota"
+                title={`${quota.planName || 'Monthly'} Quota: ${quota.remaining} of ${quota.monthlyLimit} messages left. Click to view plan details & usage.`}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all hover:scale-[1.02] ${
                   quota.remaining <= 0
                     ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-400'
@@ -763,7 +763,11 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
                 </svg>
-                <span>{quota.remaining <= 0 ? 'Quota Full' : `${quota.remaining}/${quota.monthlyLimit} left`}</span>
+                <span>
+                  {quota.remaining <= 0
+                    ? `Monthly Quota: Full (0/${quota.monthlyLimit})`
+                    : `Monthly Quota: ${quota.remaining}/${quota.monthlyLimit} Left`}
+                </span>
                 <svg className="w-3 h-3 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                 </svg>

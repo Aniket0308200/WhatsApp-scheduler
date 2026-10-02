@@ -54,6 +54,13 @@ export default function ConnectionPanel({ status, qr, pairingCode, onRefresh }) 
     }
   }, [pairingCode, localCode, countdown]);
 
+  useEffect(() => {
+    // If user is on QR tab and there is no QR code yet, auto-trigger generation
+    if (tab === 'qr' && !qr && !pairingCode && status === 'disconnected' && !refreshing) {
+      handleRefreshQR();
+    }
+  }, [tab, qr, pairingCode, status]);
+
   const handleTabChange = (newTab) => {
     setTab(newTab);
     setLocalCode(null);

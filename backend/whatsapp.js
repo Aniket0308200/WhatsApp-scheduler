@@ -34,6 +34,9 @@ if (!fs.existsSync(SESSIONS_ROOT)) {
 // In-memory sessions store: sessionId -> SessionObject
 const sessions = new Map();
 
+// Active initialization promises to prevent concurrent Baileys socket creation for the same session
+const activeInitPromises = new Map();
+
 // Temporary toggle flag to disable personal contact sync.
 // Set to true to re-enable syncing of personal contacts (@s.whatsapp.net).
 const ENABLE_PERSONAL_CONTACT_SYNC = false;
@@ -61,9 +64,8 @@ async function getOrFetchBaileysVersion() {
 }
 
 // ─── Reconnect Backoff Config ────────────────────────────────────────────────
-// Exponential backoff: 3s → 6s → 12s → 24s → 60s (capped)
 const RECONNECT_BASE_DELAY_MS = 3_000;
-const RECONNECT_MAX_DELAY_MS  = 60_000;
+const RECONNECT_MAX_DELAY_MS  = 15_000; // Cap to 15s instead of 60s so recovery is fast
 
 // ─── Helper Functions ────────────────────────────────────────────────────────
 
@@ -72,11 +74,28 @@ function hasSession(sessionId) {
   return sessions.has(sessionId);
 }
 
-/** Returns true if a session is untracked OR disconnected with no active socket. */
+/** Returns true if this session has saved, registered credentials in MongoDB. */
+async function hasSavedCredentials(sessionId) {
+  if (!sessionId) return false;
+  try {
+    const isProd = process.env.NODE_ENV === 'production';
+    const nsSessionId = isProd ? `prod_${sessionId}` : `dev_${sessionId}`;
+    const doc = await db.AuthSession.findOne({ sessionId: nsSessionId, key: 'creds' }).lean();
+    if (!doc || !doc.value) return false;
+    const creds = JSON.parse(doc.value, BufferJSON.reviver);
+    return Boolean(creds && (creds.me?.id || creds.registered));
+  } catch (_) {
+    return false;
+  }
+}
+
+/** Returns true if a session is untracked OR disconnected with no active socket or timer. */
 function shouldReinitialize(sessionId) {
   if (!sessionId) return false;
   const session = sessions.get(sessionId);
   if (!session) return true;
+  if (activeInitPromises.has(sessionId)) return false;
+  if (session.reconnectTimer) return false;
   if (session.status === 'disconnected' && !session.sock) {
     return true;
   }
@@ -598,6 +617,28 @@ async function initWhatsApp(sessionId) {
     return null;
   }
 
+  // If already connected with an active socket, do not re-create socket
+  const existing = sessions.get(sessionId);
+  if (existing && existing.status === 'connected' && existing.sock) {
+    return existing.sock;
+  }
+
+  // If initialization is already in progress, await that same promise to prevent socket collisions
+  if (activeInitPromises.has(sessionId)) {
+    console.log(`[WA] [${sessionId}] Initialization already running, returning active promise.`);
+    return activeInitPromises.get(sessionId);
+  }
+
+  const promise = _performInitWhatsApp(sessionId);
+  activeInitPromises.set(sessionId, promise);
+  try {
+    return await promise;
+  } finally {
+    activeInitPromises.delete(sessionId);
+  }
+}
+
+async function _performInitWhatsApp(sessionId) {
   let session = sessions.get(sessionId);
   if (!session) {
     session = {
@@ -612,7 +653,8 @@ async function initWhatsApp(sessionId) {
       contactCache: {},
       isSyncing: false,
       contactsBuffer: new Map(),
-      bufferTimeout: null
+      bufferTimeout: null,
+      isExplicitClosing: false
     };
     sessions.set(sessionId, session);
   }
@@ -623,16 +665,18 @@ async function initWhatsApp(sessionId) {
     session.reconnectTimer = null;
   }
 
-  // CRITICAL: Close previous socket if it exists to prevent socket leaks and conflicts
+  // CRITICAL: Close previous socket cleanly if it exists without triggering reconnect loops
   if (session.sock) {
     console.log(`[WA] [${sessionId}] Cleaning up existing socket before re-initialization.`);
     try {
+      session.isExplicitClosing = true;
       session.sock.ev.removeAllListeners();
       session.sock.end();
     } catch (e) {
       console.error(`[WA] [${sessionId}] Error ending old socket:`, e.message);
     }
     session.sock = null;
+    session.isExplicitClosing = false;
   }
 
   session.status = 'connecting';
@@ -668,17 +712,14 @@ async function initWhatsApp(sessionId) {
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
     printQRInTerminal: false,
-    // Desktop identity is required by WhatsApp to deliver the largest history
-    // sync available to a linked device.
-    browser: ['macOS', 'Chrome', '120.0.6099.109'],
+    browser: Browsers.ubuntu('Chrome'),
     syncFullHistory: false,
     generateHighQualityLinkPreview: false,
-    // Aggressive keep-alive to prevent socket drops on hosted platforms (Render.com)
-    keepAliveIntervalMs: 10_000,
+    markOnlineOnConnect: false, // Prevents session conflict/stealing from user's primary phone
+    keepAliveIntervalMs: 30_000, // Standard 30s keepAlive prevents premature 15s connectionLost drops
     retryRequestDelayMs: 5_000,
     connectTimeoutMs: 60_000,
-    defaultQueryTimeoutMs: 0,
-    // Prevent WhatsApp from treating us as inactive
+    defaultQueryTimeoutMs: 60_000,
     emitOwnEvents: false,
   });
 
@@ -721,8 +762,12 @@ async function initWhatsApp(sessionId) {
       session.qrBase64 = null;
       session.pairingCode = null;
       session.isSyncing = true;
-      // Reset backoff counter on successful connection
+      // Reset backoff counter and any timers on successful connection
       session.reconnectAttempts = 0;
+      if (session.reconnectTimer) {
+        clearTimeout(session.reconnectTimer);
+        session.reconnectTimer = null;
+      }
 
       if (session.contactsBuffer) {
         session.contactsBuffer.clear();
@@ -806,41 +851,57 @@ async function initWhatsApp(sessionId) {
     }
 
     if (connection === 'close') {
+      if (session.isExplicitClosing) {
+        console.log(`[WA] [${sessionId}] Connection closed explicitly, skipping auto-reconnect.`);
+        return;
+      }
+
       const code = lastDisconnect?.error?.output?.statusCode;
       console.log(`[WA] [${sessionId}] Connection closed. Code: ${code}`);
 
-      // Reset profile on disconnect
-      session.connectedProfile = { name: null, phone: null, jid: null };
-
-      const { loggedOut } = DisconnectReason;
+      const { loggedOut, restartRequired } = DisconnectReason;
 
       if (code === loggedOut) {
-        // User explicitly logged out — do NOT reconnect, clear session
+        // User explicitly logged out / unlinked from mobile device
         console.log(`[WA] [${sessionId}] Disconnected (loggedOut/401) — user explicitly unlinked or logged out.`);
         session.status = 'disconnected';
+        session.connectedProfile = { name: null, phone: null, jid: null };
         session.isSyncing = false;
         session.reconnectAttempts = 0;
+        session.sock = null;
         clearSession(sessionId).catch((err) => console.error(`[WA] [${sessionId}] Error clearing loggedOut session:`, err.message));
-      } else {
-        // Auto-reconnect with exponential backoff for ALL other disconnects:
-        // stream resets (440/515), network glitches, server restarts, timeouts, etc.
-        session.status = 'disconnected';
-        session.isSyncing = false;
+        return;
+      }
 
-        // Increment backoff counter and compute delay
-        session.reconnectAttempts = (session.reconnectAttempts || 0) + 1;
-        const backoffDelay = Math.min(
-          RECONNECT_BASE_DELAY_MS * Math.pow(2, session.reconnectAttempts - 1),
-          RECONNECT_MAX_DELAY_MS
-        );
-
-        console.log(`[WA] [${sessionId}] Session closed (code: ${code}). Reconnect attempt #${session.reconnectAttempts} in ${backoffDelay / 1000}s…`);
-
+      // If restartRequired (515), WhatsApp requests immediate stream restart
+      if (code === restartRequired || code === 515) {
+        console.log(`[WA] [${sessionId}] Restart required (code 515) — reconnecting immediately.`);
+        session.status = 'connecting';
         if (session.reconnectTimer) clearTimeout(session.reconnectTimer);
         session.reconnectTimer = setTimeout(() => {
-          initWhatsApp(sessionId).catch(err => console.error(`[WA] [${sessionId}] Auto-reconnect error:`, err.message));
-        }, backoffDelay);
+          initWhatsApp(sessionId).catch(err => console.error(`[WA] [${sessionId}] Restart error:`, err.message));
+        }, 300);
+        return;
       }
+
+      // Transient disconnect (network glitch, connectionLost 408/428, badSession 500, stream error):
+      // Keep connected profile intact so frontend UI does not flash "logged out" / QR code.
+      session.status = 'connecting';
+      session.isSyncing = false;
+
+      // Increment backoff counter and compute delay (capped at 15 seconds)
+      session.reconnectAttempts = (session.reconnectAttempts || 0) + 1;
+      const backoffDelay = Math.min(
+        RECONNECT_BASE_DELAY_MS * Math.pow(1.5, Math.min(session.reconnectAttempts - 1, 4)),
+        RECONNECT_MAX_DELAY_MS
+      );
+
+      console.log(`[WA] [${sessionId}] Session closed (code: ${code}). Reconnect attempt #${session.reconnectAttempts} in ${backoffDelay / 1000}s…`);
+
+      if (session.reconnectTimer) clearTimeout(session.reconnectTimer);
+      session.reconnectTimer = setTimeout(() => {
+        initWhatsApp(sessionId).catch(err => console.error(`[WA] [${sessionId}] Auto-reconnect error:`, err.message));
+      }, backoffDelay);
     }
   });
 
@@ -992,15 +1053,51 @@ async function bootstrapSessions() {
   try {
     const isProd = process.env.NODE_ENV === 'production';
     const expectedPrefix = isProd ? 'prod_' : 'dev_';
-    const dbSessionIds = await db.AuthSession.distinct('sessionId');
-    for (const dbSessionId of dbSessionIds) {
-      if (dbSessionId && dbSessionId.startsWith(expectedPrefix)) {
-        const originalSessionId = dbSessionId.substring(expectedPrefix.length);
-        console.log(`[WA] Bootstrapping saved session: ${originalSessionId} (Namespace: ${expectedPrefix})`);
-        initWhatsApp(originalSessionId).catch((err) => {
-          console.error(`[WA] Error bootstrapping session ${originalSessionId}:`, err.message);
-        });
+    
+    // Find all session creds in the current environment
+    const credDocs = await db.AuthSession.find({
+      sessionId: { $regex: `^${expectedPrefix}` },
+      key: 'creds'
+    }).lean();
+
+    console.log(`[WA] Found ${credDocs.length} stored session creds to evaluate for bootstrap.`);
+
+    let count = 0;
+    for (const doc of credDocs) {
+      try {
+        if (!doc.value) continue;
+        const creds = JSON.parse(doc.value, BufferJSON.reviver);
+        // Only bootstrap sessions that were actually paired/registered
+        if (creds && (creds.me?.id || creds.registered)) {
+          const originalSessionId = doc.sessionId.substring(expectedPrefix.length);
+          console.log(`[WA] Bootstrapping saved authenticated session: ${originalSessionId}`);
+          count++;
+          // Stagger session inits by 500ms so they don't slam the network simultaneously
+          await new Promise((r) => setTimeout(r, 500));
+          initWhatsApp(originalSessionId).catch((err) => {
+            console.error(`[WA] Error bootstrapping session ${originalSessionId}:`, err.message);
+          });
+        }
+      } catch (parseErr) {
+        console.warn(`[WA] Could not parse creds for session doc ${doc.sessionId}:`, parseErr.message);
       }
+    }
+    console.log(`[WA] Successfully bootstrapped ${count} active authenticated sessions.`);
+
+    // Purge orphaned/abandoned unauthenticated guest sessions older than 48 hours to keep MongoDB clean
+    const cutoffDate = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const staleDocs = await db.AuthSession.find({
+      key: 'creds',
+      createdAt: { $lt: cutoffDate }
+    }).lean();
+
+    for (const stale of staleDocs) {
+      try {
+        const c = JSON.parse(stale.value, BufferJSON.reviver);
+        if (!c?.me?.id && !c?.registered) {
+          await db.AuthSession.deleteMany({ sessionId: stale.sessionId });
+        }
+      } catch (_) {}
     }
   } catch (err) {
     console.error(`[WA] Error bootstrapping sessions from MongoDB:`, err.message);
@@ -1351,4 +1448,5 @@ module.exports = {
   importContactsToCache,
   syncGroups,
   updateProfileName,
+  hasSavedCredentials,
 };
