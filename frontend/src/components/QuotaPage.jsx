@@ -62,7 +62,7 @@ export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authU
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Free Tier */}
-          <div className={`rounded-2xl p-5 border transition-all ${
+          <div className={`rounded-2xl p-5 border transition-all relative overflow-hidden ${
             currentPlan === 'free'
               ? 'border-2 border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20'
               : 'border-slate-200 dark:border-wa-dbdr bg-slate-50/50 dark:bg-wa-dsurf/40'
@@ -74,6 +74,11 @@ export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authU
               {currentPlan === 'free' && (
                 <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded-full uppercase">
                   Current Active
+                </span>
+              )}
+              {currentPlan !== 'free' && (
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/60 px-2 py-0.5 rounded-full">
+                  Included
                 </span>
               )}
             </div>
@@ -95,11 +100,24 @@ export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authU
           </div>
 
           {/* Starter Tier */}
-          <div className={`rounded-2xl p-5 border transition-all ${
+          <div className={`rounded-2xl p-5 border transition-all relative overflow-hidden ${
             currentPlan === 'starter'
               ? 'border-2 border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20'
               : 'border-slate-200 dark:border-wa-dbdr bg-slate-50/50 dark:bg-wa-dsurf/40'
           }`}>
+            {/* Lock overlay for users who don't have starter or pro */}
+            {currentPlan === 'free' && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl bg-white/60 dark:bg-wa-dpanel/70 backdrop-blur-[3px]">
+                <span className="text-2xl mb-1">🔒</span>
+                <span className="text-xs font-bold text-slate-600 dark:text-wa-dmuted text-center px-4">Upgrade to unlock</span>
+                <button
+                  onClick={() => onNavigate('landing', 'pricing')}
+                  className="mt-2 px-4 py-1.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs"
+                >
+                  See Plans →
+                </button>
+              </div>
+            )}
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
                 Starter Plan
@@ -122,23 +140,42 @@ export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authU
               </li>
               <li className="flex items-center gap-1.5">
                 <span className="text-emerald-500 font-bold">✓</span>
-                <span>Images & Audio media support</span>
+                <span>Images &amp; Audio media support</span>
               </li>
             </ul>
-            <button
-              onClick={() => onNavigate('landing', 'pricing')}
-              className="w-full py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs"
-            >
-              Upgrade to Starter
-            </button>
+            {currentPlan === 'starter' ? (
+              <div className="w-full py-2 rounded-xl text-xs font-bold text-center bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40">
+                ✓ Your Current Plan
+              </div>
+            ) : (
+              <button
+                onClick={() => onNavigate('landing', 'pricing')}
+                className="w-full py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs"
+              >
+                Upgrade to Starter
+              </button>
+            )}
           </div>
 
           {/* Pro Tier */}
-          <div className={`rounded-2xl p-5 border transition-all ${
+          <div className={`rounded-2xl p-5 border transition-all relative overflow-hidden ${
             currentPlan === 'pro'
               ? 'border-2 border-amber-500 bg-amber-50/20 dark:bg-amber-950/20'
               : 'border-slate-200 dark:border-wa-dbdr bg-slate-50/50 dark:bg-wa-dsurf/40'
           }`}>
+            {/* Lock overlay for users who don't have pro */}
+            {currentPlan !== 'pro' && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl bg-white/60 dark:bg-wa-dpanel/70 backdrop-blur-[3px]">
+                <span className="text-2xl mb-1">🔒</span>
+                <span className="text-xs font-bold text-slate-600 dark:text-wa-dmuted text-center px-4">Upgrade to unlock</span>
+                <button
+                  onClick={() => onNavigate('landing', 'pricing')}
+                  className="mt-2 px-4 py-1.5 text-xs font-bold rounded-xl bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 text-white transition-all shadow-xs"
+                >
+                  See Plans →
+                </button>
+              </div>
+            )}
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
                 Pro Plan
@@ -161,15 +198,21 @@ export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authU
               </li>
               <li className="flex items-center gap-1.5">
                 <span className="text-emerald-500 font-bold">✓</span>
-                <span>Priority queue & instant delivery</span>
+                <span>Priority queue &amp; instant delivery</span>
               </li>
             </ul>
-            <button
-              onClick={() => onNavigate('landing', 'pricing')}
-              className="w-full py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 text-white transition-all shadow-xs"
-            >
-              Upgrade to Pro
-            </button>
+            {currentPlan === 'pro' ? (
+              <div className="w-full py-2 rounded-xl text-xs font-bold text-center bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40">
+                ✓ Your Current Plan
+              </div>
+            ) : (
+              <button
+                onClick={() => onNavigate('landing', 'pricing')}
+                className="w-full py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 text-white transition-all shadow-xs"
+              >
+                Upgrade to Pro
+              </button>
+            )}
           </div>
         </div>
       </div>

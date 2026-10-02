@@ -318,9 +318,17 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
 
   const [countryCode,   setCountryCode]   = useState('91');
   const [phone,         setPhone]         = useState('');
-  const [contactName,   setContactName]   = useState(null);   // fetched name
+  const [contactName,   setContactName]   = useState(null);   // fetched name for current input
   const [contactExists, setContactExists] = useState(false);
   const [fetchingName,  setFetchingName]  = useState(false);
+  // ── Multi-recipient chips ─────────────────────────────────────────────────
+  // Each chip: { phone, name, isGroup }
+  const [recipients,    setRecipients]    = useState([]); // confirmed recipient chips
+  const MAX_PERSONAL = 5;
+  const MAX_GROUPS   = 2;
+  const personalCount = recipients.filter(r => !r.isGroup).length;
+  const groupCount    = recipients.filter(r =>  r.isGroup).length;
+  // ─────────────────────────────────────────────────────────────────────────
   const [message,       setMessage]       = useState('');
   const [scheduledAt,   setScheduledAt]   = useState(getDefaultTime);
   const [timeConfirmed, setTimeConfirmed] = useState(false);  // "Done" clicked
@@ -334,6 +342,50 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // ── Helper: add a resolved contact as a chip ───────────────────────────────
+  const addRecipientChip = useCallback((chipPhone, chipName, chipIsGroup) => {
+    if (chipIsGroup) {
+      if (groupCount >= MAX_GROUPS) {
+        toast.error(`Maximum ${MAX_GROUPS} groups allowed per message.`);
+        return false;
+      }
+    } else {
+      if (personalCount >= MAX_PERSONAL) {
+        toast.error(`Maximum ${MAX_PERSONAL} personal contacts allowed per message.`);
+        return false;
+      }
+    }
+    // Prevent duplicates
+    if (recipients.some(r => r.phone === chipPhone)) {
+      toast(`${chipName || chipPhone} already added.`, { icon: 'ℹ️' });
+      return false;
+    }
+    setRecipients(prev => [...prev, { phone: chipPhone, name: chipName || null, isGroup: chipIsGroup }]);
+    return true;
+  }, [recipients, personalCount, groupCount]);
+
+  const removeRecipientChip = (phone) => {
+    setRecipients(prev => prev.filter(r => r.phone !== phone));
+  };
+
+  // Try to add the current phone input as a chip (called on Enter / comma)
+  const tryAddCurrentInputAsChip = useCallback(async () => {
+    if (!phone.trim()) return;
+    const fullPhone = getFullPhone(countryCode, phone);
+    if (!fullPhone || fullPhone.length < 7) {
+      toast.error('Enter a valid phone number.');
+      return;
+    }
+    const isGroup = phone.trim().endsWith('@g.us');
+    const chipAdded = addRecipientChip(fullPhone, contactName, isGroup);
+    if (chipAdded) {
+      setPhone('');
+      setContactName(null);
+      setContactExists(false);
+    }
+  }, [phone, countryCode, contactName, addRecipientChip]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   // Auto-suggest states
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
@@ -544,37 +596,45 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
   };
 
   const handleSelectContactFromDirectory = (c) => {
-    const isGroup = c.phone && c.phone.endsWith('@g.us');
-    if (isGroup) {
-      setPhone(c.phone);
-      setContactName(c.name || null);
-      setContactExists(true);
-    } else {
-      const { countryCode: cc, phone: ph } = parseFullPhone(c.phone);
-      setCountryCode(cc);
-      setPhone(ph);
-      setContactName(c.name || null);
-      setContactExists(true);
+    const isGroup = Boolean(c.type === 'group' || c.isGroup || c.is_group || (c.phone && c.phone.endsWith('@g.us')) || (c.jid && c.jid.endsWith('@g.us')));
+    const rawTarget = isGroup ? (c.phone || c.jid) : (c.phone || '').replace(/\D/g, '');
+    const isAlreadySelected = recipients.some(r => r.phone === rawTarget);
+
+    if (isAlreadySelected) {
+      removeRecipientChip(rawTarget);
+      toast(`Removed ${c.name || rawTarget}`, { icon: '🗑️' });
+      return;
     }
-    setShowDirectory(false);
-    toast.success(`Selected contact: ${c.name || `+${c.phone}`}`);
+
+    if (isGroup) {
+      const added = addRecipientChip(rawTarget, c.name || null, true);
+      if (added) toast.success(`Added group: ${c.name || rawTarget}`);
+    } else {
+      const added = addRecipientChip(rawTarget, c.name || null, false);
+      if (added) toast.success(`Added: ${c.name || `+${rawTarget}`}`);
+    }
+    // Keep directory open to allow adding more recipients
   };
 
   const handleSelectSuggestion = (contact) => {
     const isGroup = contact.phone && contact.phone.endsWith('@g.us');
     if (isGroup) {
-      setPhone(contact.phone);
-      setContactName(contact.name || null);
-      setContactExists(true);
+      const added = addRecipientChip(contact.phone, contact.name || null, true);
+      if (added) {
+        setPhone('');
+        setContactName(null);
+        setContactExists(false);
+      }
     } else {
-      const { countryCode: cc, phone: ph } = parseFullPhone(contact.phone);
-      setCountryCode(cc);
-      setPhone(ph);
-      setContactName(contact.name || null);
-      setContactExists(true);
+      const fullPhone = contact.phone.replace(/\D/g, '');
+      const added = addRecipientChip(fullPhone, contact.name || null, false);
+      if (added) {
+        setPhone('');
+        setContactName(null);
+        setContactExists(false);
+      }
     }
     setShowSuggestions(false);
-    toast.success(`Selected: ${contact.name || `+${contact.phone}`}`);
   };
 
   // Close suggestions dropdown on outside click
@@ -662,9 +722,25 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
       return;
     }
 
-    const fullPhone = getFullPhone(countryCode, phone);
-    if (!fullPhone || fullPhone.length < 7) {
-      toast.error('Enter a valid phone number.');
+    // If there's text in the input, try to add it as a chip first
+    let finalRecipients = [...recipients];
+    if (phone.trim()) {
+      const fullPhone = getFullPhone(countryCode, phone);
+      if (fullPhone && fullPhone.length >= 7) {
+        const isGroup = phone.trim().endsWith('@g.us');
+        const alreadyAdded = finalRecipients.some(r => r.phone === fullPhone);
+        if (!alreadyAdded) {
+          const personalC = finalRecipients.filter(r => !r.isGroup).length;
+          const groupC = finalRecipients.filter(r => r.isGroup).length;
+          if ((isGroup && groupC < MAX_GROUPS) || (!isGroup && personalC < MAX_PERSONAL)) {
+            finalRecipients = [...finalRecipients, { phone: fullPhone, name: contactName, isGroup }];
+          }
+        }
+      }
+    }
+
+    if (finalRecipients.length === 0) {
+      toast.error('Add at least one recipient.');
       return;
     }
     if (!message.trim()) {
@@ -672,17 +748,43 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
       return;
     }
 
+    // Check quota against total recipients being scheduled
+    if (quota && quota.remaining < finalRecipients.length) {
+      toast.error(`Not enough quota. You have ${quota.remaining} message(s) remaining but are trying to send to ${finalRecipients.length} recipients.`);
+      return;
+    }
+
     const utcISO = new Date(scheduledAt).toISOString();
     setLoading(true);
+    let successCount = 0;
+    let failCount = 0;
+    const errors = [];
+
     try {
-      await scheduleMessage({
-        phone: fullPhone,
-        message: message.trim(),
-        scheduledAt: utcISO,
-        recipientName: contactName
-      });
-      toast.success('Message scheduled!');
-      
+      for (const recipient of finalRecipients) {
+        try {
+          await scheduleMessage({
+            phone: recipient.phone,
+            message: message.trim(),
+            scheduledAt: utcISO,
+            recipientName: recipient.name
+          });
+          successCount++;
+        } catch (err) {
+          failCount++;
+          errors.push(err.response?.data?.error || err.message);
+        }
+      }
+
+      if (successCount > 0 && failCount === 0) {
+        toast.success(successCount === 1 ? 'Message scheduled!' : `${successCount} messages scheduled!`);
+      } else if (successCount > 0 && failCount > 0) {
+        toast.success(`${successCount} scheduled, ${failCount} failed.`);
+      } else {
+        toast.error(errors[0] || 'All scheduled messages failed.');
+        return;
+      }
+
       // Reset form
       setPhone('');
       setMessage('');
@@ -690,19 +792,10 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
       setTimeConfirmed(false);
       setContactName(null);
       setContactExists(false);
-      // setSuggestions([]);
+      setRecipients([]);
       
       // Trigger instant refresh
       onScheduled?.();
-      
-      // Refresh contacts cache if a new contact was resolved
-      if (contactName && fullPhone) {
-        try {
-          await resolveContactLive(fullPhone);
-        } catch (e) {
-          console.log('Contact refresh failed:', e.message);
-        }
-      }
     } catch (err) {
       toast.error(err.response?.data?.error || err.message);
     } finally {
@@ -815,94 +908,167 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
 
       <form onSubmit={handleSubmit} className="p-5 space-y-5">
 
-        {/* ── Recipient ─────────────────────────────────────────────────── */}
+        {/* ── Recipients (multi-chip) ────────────────────────────────────── */}
         <div>
-          <div className="mb-2.5">
+          <div className="mb-2">
             <label htmlFor="scheduler-recipient-input" className="block text-sm font-medium text-gray-700 dark:text-wa-dtext">
-              Recipient Phone Number or Contact Name
+              Recipients
             </label>
+            <p className="text-[11px] text-gray-400 dark:text-wa-dmuted mt-0.5">
+              Up to <strong>5 personal contacts</strong> + <strong>2 groups</strong> at once. Search or type a number, then press <kbd className="px-1 py-0.5 rounded bg-slate-100 dark:bg-wa-dsurf text-[10px] font-mono border border-slate-200 dark:border-wa-dbdr">Enter</kbd> or select from suggestions.
+            </p>
           </div>
-          <div className="flex gap-2">
-            <CountryPicker value={countryCode} onChange={setCountryCode} disabled={phone && phone.endsWith('@g.us')} />
-            <div className="flex-1 relative" ref={formRef}>
-              <input
-                id="scheduler-recipient-input"
-                name="recipient"
-                type="text"
-                value={phone}
-                onFocus={() => setShowSuggestions(true)}
-                onChange={e => {
-                  setPhone(e.target.value);
-                  setShowSuggestions(true);
-                }}
-                placeholder={isMobile ? "Search name or no…" : "Search name or type number…"}
-                required
-                className="w-full border border-slate-200 dark:border-wa-dbdr rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white dark:bg-wa-dsurf text-gray-900 dark:text-wa-dtext focus:outline-none focus:ring-2 focus:ring-wa-teal/40 focus:border-wa-teal md:pr-14 transition-colors"
-              />
-              {phone && (
+
+          {/* Chips area + input */}
+          <div className="border border-slate-200 dark:border-wa-dbdr rounded-xl bg-white dark:bg-wa-dsurf focus-within:ring-2 focus-within:ring-wa-teal/40 focus-within:border-wa-teal transition-all min-h-[48px] px-2.5 py-1.5 flex flex-wrap gap-1.5 items-center">
+            {/* Existing chips - Email capsule style */}
+            {recipients.map(r => (
+              <span
+                key={r.phone}
+                className={`inline-flex items-center gap-2 pl-3 pr-2 py-1 rounded-full text-xs font-medium border shadow-2xs transition-all ${
+                  r.isGroup
+                    ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 border-purple-200/80 dark:border-purple-800/60'
+                    : 'bg-white dark:bg-wa-dpanel text-slate-800 dark:text-slate-100 border-slate-300 dark:border-wa-dbdr'
+                }`}
+              >
+                <span className="text-[11px] opacity-75">{r.isGroup ? '👥' : '👤'}</span>
+                <span className="max-w-[150px] truncate font-semibold">
+                  {r.name || (r.isGroup ? r.phone : `+${r.phone}`)}
+                </span>
                 <button
                   type="button"
-                  onClick={() => {
-                    setPhone('');
-                    setContactName(null);
-                    setContactExists(false);
-                  }}
-                  className={`absolute top-1/2 -translate-y-1/2 btn-close text-xs p-1 ${fetchingName ? 'right-9' : 'right-2'}`}
-                  title="Clear recipient"
+                  onClick={() => removeRecipientChip(r.phone)}
+                  className="w-4 h-4 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/80 dark:hover:bg-slate-700 transition-colors flex-shrink-0 text-[10px]"
+                  title="Remove"
                 >
                   ✕
                 </button>
-              )}
-              {fetchingName && (
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-wa-teal border-t-transparent rounded-full animate-spin" />
-              )}
+              </span>
+            ))}
 
-              {/* Suggestions dropdown */}
-              {showSuggestions && suggestions.length > 0 && (
-                <ul className="absolute left-0 right-0 mt-1 bg-white dark:bg-wa-dpanel border border-gray-200 dark:border-wa-dbdr rounded-xl shadow-xl max-h-52 overflow-y-auto z-50 divide-y divide-gray-100 dark:divide-wa-dbdr/50 custom-scroll">
-                  {suggestions.map((c) => {
-                    const isGroup = c.isGroup || c.is_group || (c.phone && c.phone.endsWith('@g.us')) || (c.jid && c.jid.endsWith('@g.us'));
-                    return (
-                      <li key={c.jid || c.phone || c.name}>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectSuggestion(c)}
-                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-teal-50 dark:hover:bg-wa-dsurf flex flex-col transition-colors"
-                        >
-                          <span className="font-semibold text-gray-800 dark:text-wa-dtext flex items-center gap-1.5">
-                            {isGroup ? '👥 ' : ''}{c.name || (isGroup ? c.phone : `+${c.phone}`)}
-                          </span>
-                          <span className="text-xs text-gray-400 dark:text-wa-dmuted font-mono">
-                            {isGroup ? 'Group' : `+${c.phone}`}
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+            {/* Input field inside the chip area */}
+            <div className="flex gap-1.5 flex-1 min-w-[150px] items-center">
+              <CountryPicker value={countryCode} onChange={setCountryCode} disabled={phone && phone.endsWith('@g.us')} />
+              <div className="flex-1 relative" ref={formRef}>
+                <input
+                  id="scheduler-recipient-input"
+                  name="recipient"
+                  type="text"
+                  value={phone}
+                  onFocus={() => setShowSuggestions(true)}
+                  onChange={e => {
+                    setPhone(e.target.value);
+                    setShowSuggestions(true);
+                  }}
+                  onKeyDown={e => {
+                    if ((e.key === 'Enter' || e.key === ',') && phone.trim()) {
+                      e.preventDefault();
+                      tryAddCurrentInputAsChip();
+                    }
+                    // Backspace on empty input removes last chip
+                    if (e.key === 'Backspace' && !phone && recipients.length > 0) {
+                      setRecipients(prev => prev.slice(0, -1));
+                    }
+                  }}
+                  placeholder={recipients.length === 0 ? (isMobile ? 'Search name or number…' : 'Search name or type number…') : 'Add another…'}
+                  className="w-full bg-transparent text-sm text-gray-900 dark:text-wa-dtext focus:outline-none py-1 pl-1"
+                />
+                {phone && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhone('');
+                      setContactName(null);
+                      setContactExists(false);
+                    }}
+                    className={`absolute top-1/2 -translate-y-1/2 btn-close text-xs p-1 ${fetchingName ? 'right-7' : 'right-0'}`}
+                    title="Clear"
+                  >
+                    ✕
+                  </button>
+                )}
+                {fetchingName && (
+                  <span className="absolute right-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-wa-teal border-t-transparent rounded-full animate-spin" />
+                )}
+
+                {/* Suggestions dropdown */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <ul className="absolute left-0 right-0 mt-1 bg-white dark:bg-wa-dpanel border border-gray-200 dark:border-wa-dbdr rounded-xl shadow-xl max-h-52 overflow-y-auto z-50 divide-y divide-gray-100 dark:divide-wa-dbdr/50 custom-scroll">
+                    {suggestions.map((c) => {
+                      const isGroup = c.isGroup || c.is_group || (c.phone && c.phone.endsWith('@g.us')) || (c.jid && c.jid.endsWith('@g.us'));
+                      const alreadyAdded = recipients.some(r => r.phone === (isGroup ? c.phone : c.phone.replace(/\D/g, '')));
+                      return (
+                        <li key={c.jid || c.phone || c.name}>
+                          <button
+                            type="button"
+                            onClick={() => !alreadyAdded && handleSelectSuggestion(c)}
+                            disabled={alreadyAdded}
+                            className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between transition-colors ${
+                              alreadyAdded ? 'opacity-50 cursor-not-allowed bg-gray-50 dark:bg-wa-dsurf/30' : 'hover:bg-teal-50 dark:hover:bg-wa-dsurf'
+                            }`}
+                          >
+                            <span className="flex flex-col">
+                              <span className="font-semibold text-gray-800 dark:text-wa-dtext flex items-center gap-1.5">
+                                {isGroup ? '👥 ' : '👤 '}{c.name || (isGroup ? c.phone : `+${c.phone}`)}
+                              </span>
+                              <span className="text-xs text-gray-400 dark:text-wa-dmuted font-mono">
+                                {isGroup ? 'Group' : `+${c.phone}`}
+                              </span>
+                            </span>
+                            {alreadyAdded && <span className="text-[10px] text-emerald-500 font-bold">Added ✓</span>}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              {/* Add button when there's text in input */}
+              {phone.trim() && (
+                <button
+                  type="button"
+                  onClick={tryAddCurrentInputAsChip}
+                  className="flex-shrink-0 px-2.5 py-1.5 text-xs font-bold rounded-lg bg-wa-teal/10 text-wa-teal dark:text-wa-green border border-wa-teal/20 hover:bg-wa-teal/20 transition-colors"
+                  title="Add recipient"
+                >
+                  + Add
+                </button>
               )}
             </div>
           </div>
 
-          {/* Preview + contact name */}
-          <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-400 dark:text-wa-dmuted">
-              Full number: <span className="font-mono text-gray-600 dark:text-wa-dtext">+{getFullPhone(countryCode, phone)}</span>
+          {/* Quota bar for recipients */}
+          <div className="mt-2 flex items-center gap-3 flex-wrap">
+            <span className="text-[11px] text-gray-400 dark:text-wa-dmuted flex items-center gap-1">
+              <span className={`font-bold ${personalCount >= MAX_PERSONAL ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`}>{personalCount}/{MAX_PERSONAL}</span> contacts
             </span>
-            {contactExists && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-medium flex items-center gap-1 border border-green-200/50 dark:border-green-900/30">
-                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"/>
-                  </svg>
-                  {contactName || `+${getFullPhone(countryCode, phone)}`}
-                </span>
-                {!contactName && (
-                  <span className="text-xs bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full font-medium border border-green-200/50 dark:border-green-900/30">
-                    ✓ Valid WhatsApp Number
-                  </span>
-                )}
-              </div>
+            <span className="text-gray-200 dark:text-wa-dbdr">·</span>
+            <span className="text-[11px] text-gray-400 dark:text-wa-dmuted flex items-center gap-1">
+              <span className={`font-bold ${groupCount >= MAX_GROUPS ? 'text-rose-500' : 'text-purple-600 dark:text-purple-400'}`}>{groupCount}/{MAX_GROUPS}</span> groups
+            </span>
+            {recipients.length > 0 && (
+              <>
+                <span className="text-gray-200 dark:text-wa-dbdr">·</span>
+                <span className="text-[11px] font-semibold text-slate-600 dark:text-wa-dtext">{recipients.length} recipient{recipients.length !== 1 ? 's' : ''} added</span>
+                <button
+                  type="button"
+                  onClick={() => setRecipients([])}
+                  className="text-[11px] text-rose-500 hover:text-rose-700 font-semibold transition-colors"
+                >
+                  Clear all
+                </button>
+              </>
+            )}
+            {/* Resolved contact name hint */}
+            {contactExists && phone && (
+              <span className="text-xs bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-medium flex items-center gap-1 border border-green-200/50 dark:border-green-900/30">
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"/>
+                </svg>
+                {contactName || `+${getFullPhone(countryCode, phone)}`}
+                {!contactName && ' ✓ Valid'}
+              </span>
             )}
           </div>
         </div>
@@ -1007,9 +1173,9 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
         {/* ── Submit ────────────────────────────────────────────────────── */}
         <button
           type="submit"
-          disabled={loading || !isConnected || !timeConfirmed || (quota && quota.remaining <= 0)}
+          disabled={loading || !isConnected || !timeConfirmed || (quota && quota.remaining <= 0) || (recipients.length === 0 && !phone.trim())}
           className={`w-full font-semibold py-3 rounded-xl text-sm shadow-sm flex items-center justify-center gap-2 transition-colors
-            ${timeConfirmed && isConnected && !(quota && quota.remaining <= 0)
+            ${timeConfirmed && isConnected && !(quota && quota.remaining <= 0) && (recipients.length > 0 || phone.trim())
               ? 'bg-wa-green hover:bg-wa-teal text-white'
               : 'bg-gray-200 dark:bg-wa-dsurf text-gray-400 dark:text-wa-dmuted cursor-not-allowed border dark:border-wa-dbdr'}`}
         >
@@ -1019,8 +1185,10 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
           {loading
             ? 'Scheduling…'
             : (quota && quota.remaining <= 0)
-            ? '🚫 Monthly Limit Reached (50/50)'
-            : '📅  Schedule Message'}
+            ? '🚫 Monthly Limit Reached'
+            : recipients.length > 1
+            ? `📅 Schedule to ${recipients.length} Recipients`
+            : '📅 Schedule Message'}
         </button>
       </form>
       {showImportModal && (
@@ -1051,7 +1219,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
                     {contactsList.all?.length || 0}
                   </span>
                 </h3>
-                <p className="text-[11px] text-emerald-100/90 dark:text-wa-dmuted mt-0.5">Click a contact to fill the scheduler form</p>
+                <p className="text-[11px] text-emerald-100/90 dark:text-wa-dmuted mt-0.5">Click contacts to add them as recipients (up to 5 personal + 2 groups)</p>
               </div>
               <button type="button" onClick={() => setShowDirectory(false)} className="btn-close text-[18px]">
                 ✕
@@ -1273,20 +1441,31 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
                     ? 'Group Sync'
                     : c.source || 'WhatsApp';
                   
+                  const rawTarget = isGroup ? (c.phone || c.jid) : (c.phone || '').replace(/\D/g, '');
+                  const isSelected = recipients.some(r => r.phone === rawTarget);
+
                   return (
                     <button
                       key={c.phone + '-' + c.jid}
                       type="button"
                       onClick={() => handleSelectContactFromDirectory(c)}
-                      className="w-full text-left px-4 py-3.5 hover:bg-emerald-500/5 dark:hover:bg-emerald-500/10 rounded-xl flex items-center justify-between gap-3 transition-colors group border-b border-slate-100/50 dark:border-wa-dbdr/20"
+                      className={`w-full text-left px-4 py-3.5 rounded-xl flex items-center justify-between gap-3 transition-all group border-b ${
+                        isSelected
+                          ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/40'
+                          : 'hover:bg-emerald-500/5 dark:hover:bg-emerald-500/10 border-slate-100/50 dark:border-wa-dbdr/20'
+                      }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         {/* Initial/Avatar */}
-                        <div className="w-10 h-10 rounded-full bg-emerald-500/10 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-sm shrink-0 border border-emerald-500/20">
-                          {hasName ? c.name.charAt(0).toUpperCase() : '#'}
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 border ${
+                          isSelected
+                            ? 'bg-emerald-500 text-white border-emerald-600'
+                            : 'bg-emerald-500/10 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                        }`}>
+                          {isSelected ? '✓' : (hasName ? c.name.charAt(0).toUpperCase() : '#')}
                         </div>
                         <div className="min-w-0">
-                          <p className={`text-sm font-semibold truncate ${hasName ? 'text-gray-800 dark:text-wa-dtext' : 'text-gray-500 dark:text-wa-dmuted font-mono'}`}>
+                          <p className={`text-sm font-semibold truncate ${isSelected ? 'text-emerald-800 dark:text-emerald-300' : hasName ? 'text-gray-800 dark:text-wa-dtext' : 'text-gray-500 dark:text-wa-dmuted font-mono'}`}>
                             {contactNameDisplay}
                           </p>
                           <p className="text-xs text-gray-400 dark:text-wa-dmuted font-mono truncate">
@@ -1298,9 +1477,15 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${badgeCls}`}>
                           {sourceLabel}
                         </span>
-                        <span className="text-[10px] text-wa-teal dark:text-wa-green opacity-0 group-hover:opacity-100 transition-opacity font-semibold flex items-center gap-0.5">
-                          Select ➔
-                        </span>
+                        {isSelected ? (
+                          <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5">
+                            Added ✓
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-wa-teal dark:text-wa-green opacity-0 group-hover:opacity-100 transition-opacity font-semibold flex items-center gap-0.5">
+                            + Add ➔
+                          </span>
+                        )}
                       </div>
                     </button>
                   );
