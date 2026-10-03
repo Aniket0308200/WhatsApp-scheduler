@@ -919,124 +919,125 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
             </p>
           </div>
 
-          {/* Chips area + input */}
-          <div className="border border-slate-200 dark:border-wa-dbdr rounded-xl bg-white dark:bg-wa-dsurf focus-within:ring-2 focus-within:ring-wa-teal/40 focus-within:border-wa-teal transition-all min-h-[48px] px-2.5 py-1.5 flex flex-wrap gap-1.5 items-center">
-            {/* Existing chips - Email capsule style */}
-            {recipients.map(r => (
-              <span
-                key={r.phone}
-                className={`inline-flex items-center gap-2 pl-3 pr-2 py-1 rounded-full text-xs font-medium border shadow-2xs transition-all ${
-                  r.isGroup
-                    ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 border-purple-200/80 dark:border-purple-800/60'
-                    : 'bg-white dark:bg-wa-dpanel text-slate-800 dark:text-slate-100 border-slate-300 dark:border-wa-dbdr'
-                }`}
-              >
-                <span className="text-[11px] opacity-75">{r.isGroup ? '👥' : '👤'}</span>
-                <span className="max-w-[150px] truncate font-semibold">
-                  {r.name || (r.isGroup ? r.phone : `+${r.phone}`)}
-                </span>
+          {/* Input row: country picker + search box — always clean, no chips inside */}
+          <div className="flex gap-1.5 items-center border border-slate-200 dark:border-wa-dbdr rounded-xl bg-white dark:bg-wa-dsurf focus-within:ring-2 focus-within:ring-wa-teal/40 focus-within:border-wa-teal transition-all px-2.5 py-1.5 min-h-[48px]">
+            <CountryPicker value={countryCode} onChange={setCountryCode} disabled={phone && phone.endsWith('@g.us')} />
+            <div className="flex-1 relative" ref={formRef}>
+              <input
+                id="scheduler-recipient-input"
+                name="recipient"
+                type="text"
+                value={phone}
+                onFocus={() => setShowSuggestions(true)}
+                onChange={e => {
+                  setPhone(e.target.value);
+                  setShowSuggestions(true);
+                }}
+                onKeyDown={e => {
+                  if ((e.key === 'Enter' || e.key === ',') && phone.trim()) {
+                    e.preventDefault();
+                    tryAddCurrentInputAsChip();
+                  }
+                  // Backspace on empty input removes last chip
+                  if (e.key === 'Backspace' && !phone && recipients.length > 0) {
+                    setRecipients(prev => prev.slice(0, -1));
+                  }
+                }}
+                placeholder={isMobile ? 'Search name or number…' : 'Search name or type number…'}
+                className="w-full bg-transparent text-sm text-gray-900 dark:text-wa-dtext focus:outline-none py-1 pl-1"
+              />
+              {phone && (
                 <button
                   type="button"
-                  onClick={() => removeRecipientChip(r.phone)}
-                  className="w-4 h-4 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/80 dark:hover:bg-slate-700 transition-colors flex-shrink-0 text-[10px]"
-                  title="Remove"
+                  onClick={() => {
+                    setPhone('');
+                    setContactName(null);
+                    setContactExists(false);
+                  }}
+                  className={`absolute top-1/2 -translate-y-1/2 btn-close text-xs p-1 ${fetchingName ? 'right-7' : 'right-0'}`}
+                  title="Clear"
                 >
                   ✕
                 </button>
-              </span>
-            ))}
+              )}
+              {fetchingName && (
+                <span className="absolute right-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-wa-teal border-t-transparent rounded-full animate-spin" />
+              )}
 
-            {/* Input field inside the chip area */}
-            <div className="flex gap-1.5 flex-1 min-w-[150px] items-center">
-              <CountryPicker value={countryCode} onChange={setCountryCode} disabled={phone && phone.endsWith('@g.us')} />
-              <div className="flex-1 relative" ref={formRef}>
-                <input
-                  id="scheduler-recipient-input"
-                  name="recipient"
-                  type="text"
-                  value={phone}
-                  onFocus={() => setShowSuggestions(true)}
-                  onChange={e => {
-                    setPhone(e.target.value);
-                    setShowSuggestions(true);
-                  }}
-                  onKeyDown={e => {
-                    if ((e.key === 'Enter' || e.key === ',') && phone.trim()) {
-                      e.preventDefault();
-                      tryAddCurrentInputAsChip();
-                    }
-                    // Backspace on empty input removes last chip
-                    if (e.key === 'Backspace' && !phone && recipients.length > 0) {
-                      setRecipients(prev => prev.slice(0, -1));
-                    }
-                  }}
-                  placeholder={recipients.length === 0 ? (isMobile ? 'Search name or number…' : 'Search name or type number…') : 'Add another…'}
-                  className="w-full bg-transparent text-sm text-gray-900 dark:text-wa-dtext focus:outline-none py-1 pl-1"
-                />
-                {phone && (
+              {/* Suggestions dropdown */}
+              {showSuggestions && suggestions.length > 0 && (
+                <ul className="absolute left-0 right-0 mt-1 bg-white dark:bg-wa-dpanel border border-gray-200 dark:border-wa-dbdr rounded-xl shadow-xl max-h-52 overflow-y-auto z-50 divide-y divide-gray-100 dark:divide-wa-dbdr/50 custom-scroll">
+                  {suggestions.map((c) => {
+                    const isGroup = c.isGroup || c.is_group || (c.phone && c.phone.endsWith('@g.us')) || (c.jid && c.jid.endsWith('@g.us'));
+                    const alreadyAdded = recipients.some(r => r.phone === (isGroup ? c.phone : c.phone.replace(/\D/g, '')));
+                    return (
+                      <li key={c.jid || c.phone || c.name}>
+                        <button
+                          type="button"
+                          onClick={() => !alreadyAdded && handleSelectSuggestion(c)}
+                          disabled={alreadyAdded}
+                          className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between transition-colors ${
+                            alreadyAdded ? 'opacity-50 cursor-not-allowed bg-gray-50 dark:bg-wa-dsurf/30' : 'hover:bg-teal-50 dark:hover:bg-wa-dsurf'
+                          }`}
+                        >
+                          <span className="flex flex-col">
+                            <span className="font-semibold text-gray-800 dark:text-wa-dtext flex items-center gap-1.5">
+                              {isGroup ? '👥 ' : '👤 '}{c.name || (isGroup ? c.phone : `+${c.phone}`)}
+                            </span>
+                            <span className="text-xs text-gray-400 dark:text-wa-dmuted font-mono">
+                              {isGroup ? 'Group' : `+${c.phone}`}
+                            </span>
+                          </span>
+                          {alreadyAdded && <span className="text-[10px] text-emerald-500 font-bold">Added ✓</span>}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            {/* Add button when there's text in input */}
+            {phone.trim() && (
+              <button
+                type="button"
+                onClick={tryAddCurrentInputAsChip}
+                className="flex-shrink-0 px-2.5 py-1.5 text-xs font-bold rounded-lg bg-wa-teal/10 text-wa-teal dark:text-wa-green border border-wa-teal/20 hover:bg-wa-teal/20 transition-colors"
+                title="Add recipient"
+              >
+                + Add
+              </button>
+            )}
+          </div>
+
+          {/* Selected recipients chips — shown below the search box */}
+          {recipients.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {recipients.map(r => (
+                <span
+                  key={r.phone}
+                  className={`inline-flex items-center gap-2 pl-3 pr-2 py-1 rounded-full text-xs font-medium border shadow-2xs transition-all ${
+                    r.isGroup
+                      ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 border-purple-200/80 dark:border-purple-800/60'
+                      : 'bg-white dark:bg-wa-dpanel text-slate-800 dark:text-slate-100 border-slate-300 dark:border-wa-dbdr'
+                  }`}
+                >
+                  <span className="text-[11px] opacity-75">{r.isGroup ? '👥' : '👤'}</span>
+                  <span className="max-w-[150px] truncate font-semibold">
+                    {r.name || (r.isGroup ? r.phone : `+${r.phone}`)}
+                  </span>
                   <button
                     type="button"
-                    onClick={() => {
-                      setPhone('');
-                      setContactName(null);
-                      setContactExists(false);
-                    }}
-                    className={`absolute top-1/2 -translate-y-1/2 btn-close text-xs p-1 ${fetchingName ? 'right-7' : 'right-0'}`}
-                    title="Clear"
+                    onClick={() => removeRecipientChip(r.phone)}
+                    className="w-4 h-4 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/80 dark:hover:bg-slate-700 transition-colors flex-shrink-0 text-[10px]"
+                    title="Remove"
                   >
                     ✕
                   </button>
-                )}
-                {fetchingName && (
-                  <span className="absolute right-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-wa-teal border-t-transparent rounded-full animate-spin" />
-                )}
-
-                {/* Suggestions dropdown */}
-                {showSuggestions && suggestions.length > 0 && (
-                  <ul className="absolute left-0 right-0 mt-1 bg-white dark:bg-wa-dpanel border border-gray-200 dark:border-wa-dbdr rounded-xl shadow-xl max-h-52 overflow-y-auto z-50 divide-y divide-gray-100 dark:divide-wa-dbdr/50 custom-scroll">
-                    {suggestions.map((c) => {
-                      const isGroup = c.isGroup || c.is_group || (c.phone && c.phone.endsWith('@g.us')) || (c.jid && c.jid.endsWith('@g.us'));
-                      const alreadyAdded = recipients.some(r => r.phone === (isGroup ? c.phone : c.phone.replace(/\D/g, '')));
-                      return (
-                        <li key={c.jid || c.phone || c.name}>
-                          <button
-                            type="button"
-                            onClick={() => !alreadyAdded && handleSelectSuggestion(c)}
-                            disabled={alreadyAdded}
-                            className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between transition-colors ${
-                              alreadyAdded ? 'opacity-50 cursor-not-allowed bg-gray-50 dark:bg-wa-dsurf/30' : 'hover:bg-teal-50 dark:hover:bg-wa-dsurf'
-                            }`}
-                          >
-                            <span className="flex flex-col">
-                              <span className="font-semibold text-gray-800 dark:text-wa-dtext flex items-center gap-1.5">
-                                {isGroup ? '👥 ' : '👤 '}{c.name || (isGroup ? c.phone : `+${c.phone}`)}
-                              </span>
-                              <span className="text-xs text-gray-400 dark:text-wa-dmuted font-mono">
-                                {isGroup ? 'Group' : `+${c.phone}`}
-                              </span>
-                            </span>
-                            {alreadyAdded && <span className="text-[10px] text-emerald-500 font-bold">Added ✓</span>}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-
-              {/* Add button when there's text in input */}
-              {phone.trim() && (
-                <button
-                  type="button"
-                  onClick={tryAddCurrentInputAsChip}
-                  className="flex-shrink-0 px-2.5 py-1.5 text-xs font-bold rounded-lg bg-wa-teal/10 text-wa-teal dark:text-wa-green border border-wa-teal/20 hover:bg-wa-teal/20 transition-colors"
-                  title="Add recipient"
-                >
-                  + Add
-                </button>
-              )}
+                </span>
+              ))}
             </div>
-          </div>
+          )}
 
           {/* Quota bar for recipients */}
           <div className="mt-2 flex items-center gap-3 flex-wrap">
