@@ -97,7 +97,7 @@ export default function PricingSection({ onGetStarted }) {
                 </div>
                 <div className="flex items-start gap-2.5">
                   <span className="text-emerald-500 font-black shrink-0">✓</span>
-                  <span>Connect 1 Google Account</span>
+                  <span>Sync contacts from <strong>1 Google Account</strong></span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <span className="text-emerald-500 font-black shrink-0">✓</span>
@@ -194,7 +194,7 @@ export default function PricingSection({ onGetStarted }) {
                 </div>
                 <div className="flex items-start gap-2.5">
                   <span className="text-emerald-500 font-black shrink-0">✓</span>
-                  <span>Connect up to 2 Google Accounts</span>
+                  <span>Sync contacts from up to <strong>2 Google Accounts</strong></span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <span className="text-emerald-500 font-black shrink-0">✓</span>
@@ -272,7 +272,7 @@ export default function PricingSection({ onGetStarted }) {
                 </div>
                 <div className="flex items-start gap-2.5">
                   <span className="text-emerald-500 font-black shrink-0">✓</span>
-                  <span>Connect up to 5 Google Accounts</span>
+                  <span>Sync contacts from up to <strong>2 Google Accounts</strong></span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <span className="text-emerald-500 font-black shrink-0">✓</span>
