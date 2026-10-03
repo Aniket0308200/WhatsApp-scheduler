@@ -704,6 +704,33 @@ async function _performInitWhatsApp(sessionId) {
   }
   const version = await getOrFetchBaileysVersion();
 
+  if (!session.messageCache) {
+    session.messageCache = new Map();
+  }
+
+  const getMessage = async (key) => {
+    try {
+      if (!key?.id) return undefined;
+      // 1. In-memory session cache for instant response
+      if (session.messageCache?.has(key.id)) {
+        return session.messageCache.get(key.id);
+      }
+      // 2. Database store lookup
+      const doc = await db.ScheduledMessage.findOne({ waMessageId: key.id }).lean();
+      if (doc) {
+        const text = db.decrypt(doc.encryptedMessageText);
+        if (text) {
+          const msgObj = { conversation: text };
+          session.messageCache.set(key.id, msgObj);
+          return msgObj;
+        }
+      }
+    } catch (e) {
+      console.warn(`[WA] [${sessionId}] getMessage retry failed for ${key?.id}:`, e.message);
+    }
+    return undefined;
+  };
+
   const sock = makeWASocket({
     version,
     logger,
@@ -711,6 +738,7 @@ async function _performInitWhatsApp(sessionId) {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
+    getMessage,
     printQRInTerminal: false,
     browser: Browsers.ubuntu('Chrome'),
     syncFullHistory: false,
@@ -720,7 +748,7 @@ async function _performInitWhatsApp(sessionId) {
     retryRequestDelayMs: 5_000,
     connectTimeoutMs: 60_000,
     defaultQueryTimeoutMs: 60_000,
-    emitOwnEvents: false,
+    emitOwnEvents: true,
   });
 
   session.sock = sock;
@@ -728,16 +756,49 @@ async function _performInitWhatsApp(sessionId) {
   // ── Persist credentials ───────────────────────────────────────────────────
   sock.ev.on('creds.update', saveCreds);
 
+  // ── Delivery & Read receipts ──────────────────────────────────────────────
   sock.ev.on('messages.update', (updates) => {
     for (const { key, update } of updates) {
-      if (!key?.fromMe || !key.id || typeof update?.status !== 'number') continue;
-      const receiptStatus = update.status >= 4 ? 'read' : update.status === 3 ? 'delivered' : null;
+      if (!key?.id) continue;
+      const statusNum = typeof update?.status === 'number' ? update.status : null;
+      // 3 = DELIVERY_ACK, 4 = READ, 5 = PLAYED
+      const receiptStatus = statusNum >= 4 ? 'read' : statusNum === 3 ? 'delivered' : null;
       if (receiptStatus && messageStatusListener) {
         const currentPhone = session.connectedProfile.phone || getPhoneFromSession(sessionId);
         if (currentPhone) {
           Promise.resolve(messageStatusListener(currentPhone, key.id, receiptStatus))
             .catch((err) => console.error(`[WA] [${sessionId}] Receipt persistence error:`, err.message));
         }
+      }
+    }
+  });
+
+  sock.ev.on('message-receipt.update', (receipts) => {
+    for (const { key, receipt } of receipts) {
+      if (!key?.id) continue;
+      const receiptStatus = receipt?.readTimestamp ? 'read' : receipt?.receiptTimestamp ? 'delivered' : null;
+      if (receiptStatus && messageStatusListener) {
+        const currentPhone = session.connectedProfile.phone || getPhoneFromSession(sessionId);
+        if (currentPhone) {
+          Promise.resolve(messageStatusListener(currentPhone, key.id, receiptStatus))
+            .catch((err) => console.error(`[WA] [${sessionId}] Group receipt persistence error:`, err.message));
+        }
+      }
+    }
+  });
+
+  sock.ev.on('messages.upsert', ({ messages: upsertedMessages }) => {
+    if (!session.messageCache) session.messageCache = new Map();
+    for (const msg of upsertedMessages || []) {
+      if (msg.key?.id && msg.message) {
+        session.messageCache.set(msg.key.id, msg.message);
+      }
+    }
+    if (session.messageCache.size > 500) {
+      const overflow = session.messageCache.size - 500;
+      for (let i = 0; i < overflow; i++) {
+        const oldestKey = session.messageCache.keys().next().value;
+        session.messageCache.delete(oldestKey);
       }
     }
   });
@@ -1191,6 +1252,19 @@ async function sendMessage(sessionId, phone, text) {
     const result = await session.sock.sendMessage(jid, { text });
     if (!result?.key?.id) throw new Error('WhatsApp did not return a message id.');
     console.log(`[WA] [${sessionId}] Message submitted to ${jid}; id=${result.key.id}`);
+
+    // Cache message object to instantly answer decryption retry requests from primary phone
+    if (!session.messageCache) session.messageCache = new Map();
+    if (result.message) {
+      session.messageCache.set(result.key.id, result.message);
+    } else {
+      session.messageCache.set(result.key.id, { conversation: text });
+    }
+    if (session.messageCache.size > 500) {
+      const oldestKey = session.messageCache.keys().next().value;
+      session.messageCache.delete(oldestKey);
+    }
+
     return { id: result.key.id, jid };
   } catch (err) {
     console.error(`[WA] [${sessionId}] ✗ Failed to send to ${jid}: ${err.message}`);

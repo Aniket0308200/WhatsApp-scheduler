@@ -46,13 +46,12 @@ async function processAllDueMessages() {
 
         try {
           const result = await whatsapp.sendMessage(sessionId, msg.phone, msg.message);
-          // Set status to 'sent' and save waMessageId
-          await db.updateMessageStatus(sessionId, msg.id, 'sent');
+          // Atomically mark as sent and store WhatsApp message id
           await db.ScheduledMessage.updateOne(
             { _id: msg.id },
-            { $set: { waMessageId: result.id } }
+            { $set: { status: 'sent', waMessageId: result.id, error: null } }
           );
-          console.log(`[Scheduler] [${sessionId}] ✓ #${msg.id} sent to +${msg.phone}`);
+          console.log(`[Scheduler] [${sessionId}] ✓ #${msg.id} sent to +${msg.phone} (waId: ${result.id})`);
         } catch (err) {
           const errMsg = err?.message || String(err) || 'Unknown send error';
           console.error(`[Scheduler] [${sessionId}] ✗ #${msg.id} FAILED: ${errMsg}`);

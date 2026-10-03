@@ -14,7 +14,7 @@ import AuthModal from './components/AuthModal';
 
 const POLL_INTERVAL_DISCONNECTED = 5_000;  // fast poll when waiting for QR/connection
 const POLL_INTERVAL_CONNECTED    = 15_000;  // slow poll when already connected (stable)
-const MSG_POLL_INTERVAL = 20_000;
+const MSG_POLL_INTERVAL = 8_000;
 
 export default function App() {
   const navigate = useNavigate();

@@ -232,6 +232,7 @@ const ScheduledMessageSchema = new mongoose.Schema({
 
 ScheduledMessageSchema.index({ sessionId: 1, scheduledAt: 1 });
 ScheduledMessageSchema.index({ status: 1, scheduledAt: 1 });
+ScheduledMessageSchema.index({ waMessageId: 1 });
 
 const ScheduledMessage = mongoose.model('ScheduledMessage', ScheduledMessageSchema);
 
@@ -449,7 +450,13 @@ async function markMessageSubmitted(sessionId, id, waMessageId) {
 }
 
 async function updateMessageStatusByWhatsAppId(senderPhone, waMessageId, status) {
-  const permitted = status === 'read' ? ['submitted', 'delivered', 'read'] : ['submitted'];
+  if (!waMessageId) return 0;
+  // Valid transitions:
+  // sent / submitted -> delivered
+  // sent / submitted / delivered -> read
+  const permitted = status === 'read'
+    ? ['submitted', 'sent', 'delivered']
+    : ['submitted', 'sent'];
   const res = await ScheduledMessage.updateOne(
     { waMessageId, status: { $in: permitted } },
     { $set: { status } }

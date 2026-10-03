@@ -42,11 +42,11 @@ export default function MessageTable({ messages, loading, onRefresh }) {
     prevCountRef.current = messages.length;
   }, [messages]);
 
-  // Auto-refresh every 15 s when there are pending messages
+  // Auto-refresh every 5s when there are messages that can change status (pending, sent, delivered)
   useEffect(() => {
-    const hasPending = messages.some(m => m.status === 'pending');
-    if (!hasPending) return;
-    const t = setInterval(onRefresh, 15_000);
+    const hasActiveMessages = messages.some(m => ['pending', 'sent', 'delivered'].includes(m.status));
+    if (!hasActiveMessages) return;
+    const t = setInterval(onRefresh, 5_000);
     return () => clearInterval(t);
   }, [messages, onRefresh]);
 
