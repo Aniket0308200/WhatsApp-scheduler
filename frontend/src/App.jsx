@@ -14,7 +14,6 @@ import AuthModal from './components/AuthModal';
 
 const POLL_INTERVAL_DISCONNECTED = 5_000;  // fast poll when waiting for QR/connection
 const POLL_INTERVAL_CONNECTED    = 15_000;  // slow poll when already connected (stable)
-const MSG_POLL_INTERVAL = 8_000;
 
 export default function App() {
   const navigate = useNavigate();
@@ -116,19 +115,17 @@ export default function App() {
     };
     scheduleStatusPoll();
 
-    // Only poll messages & quota if user is authenticated or in app dashboard
-    let t2 = null;
+    // Initial fetch of messages and quota on login or navigating to app
     let t3 = null;
     if (authUser || activeView !== 'landing') {
       refreshMessages();
       refreshQuota();
-      t2 = setInterval(refreshMessages, MSG_POLL_INTERVAL);
-      t3 = setInterval(refreshQuota, MSG_POLL_INTERVAL);
+      // Quota background update every 30s
+      t3 = setInterval(refreshQuota, 30_000);
     }
 
     return () => {
       clearTimeout(statusTimer);
-      if (t2) clearInterval(t2);
       if (t3) clearInterval(t3);
     };
   }, [refreshStatus, refreshMessages, refreshQuota, authUser, activeView]);

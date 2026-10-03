@@ -13,6 +13,18 @@ const STATUS_BADGE = {
   cancelled: { label: '🚫 Cancelled',   cls: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700' },
 };
 
+const RefreshIcon = ({ className = "w-4 h-4", spinning = false }) => (
+  <svg
+    className={`${className} ${spinning ? 'animate-spin' : ''}`}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth={2.2}
+  >
+    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+  </svg>
+);
+
 const FILTERS = ['all', 'pending', 'sent', 'delivered', 'read', 'failed', 'cancelled'];
 
 function formatDate(val) {
@@ -42,13 +54,6 @@ export default function MessageTable({ messages, loading, onRefresh }) {
     prevCountRef.current = messages.length;
   }, [messages]);
 
-  // Auto-refresh every 5s when there are messages that can change status (pending, sent, delivered)
-  useEffect(() => {
-    const hasActiveMessages = messages.some(m => ['pending', 'sent', 'delivered'].includes(m.status));
-    if (!hasActiveMessages) return;
-    const t = setInterval(onRefresh, 5_000);
-    return () => clearInterval(t);
-  }, [messages, onRefresh]);
 
   // Sort messages: newest first (highest ID or timestamp first, so new schedules always appear at the top)
   const sortedMessages = [...messages].sort((a, b) => {
@@ -125,13 +130,11 @@ export default function MessageTable({ messages, loading, onRefresh }) {
         <button
           onClick={onRefresh}
           disabled={loading}
-          className="text-xs text-wa-teal dark:text-wa-green flex items-center gap-1 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200/80 dark:border-wa-dbdr text-xs font-semibold text-slate-700 dark:text-wa-dtext hover:text-emerald-600 dark:hover:text-emerald-400 bg-white dark:bg-wa-dsurf hover:bg-slate-50 dark:hover:bg-wa-dsurf/80 shadow-2xs transition-all disabled:opacity-50"
+          title="Refresh scheduled messages"
         >
-          {loading
-            ? <span className="w-3.5 h-3.5 border-2 border-wa-teal hover:underline  dark:border-wa-green border-t-transparent rounded-full animate-spin" />
-            : <span className="text-base leading-none rotate-90">🗘</span>
-          }
-          Refresh
+          <RefreshIcon className="w-4 h-4" spinning={loading} />
+          <span>Refresh</span>
         </button>
       </div>
 
@@ -258,8 +261,8 @@ export default function MessageTable({ messages, loading, onRefresh }) {
         </div>
       )}
 
-      {/* ── Pagination Controls ─────────────────────────────────────────── */}
-      {!loading && filtered.length > 0 && (
+      {/* ── Pagination Controls (Always stays visible so UI does not jump) ─── */}
+      {filtered.length > 0 && (
         <div className="px-5 py-4 border-t border-gray-150 dark:border-wa-dbdr flex flex-col sm:flex-row items-center justify-between gap-4 bg-gray-50/50 dark:bg-wa-dsurf/10">
           {/* Page size select & current items info */}
           <div className="flex items-center flex-wrap justify-center sm:justify-start gap-2.5 text-xs text-gray-500 dark:text-wa-dmuted">
