@@ -401,7 +401,14 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
   const [manualSyncing,   setManualSyncing]   = useState(false);
   const [directorySearch, setDirectorySearch] = useState('');
   const [directoryTab,    setDirectoryTab]    = useState('all');
-  const [linkedEmails,    setLinkedEmails]    = useState([]);
+  const [linkedEmails,        setLinkedEmails]        = useState([]);
+  const [maxGoogleAccounts,   setMaxGoogleAccounts]   = useState(1);
+
+  // Dynamic plan-based Google account sync limit calculation
+  const planCode = (quota?.plan || '').toLowerCase();
+  const isFreePlan = !planCode || planCode === 'free' || (quota?.planName || '').toLowerCase().includes('free');
+  const allowedGoogleLimit = (planCode === 'starter' || planCode === 'pro') ? 2 : (maxGoogleAccounts || 1);
+  const isGoogleLimitReached = linkedEmails.length >= allowedGoogleLimit;
 
   // Click-outside listener for Settings Dropdown
   useEffect(() => {
@@ -446,6 +453,9 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
     try {
       const data = await fetchLinkedGoogleAccounts();
       setLinkedEmails(data.linkedEmails || []);
+      if (data.maxAccounts) {
+        setMaxGoogleAccounts(data.maxAccounts);
+      }
     } catch (err) {
       console.error('Failed to load linked Google accounts:', err);
     }
@@ -467,14 +477,12 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
   };
 
   const handleGoogleSync = async () => {
-    // Plan-based Google account limit
-    const isFreePlan = !quota || !quota.planName || quota.planName.toLowerCase() === 'free';
-    const maxGoogleAccounts = isFreePlan ? 1 : 2;
-    if (linkedEmails.length >= maxGoogleAccounts) {
+    if (isGoogleLimitReached) {
       if (isFreePlan) {
-        toast.error(`Free plan allows only 1 Google account for contact sync. Upgrade to Starter or Pro for up to 2 accounts.`);
+        toast.error('Free plan allows syncing contacts from 1 Google Account only. Upgrade to Starter or Pro to connect up to 2 accounts.');
+        if (onViewQuota) onViewQuota();
       } else {
-        toast.error(`You\'ve reached the maximum of 2 Google accounts for contact sync.`);
+        toast.error('You have reached the maximum limit of 2 connected Google Accounts.');
       }
       return;
     }
@@ -1274,10 +1282,13 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
                         </button>
                       </span>
                     ))}
+                    <span className="text-[9px] text-gray-400 dark:text-wa-dmuted font-medium ml-1">
+                      ({linkedEmails.length}/{allowedGoogleLimit} linked{isGoogleLimitReached ? ' • Limit reached' : ''})
+                    </span>
                   </div>
                 ) : (
                   <div className="text-[10px] text-gray-400 dark:text-wa-dmuted font-medium italic">
-                    No Gmail linked — sync contacts from Google.
+                    No Gmail linked (Max {allowedGoogleLimit} for {isFreePlan ? 'Free Plan' : 'Pro Plan'}).
                   </div>
                 )}
               </div>
@@ -1295,52 +1306,53 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
 
                 {showSettingsDropdown && (
                   <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-wa-dpanel border border-gray-200 dark:border-wa-dbdr rounded-xl shadow-xl z-50 p-2 space-y-1.5 animate-fade-in">
-                    {(() => {
-                      const isFreePlan = !quota || !quota.planName || quota.planName.toLowerCase() === 'free';
-                      const maxGoogleAccounts = isFreePlan ? 1 : 2;
-                      const limitReached = linkedEmails.length >= maxGoogleAccounts;
-                      return (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowSettingsDropdown(false);
-                            handleGoogleSync();
-                          }}
-                          disabled={limitReached}
-                          className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs font-semibold rounded-lg transition-colors ${
-                            limitReached
-                              ? 'text-gray-400 dark:text-wa-dmuted cursor-not-allowed opacity-60'
-                              : 'text-gray-700 dark:text-wa-dtext hover:bg-slate-50 dark:hover:bg-wa-dsurf'
-                          }`}
-                          title={limitReached ? `Limit reached (${maxGoogleAccounts} account${maxGoogleAccounts > 1 ? 's' : ''} max${isFreePlan ? ' on Free plan' : ''})` : 'Sync Google Contacts'}
-                        >
-                          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                            <path
-                              fill="#EA4335"
-                              d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.355 0 3.39 2.673 1.473 6.564l3.793 3.201z"
-                            />
-                            <path
-                              fill="#4285F4"
-                              d="M23.49 12.275c0-.827-.074-1.624-.21-2.395H12v4.51h6.46c-.279 1.481-1.116 2.733-2.37 3.582l3.69 2.861c2.16-1.993 3.71-4.916 3.71-8.558z"
-                            />
-                            <path
-                              fill="#FBBC05"
-                              d="M5.266 14.235L1.473 17.44C3.39 21.327 7.355 24 12 24c3.055 0 5.782-1.01 7.782-2.736l-3.69-2.861c-1.108.74-2.527 1.182-4.092 1.182-4.136 0-7.627-2.79-8.877-6.545-.078-.235-.138-.477-.184-.725l.027.02z"
-                            />
-                            <path
-                              fill="#34A853"
-                              d="M12 4.909c2.455 0 4.218 1.055 5.164 1.945l3.855-3.855C18.673 1.018 15.655 0 12 0 7.355 0 3.39 2.673 1.473 6.564l3.793 3.201C6.518 6.018 9.073 4.909 12 4.909z"
-                            />
-                          </svg>
-                          Sync Google Contacts
-                          {limitReached && (
-                            <span className="ml-auto text-[9px] font-bold text-amber-500 bg-amber-50 dark:bg-amber-950/30 px-1.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800/40">
-                              {isFreePlan ? 'Upgrade' : 'Max 2'}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })()}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSettingsDropdown(false);
+                        handleGoogleSync();
+                      }}
+                      disabled={isGoogleLimitReached}
+                      className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-xs font-semibold rounded-lg transition-colors ${
+                        isGoogleLimitReached
+                          ? 'text-gray-400 dark:text-wa-dmuted bg-gray-50/70 dark:bg-wa-dsurf/40 cursor-not-allowed opacity-60'
+                          : 'text-gray-700 dark:text-wa-dtext hover:bg-slate-50 dark:hover:bg-wa-dsurf'
+                      }`}
+                      title={
+                        isGoogleLimitReached
+                          ? (isFreePlan
+                              ? 'Free plan allows 1 Google Account. Disconnect current account or upgrade to add another.'
+                              : 'Maximum 2 Google Accounts reached. Disconnect one to add another.')
+                          : 'Sync Google Contacts'
+                      }
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                          <path
+                            fill="#EA4335"
+                            d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.355 0 3.39 2.673 1.473 6.564l3.793 3.201z"
+                          />
+                          <path
+                            fill="#4285F4"
+                            d="M23.49 12.275c0-.827-.074-1.624-.21-2.395H12v4.51h6.46c-.279 1.481-1.116 2.733-2.37 3.582l3.69 2.861c2.16-1.993 3.71-4.916 3.71-8.558z"
+                          />
+                          <path
+                            fill="#FBBC05"
+                            d="M5.266 14.235L1.473 17.44C3.39 21.327 7.355 24 12 24c3.055 0 5.782-1.01 7.782-2.736l-3.69-2.861c-1.108.74-2.527 1.182-4.092 1.182-4.136 0-7.627-2.79-8.877-6.545-.078-.235-.138-.477-.184-.725l.027.02z"
+                          />
+                          <path
+                            fill="#34A853"
+                            d="M12 4.909c2.455 0 4.218 1.055 5.164 1.945l3.855-3.855C18.673 1.018 15.655 0 12 0 7.355 0 3.39 2.673 1.473 6.564l3.793 3.201C6.518 6.018 9.073 4.909 12 4.909z"
+                          />
+                        </svg>
+                        <span className="truncate">Sync Google Contacts</span>
+                      </div>
+                      {isGoogleLimitReached && (
+                        <span className="shrink-0 text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800/40">
+                          {isFreePlan ? '1/1 (Upgrade)' : '2/2 (Max)'}
+                        </span>
+                      )}
+                    </button>
 
                     <button
                       type="button"

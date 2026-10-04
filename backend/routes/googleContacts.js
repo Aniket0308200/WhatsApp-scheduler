@@ -13,13 +13,26 @@ function getOAuth2Client() {
 }
 
 // GET /api/auth/google/url
-router.get('/url', (req, res) => {
-  const sessionId = req.query.sessionId;
+router.get('/url', async (req, res) => {
+  const sessionId = req.query.sessionId || req.sessionId;
   if (!sessionId) {
     return res.status(400).json({ error: 'sessionId query parameter is required.' });
   }
 
   try {
+    // Check linked accounts limit based on plan (Free: 1, Starter/Pro: 2)
+    const quota = await db.getUserMonthlyQuota(sessionId);
+    const plan = (quota && quota.plan) ? quota.plan.toLowerCase() : 'free';
+    const maxAllowed = (plan === 'starter' || plan === 'pro') ? 2 : 1;
+    const count = await db.LinkedGoogleAccount.countDocuments({ sessionId });
+
+    if (count >= maxAllowed) {
+      const msg = maxAllowed === 1
+        ? 'Free plan allows syncing contacts from 1 Google Account only. Upgrade to Starter or Pro to connect up to 2 accounts.'
+        : 'You have reached the maximum limit of 2 connected Google Accounts.';
+      return res.status(403).json({ error: msg, limitReached: true, maxAllowed, currentCount: count });
+    }
+
     const oauth2Client = getOAuth2Client();
     const scopes = [
       'https://www.googleapis.com/auth/contacts.readonly',
@@ -75,19 +88,26 @@ router.get('/callback', async (req, res) => {
       throw new Error('Could not identify user email address.');
     }
 
-    // Check linked accounts limit (max 2 per session)
+    // Check linked accounts limit based on plan (Free: 1, Starter/Pro: 2)
     const encryptedEmail = db.encrypt(email);
     const count = await db.LinkedGoogleAccount.countDocuments({ sessionId });
     const exists = await db.LinkedGoogleAccount.findOne({ sessionId, email: encryptedEmail });
 
-    if (!exists && count >= 2) {
+    const quota = await db.getUserMonthlyQuota(sessionId);
+    const plan = (quota && quota.plan) ? quota.plan.toLowerCase() : 'free';
+    const maxAllowed = (plan === 'starter' || plan === 'pro') ? 2 : 1;
+
+    if (!exists && count >= maxAllowed) {
+      const planMsg = maxAllowed === 1
+        ? 'Free plan allows only 1 Google Account for contact sync. Please upgrade to Starter or Pro to connect 2 accounts.'
+        : 'Maximum 2 linked Google Accounts limit reached.';
       return res.send(`
         <html>
           <body style="font-family: sans-serif; text-align: center; padding: 40px;">
-            <h3 style="color: red;">Link Limit Exceeded</h3>
-            <p>You can link a maximum of 2 Gmail accounts per session.</p>
+            <h3 style="color: #dc2626;">Link Limit Exceeded</h3>
+            <p>${planMsg}</p>
             <script>
-              window.opener.postMessage({ type: 'GOOGLE_SYNC_ERROR', error: 'Maximum 2 linked accounts limit reached' }, '*');
+              window.opener.postMessage({ type: 'GOOGLE_SYNC_ERROR', error: '${planMsg}' }, '*');
               setTimeout(() => window.close(), 4000);
             </script>
           </body>
@@ -239,8 +259,15 @@ router.get('/linked', async (req, res) => {
   }
 
   try {
+    const quota = await db.getUserMonthlyQuota(sessionId);
+    const plan = (quota && quota.plan) ? quota.plan.toLowerCase() : 'free';
+    const maxAccounts = (plan === 'starter' || plan === 'pro') ? 2 : 1;
     const accounts = await db.LinkedGoogleAccount.find({ sessionId }).lean();
-    res.json({ linkedEmails: accounts.map(a => db.decrypt(a.email)) });
+    res.json({
+      linkedEmails: accounts.map(a => db.decrypt(a.email)),
+      maxAccounts,
+      plan
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
