@@ -266,6 +266,12 @@ export default function PaymentModal({
    * 3. Exact Plan Amount: 199 or 499 (detects wrong payments like ₹1)
    * 4. 30-Minute Window & Date check
    */
+  /**
+   * Smart Verification / OCR Check
+   * Dual-pass verification:
+   * Pass 1: Full-screenshot OCR for Recipient, UTR, and Status
+   * Pass 2: Canvas Binarized & Inverted Crop of the amount region with PSM 7 to read dark-mode rupee amount (₹199, ₹499, ₹1, etc.)
+   */
   const handleVerifyProof = async () => {
     if (!isScannerVisible) {
       toast.error('Please click "Show Scanner" first before verifying.');
@@ -295,57 +301,123 @@ export default function PaymentModal({
 
     try {
       const worker = await createWorker('eng');
-      const ret = await worker.recognize(screenshotData);
+
+      // ── PASS 1: Full image recognition (Recipient, UTR, Status) ──
+      const fullRet = await worker.recognize(screenshotData);
+      const rawText = fullRet?.data?.text || '';
+      const upperText = rawText.toUpperCase();
+      console.log('[Pass 1 OCR Text]:', rawText);
+
+      // ── PASS 2: Canvas-based crop + binarization of the amount region ──
+      // In UPI apps (Google Pay/PhonePe) dark mode, the big amount is rendered in bright white in the upper-middle area.
+      // We crop and binarize into crisp black text on pure white background, skipping the ₹ symbol for 100% OCR precision.
+      let detectedAmountText = '';
+      try {
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = screenshotData;
+        });
+
+        const naturalW = img.naturalWidth || img.width;
+        const naturalH = img.naturalHeight || img.height;
+
+        // Crop region for the amount digits (skipping left currency symbol)
+        const cropX = Math.floor(naturalW * 0.38);
+        const cropY = Math.floor(naturalH * 0.20);
+        const cropW = Math.floor(naturalW * 0.45);
+        const cropH = Math.floor(naturalH * 0.16);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = cropW;
+        canvas.height = cropH;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+        const imgData = ctx.getImageData(0, 0, cropW, cropH);
+        const data = imgData.data;
+
+        // Binarize: Invert bright white text to black, everything else to pure white
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          if (r > 160 && g > 160 && b > 160) {
+            // Text -> black
+            data[i] = 0;
+            data[i + 1] = 0;
+            data[i + 2] = 0;
+          } else {
+            // Background -> pure white
+            data[i] = 255;
+            data[i + 1] = 255;
+            data[i + 2] = 255;
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+
+        const processedAmountDataUrl = canvas.toDataURL('image/png');
+
+        await worker.setParameters({
+          tessedit_pageseg_mode: '7'
+        });
+
+        const amountRet = await worker.recognize(processedAmountDataUrl);
+        detectedAmountText = (amountRet?.data?.text || '').trim();
+        console.log('[Pass 2 Amount OCR]:', detectedAmountText);
+      } catch (cropErr) {
+        console.warn('Pass 2 Canvas preprocessing warning:', cropErr.message);
+      }
+
       await worker.terminate();
 
-      const rawText = ret?.data?.text || '';
-      const upperText = rawText.toUpperCase();
-      console.log('[OCR Extracted Text]:', rawText);
-
       const errors = [];
+      const expectedAmount = activePlanInfo.amount; // e.g. 199 or 499
 
       // ── 1. Amount Verification ──
-      const expectedAmount = activePlanInfo.amount; // e.g. 199 or 499
-      // Regex check for amount e.g. "₹199", "₹ 199", "199.00", "199"
-      const amountRegex = new RegExp(`(?:₹|RS\\.?|INR)?\\s*${expectedAmount}(?:\\.00)?\\b`, 'i');
-      const hasCorrectAmount = amountRegex.test(rawText);
+      // Check both raw text and preprocessed amount text
+      const cleanAmountOcr = detectedAmountText.replace(/\D/g, '');
+      const rawHasExpected = rawText.includes(String(expectedAmount)) || cleanAmountOcr === String(expectedAmount);
 
-      // Check if user paid ₹1 or small wrong amount
-      if (!hasCorrectAmount) {
-        // Detect if ₹1, ₹10 or other wrong number exists
-        const oneRupeeMatch = /(?:₹|RS\\.?|INR)?\s*1(?:\.00)?\b/i.test(rawText);
-        if (oneRupeeMatch) {
-          errors.push(`Amount Mismatch: Screenshot shows ₹1 instead of required ₹${expectedAmount} for ${activePlanInfo.name}.`);
+      if (!rawHasExpected) {
+        // Detect actual paid amount
+        const detectedNumber = cleanAmountOcr || (rawText.match(/\b\d{1,4}\b/) ? rawText.match(/\b\d{1,4}\b/)[0] : null);
+        if (detectedNumber && Number(detectedNumber) !== expectedAmount) {
+          errors.push(`Amount Mismatch: Screenshot shows ₹${detectedNumber} instead of required ₹${expectedAmount} for ${activePlanInfo.name}.`);
         } else {
-          errors.push(`Amount Mismatch: Could not verify ₹${expectedAmount} in the screenshot. Please ensure full plan amount was paid.`);
+          errors.push(`Amount Mismatch: Could not verify ₹${expectedAmount} in the screenshot. Please ensure the full ${activePlanInfo.name} amount was paid.`);
         }
       }
 
       // ── 2. Payee / Recipient Name Verification ──
       // Must be paid TO Aniket Vinod Chouhan / Aniket Chouhan / aniketchouhan314
-      // Disallow payments TO other people (e.g. Bhavesh Chouhan, etc.)
+      // Disallow payments TO other people (e.g. Bhavesh Chouhan, Anita Pandey, etc.)
       const isPaidToAniket =
         upperText.includes('TO ANIKET') ||
-        upperText.includes('ANIKET VINOD CHOUHAN') ||
+        upperText.includes('TO: ANIKET') ||
         upperText.includes('ANIKET CHOUHAN') ||
-        upperText.includes('ANIKETCHOUHAN314') ||
         upperText.includes('ANIKET VINOD') ||
-        upperText.includes('ANIKET');
+        upperText.includes('ANIKETCHOUHAN314');
 
-      // Check if it's sent TO someone else (like "To BHAVESH CHOUHAN" or "From: ANIKET")
+      // Check if it was sent to someone else
       const paidToOther =
         upperText.includes('TO BHAVESH') ||
-        upperText.includes('BHAVESH') ||
-        (upperText.includes('FROM: ANIKET') && !upperText.includes('TO: ANIKET') && !upperText.includes('TO ANIKET'));
+        upperText.includes('TO: BHAVESH') ||
+        upperText.includes('TO ANITA') ||
+        upperText.includes('TO: ANITA') ||
+        (upperText.includes('FROM: ANIKET') && !upperText.includes('TO ANIKET') && !upperText.includes('TO: ANIKET'));
 
       if (!isPaidToAniket || paidToOther) {
-        errors.push(`Recipient Mismatch: Payment was not sent to official account (Aniket Vinod Chouhan). Detected recipient does not match.`);
+        // Extract recipient if possible
+        const toMatch = rawText.match(/To:?\s*([A-Za-z ]+)/i);
+        const recipientName = toMatch ? toMatch[1].trim() : 'different account';
+        errors.push(`Recipient Mismatch: Payment was sent to "${recipientName}" instead of official account (Aniket Chouhan).`);
       }
 
       // ── 3. 12-Digit UTR Match Verification ──
-      // Clean non-digits from UTR
       const cleanUtr = utr.trim();
-      const hasUtrMatch = rawText.includes(cleanUtr);
+      const hasUtrMatch = rawText.replace(/\s+/g, '').includes(cleanUtr);
       if (!hasUtrMatch) {
         errors.push(`UTR Mismatch: Entered UTR "${cleanUtr}" was not found in the uploaded screenshot.`);
       }
@@ -362,8 +434,7 @@ export default function PaymentModal({
       }
 
       setOcrExtractedData({
-        rawTextSnippet: rawText.slice(0, 160),
-        amountFound: hasCorrectAmount ? `₹${expectedAmount}` : 'Not Found / Mismatch',
+        amountFound: rawHasExpected ? `₹${expectedAmount}` : (cleanAmountOcr ? `₹${cleanAmountOcr}` : 'Mismatch'),
         utrFound: hasUtrMatch ? cleanUtr : 'Mismatch',
         recipientMatch: isPaidToAniket && !paidToOther ? 'Verified' : 'Mismatch'
       });
@@ -382,7 +453,7 @@ export default function PaymentModal({
       }
     } catch (err) {
       console.error('OCR check error:', err);
-      toast.error('Could not read image clearly. Please upload a higher resolution screenshot.', { id: toastId });
+      toast.error('Could not read image clearly. Please upload a clear screenshot.', { id: toastId });
     } finally {
       setIsCheckingOcr(false);
     }
@@ -474,7 +545,7 @@ export default function PaymentModal({
             className="absolute inset-0 opacity-50 bg-repeat bg-center pointer-events-none"
             style={{
               backgroundImage: "url('/green-bg-wp.jpg')",
-              backgroundSize: '200px',
+              backgroundSize: '400px',
               backgroundRepeat: 'repeat'
             }}
           />
@@ -876,9 +947,9 @@ export default function PaymentModal({
                           alt="Official UPI QR Scanner"
                           className="w-48 sm:w-52 rounded-xl object-contain shadow-xs"
                         />
-                        <div className="absolute top-4 right-4 px-2 py-0.5 rounded-full bg-emerald-600 text-white font-mono font-black text-[10px] shadow-sm">
+                        {/* <div className="absolute top-4 right-4 px-2 py-0.5 rounded-full bg-emerald-600 text-white font-mono font-black text-[10px] shadow-sm hidden">
                           ₹{activePlanInfo.amount} Auto
-                        </div>
+                        </div> */}
                       </div>
                       <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 mt-1.5 uppercase tracking-wide">
                         Verified Official UPI Scanner (₹{activePlanInfo.amount})
