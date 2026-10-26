@@ -70,13 +70,13 @@ export default function PaymentModal({
   const [isScannerVisible, setIsScannerVisible] = useState(false);
   const [scannerActivatedAt, setScannerActivatedAt] = useState(null);
   const [secondsRemaining, setSecondsRemaining] = useState(30 * 60); // 1800 seconds (30 mins)
-  
+
   const [upiConfig, setUpiConfig] = useState({
     upiId: DEFAULT_UPI_ID,
     upiName: DEFAULT_UPI_NAME,
     scannerImageUrl: SCANNER_IMAGE_URL
   });
-  
+
   const [submitting, setSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [submittedData, setSubmittedData] = useState(null);
@@ -271,10 +271,10 @@ export default function PaymentModal({
         <div className="hidden md:flex flex-col justify-between w-5/12 bg-gradient-to-br from-[#0c3328] via-[#075e54] to-[#128c7e] text-white p-7 relative overflow-hidden shrink-0 select-none">
           {/* WhatsApp Pattern Background Image overlay */}
           <div
-            className="absolute inset-0 opacity-40 bg-repeat bg-center pointer-events-none"
+            className="absolute inset-0 opacity-50 bg-repeat bg-center pointer-events-none"
             style={{
               backgroundImage: "url('/green-bg-wp.jpg')",
-              backgroundSize: '360px',
+              backgroundSize: '200px',
               backgroundRepeat: 'repeat'
             }}
           />
@@ -334,10 +334,10 @@ export default function PaymentModal({
                 <span className="text-emerald-300 text-sm">⏱️</span>
                 <span>Active 30-Minute Payment Window Verification</span>
               </div>
-              <div className="flex items-center gap-2 text-[11px] text-emerald-100/90 font-medium">
+              {/* <div className="flex items-center gap-2 text-[11px] text-emerald-100/90 font-medium">
                 <span className="text-emerald-300 text-sm">🔒</span>
                 <span>End-to-End Encrypted Account Mapping</span>
-              </div>
+              </div> */}
             </div>
           </div>
 
@@ -445,7 +445,7 @@ export default function PaymentModal({
           ) : (
             /* ═════════ ACTIVE PAYMENT FORM ═════════ */
             <form onSubmit={handleSubmit} className="space-y-4 py-3">
-              
+
               {/* 1. Plan Selector Dropdown & Quick Toggle Pills */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -464,13 +464,12 @@ export default function PaymentModal({
                     type="button"
                     disabled={isProOwned}
                     onClick={() => setSelectedPlan('starter')}
-                    className={`p-3 rounded-2xl border text-left transition-all relative flex flex-col justify-between ${
-                      selectedPlan === 'starter'
-                        ? 'border-2 border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/30 shadow-sm'
-                        : isProOwned
+                    className={`p-3 rounded-2xl border text-left transition-all relative flex flex-col justify-between ${selectedPlan === 'starter'
+                      ? 'border-2 border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/30 shadow-sm'
+                      : isProOwned
                         ? 'border-slate-200 dark:border-wa-dbdr bg-slate-100 dark:bg-wa-dsurf opacity-50 cursor-not-allowed'
                         : 'border-slate-200 dark:border-wa-dbdr bg-slate-50/60 dark:bg-wa-dsurf/40 hover:border-slate-300'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between w-full">
                       <span className="font-extrabold text-xs text-slate-900 dark:text-white flex items-center gap-1">
@@ -490,11 +489,10 @@ export default function PaymentModal({
                   <button
                     type="button"
                     onClick={() => setSelectedPlan('pro')}
-                    className={`p-3 rounded-2xl border text-left transition-all relative flex flex-col justify-between ${
-                      selectedPlan === 'pro'
-                        ? 'border-2 border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/30 shadow-sm'
-                        : 'border-slate-200 dark:border-wa-dbdr bg-slate-50/60 dark:bg-wa-dsurf/40 hover:border-slate-300'
-                    }`}
+                    className={`p-3 rounded-2xl border text-left transition-all relative flex flex-col justify-between ${selectedPlan === 'pro'
+                      ? 'border-2 border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/30 shadow-sm'
+                      : 'border-slate-200 dark:border-wa-dbdr bg-slate-50/60 dark:bg-wa-dsurf/40 hover:border-slate-300'
+                      }`}
                   >
                     <div className="flex items-center justify-between w-full">
                       <span className="font-extrabold text-xs text-slate-900 dark:text-white flex items-center gap-1">
@@ -532,8 +530,8 @@ export default function PaymentModal({
                         {isProOwned
                           ? '⛔ Starter Plan (Blocked - Pro Already Owned)'
                           : isStarterOwned
-                          ? '⚡ Starter Plan - ₹199 (Currently Active)'
-                          : '⚡ Starter Plan - ₹199 / month'}
+                            ? '⚡ Starter Plan - ₹199 (Currently Active)'
+                            : '⚡ Starter Plan - ₹199 / month'}
                       </option>
 
                       {/* Pro Plan */}
@@ -611,7 +609,7 @@ export default function PaymentModal({
                   </div>
                   <div>
                     <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                      UPI QR Scanner  
+                      UPI QR Scanner
                     </h4>
                     <p className="text-xs text-slate-600 dark:text-wa-dmuted mt-0.5 max-w-sm mx-auto">
                       Click below to reveal the official scanner. Your <strong>30-minute verification timer</strong> will start immediately.
@@ -642,11 +640,10 @@ export default function PaymentModal({
 
                     <div className="flex items-center gap-2 self-start sm:self-auto">
                       <span className="text-[11px] text-slate-500 dark:text-wa-dmuted">Remaining:</span>
-                      <span className={`font-mono text-sm font-black px-2.5 py-0.5 rounded-lg border ${
-                        secondsRemaining > 300
-                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
-                          : 'bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30 animate-pulse'
-                      }`}>
+                      <span className={`font-mono text-sm font-black px-2.5 py-0.5 rounded-lg border ${secondsRemaining > 300
+                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                        : 'bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30 animate-pulse'
+                        }`}>
                         ⏱️ {formatTime(secondsRemaining)}
                       </span>
                     </div>
@@ -713,11 +710,10 @@ export default function PaymentModal({
                       12-Digit UTR / Transaction Reference ID <span className="text-rose-500">*</span>
                     </label>
                     <span
-                      className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                        utr.length === 12
-                          ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                          : 'bg-slate-100 dark:bg-wa-dsurf text-slate-500'
-                      }`}
+                      className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${utr.length === 12
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-slate-100 dark:bg-wa-dsurf text-slate-500'
+                        }`}
                     >
                       {utr.length} / 12 digits
                     </span>
@@ -811,11 +807,10 @@ export default function PaymentModal({
                 <button
                   type="submit"
                   disabled={submitting || utr.length !== 12 || !screenshotData || !isScannerVisible || secondsRemaining <= 0}
-                  className={`w-full py-3.5 px-4 rounded-xl font-extrabold text-sm text-white shadow-lg transition-all duration-200 flex items-center justify-center gap-2 ${
-                    submitting || utr.length !== 12 || !screenshotData || !isScannerVisible || secondsRemaining <= 0
-                      ? 'bg-slate-300 dark:bg-wa-dsurf text-slate-400 dark:text-slate-500 cursor-not-allowed shadow-none'
-                      : 'bg-gradient-to-r from-wa-teal via-emerald-600 to-wa-green hover:from-emerald-600 hover:to-wa-teal shadow-emerald-500/25 active:scale-98 transform hover:-translate-y-0.5'
-                  }`}
+                  className={`w-full py-3.5 px-4 rounded-xl font-extrabold text-sm text-white shadow-lg transition-all duration-200 flex items-center justify-center gap-2 ${submitting || utr.length !== 12 || !screenshotData || !isScannerVisible || secondsRemaining <= 0
+                    ? 'bg-slate-300 dark:bg-wa-dsurf text-slate-400 dark:text-slate-500 cursor-not-allowed shadow-none'
+                    : 'bg-gradient-to-r from-wa-teal via-emerald-600 to-wa-green hover:from-emerald-600 hover:to-wa-teal shadow-emerald-500/25 active:scale-98 transform hover:-translate-y-0.5'
+                    }`}
                 >
                   {submitting ? (
                     <>
