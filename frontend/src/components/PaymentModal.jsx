@@ -3,8 +3,8 @@ import toast from 'react-hot-toast';
 import { fetchSubscriptionConfig, submitSubscriptionPayment } from '../api';
 
 const DEFAULT_UPI_ID = 'aniketchouhan314@okicici';
-const DEFAULT_UPI_NAME = 'Aniket Chouhan';
-const SCANNER_IMAGE_URL = '/aniket-upi-scanner.jpg';
+const DEFAULT_UPI_NAME = 'WA Scheduler';
+const SCANNER_IMAGE_URL = '/upi-qr-scanner.png';
 
 const PLANS = {
   starter: {
@@ -268,16 +268,21 @@ export default function PaymentModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── LEFT HERO BRANDING COLUMN (Desktop Split Banner - Exact Match to Auth/Login) ── */}
-        <div className="hidden md:flex flex-col justify-between w-5/12 bg-gradient-to-br from-wa-dark via-emerald-700 to-teal-800 text-white p-7 relative overflow-hidden shrink-0 select-none">
+        <div className="hidden md:flex flex-col justify-between w-5/12 bg-gradient-to-br from-[#0c3328] via-[#075e54] to-[#128c7e] text-white p-7 relative overflow-hidden shrink-0 select-none">
           {/* WhatsApp Pattern Background Image overlay */}
           <div
-            className="absolute inset-0 opacity-20 bg-cover bg-center pointer-events-none mix-blend-overlay"
-            style={{ backgroundImage: "url('/green-bg-wp.jpg')" }}
+            className="absolute inset-0 opacity-40 bg-repeat bg-center pointer-events-none"
+            style={{
+              backgroundImage: "url('/green-bg-wp.jpg')",
+              backgroundSize: '360px',
+              backgroundRepeat: 'repeat'
+            }}
           />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/35 pointer-events-none" />
 
           {/* Background Ambient Glow Circles */}
-          <div className="absolute -top-10 -left-10 w-44 h-44 bg-emerald-400/20 rounded-full blur-2xl pointer-events-none" />
-          <div className="absolute -bottom-10 -right-10 w-52 h-52 bg-teal-300/20 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute -top-10 -left-10 w-44 h-44 bg-emerald-400/25 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute -bottom-10 -right-10 w-52 h-52 bg-teal-300/25 rounded-full blur-2xl pointer-events-none" />
 
           {/* Top Brand Info */}
           <div className="relative z-10 space-y-6">
@@ -323,7 +328,7 @@ export default function PaymentModal({
             <div className="pt-2 space-y-2 border-t border-white/15">
               <div className="flex items-center gap-2 text-[11px] text-emerald-100/90 font-medium">
                 <span className="text-emerald-300 text-sm">🛡️</span>
-                <span>Direct UPI Payment to Aniket Chouhan</span>
+                <span>100% Direct & Verified UPI Payment</span>
               </div>
               <div className="flex items-center gap-2 text-[11px] text-emerald-100/90 font-medium">
                 <span className="text-emerald-300 text-sm">⏱️</span>
@@ -390,7 +395,7 @@ export default function PaymentModal({
                   Payment Details Received!
                 </h4>
                 <p className="text-xs sm:text-sm text-slate-600 dark:text-wa-dmuted max-w-md mx-auto leading-relaxed">
-                  Your payment to <strong>Aniket Chouhan</strong> was received within the 30-minute window. Your plan will be activated shortly after admin verification.
+                  Your payment was received within the 30-minute window. Your plan will be activated shortly after admin verification.
                 </p>
               </div>
 
@@ -606,7 +611,7 @@ export default function PaymentModal({
                   </div>
                   <div>
                     <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                      UPI QR Scanner (Aniket Chouhan)
+                      UPI QR Scanner  
                     </h4>
                     <p className="text-xs text-slate-600 dark:text-wa-dmuted mt-0.5 max-w-sm mx-auto">
                       Click below to reveal the official scanner. Your <strong>30-minute verification timer</strong> will start immediately.
@@ -621,7 +626,7 @@ export default function PaymentModal({
                     <span>→</span>
                   </button>
                   <span className="text-[10px] text-slate-400 dark:text-wa-dmuted">
-                    Payments made to Aniket Chouhan within 30 mins will unlock the plan
+                    Payments made via official scanner within 30 mins will unlock the plan
                   </span>
                 </div>
               ) : (
@@ -655,18 +660,18 @@ export default function PaymentModal({
                     />
                   </div>
 
-                  {/* Scanner Card with Aniket Chouhan QR */}
+                  {/* Scanner Card with Official QR */}
                   <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
                     <div className="relative shrink-0 flex flex-col items-center">
                       <div className="p-2 bg-white rounded-2xl shadow-lg border border-slate-200 dark:border-transparent max-w-[210px]">
                         <img
                           src={upiConfig.scannerImageUrl}
-                          alt="Aniket Chouhan UPI Scanner"
+                          alt="Official UPI QR Scanner"
                           className="w-48 sm:w-52 rounded-xl object-contain shadow-xs"
                         />
                       </div>
                       <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 mt-1.5 uppercase tracking-wide">
-                        Aniket Chouhan · Google Pay / UPI
+                        Verified Official UPI Scanner
                       </span>
                     </div>
 
@@ -675,7 +680,7 @@ export default function PaymentModal({
                         <span>📱 Scan with Any UPI App</span>
                       </div>
                       <h4 className="text-xs sm:text-sm font-extrabold text-slate-800 dark:text-white">
-                        Pay ₹{activePlanInfo.amount} to Aniket Chouhan
+                        Pay ₹{activePlanInfo.amount} via UPI Scanner
                       </h4>
                       <p className="text-[11px] text-slate-500 dark:text-wa-dmuted leading-relaxed">
                         Open <strong>Google Pay, PhonePe, Paytm, or BHIM</strong>, scan the QR code above, and pay <strong>₹{activePlanInfo.amount}</strong>.
@@ -796,7 +801,7 @@ export default function PaymentModal({
                 <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-800 dark:text-amber-300">
                   <span className="text-sm shrink-0">⚠️</span>
                   <div className="leading-relaxed">
-                    <strong>30-Minute Rule:</strong> Please upload a screenshot of a payment made to Aniket Chouhan within the 30-minute active window. Older or reused screenshots will be rejected.
+                    <strong>30-Minute Rule:</strong> Please upload a screenshot of a payment made via the scanner within the 30-minute active window. Older or reused screenshots will be rejected.
                   </div>
                 </div>
               </div>

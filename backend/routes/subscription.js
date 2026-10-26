@@ -53,19 +53,19 @@ const PLANS_CONFIG = {
 router.get('/config', (req, res) => {
   try {
     const upiId = process.env.UPI_ID || 'aniketchouhan314@okicici';
-    const upiName = process.env.UPI_NAME || 'Aniket Chouhan';
+    const upiName = process.env.UPI_NAME || 'WA Scheduler';
     return res.json({
       success: true,
       upiId,
       upiName,
-      scannerImageUrl: '/aniket-upi-scanner.jpg',
+      scannerImageUrl: '/upi-qr-scanner.png',
       plans: PLANS_CONFIG,
       currency: 'INR',
       supportedCurrencies: [
         { code: 'INR', symbol: '₹', label: 'INR (₹) - Indian Rupee', active: true },
         { code: 'USD', symbol: '$', label: 'USD ($) - Coming Soon (Stripe / PayPal)', active: false }
       ],
-      ruleNotice: 'Please upload a screenshot of a payment made within 30 minutes of activating the scanner to Aniket Chouhan.'
+      ruleNotice: 'Please upload a screenshot of a payment made via the scanner within 30 minutes of activation.'
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
