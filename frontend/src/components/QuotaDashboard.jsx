@@ -134,6 +134,12 @@ export default function QuotaDashboard({ quota, onUpgrade, onRefresh, loading = 
               <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wide border ${planBadge.cls}`}>
                 {planBadge.label}
               </span>
+              {(quota?.planStatus === 'pending' || quota?.pendingSubscription) && (
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wide bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1 animate-pulse">
+                  <span>⏳</span>
+                  <span>Verification Pending</span>
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 dark:text-wa-dmuted mt-0.5">
               Current cycle: <span className="font-semibold text-slate-700 dark:text-slate-300">{monthName}</span>

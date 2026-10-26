@@ -1,7 +1,7 @@
 import React from 'react';
 import QuotaDashboard from './QuotaDashboard';
 
-export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authUser, onOpenAuthModal }) {
+export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authUser, onOpenAuthModal, onUpgradePlan }) {
   const currentPlan = quota?.plan || 'free';
 
   return (
@@ -37,7 +37,7 @@ export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authU
       <QuotaDashboard
         quota={quota}
         loading={loading}
-        onUpgrade={() => onNavigate('landing', 'pricing')}
+        onUpgrade={() => (onUpgradePlan ? onUpgradePlan(currentPlan === 'starter' ? 'pro' : 'starter') : onNavigate('landing', 'pricing'))}
         onRefresh={onRefresh}
       />
 
@@ -111,10 +111,10 @@ export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authU
                 <span className="text-2xl mb-1">🔒</span>
                 <span className="text-xs font-bold text-slate-600 dark:text-wa-dmuted text-center px-4">Upgrade to unlock</span>
                 <button
-                  onClick={() => onNavigate('landing', 'pricing')}
+                  onClick={() => (onUpgradePlan ? onUpgradePlan('starter') : onNavigate('landing', 'pricing'))}
                   className="mt-2 px-4 py-1.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs"
                 >
-                  See Plans →
+                  Upgrade to Starter (₹199) →
                 </button>
               </div>
             )}
@@ -128,7 +128,7 @@ export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authU
                 </span>
               )}
             </div>
-            <div className="text-2xl font-black text-slate-900 dark:text-white my-2">$2 <span className="text-xs font-normal text-slate-500">/ mo</span></div>
+            <div className="text-2xl font-black text-slate-900 dark:text-white my-2">₹199 <span className="text-xs font-normal text-slate-500">/ mo ($2)</span></div>
             <ul className="text-xs space-y-2 text-slate-600 dark:text-wa-dmuted mb-4">
               <li className="flex items-center gap-1.5">
                 <span className="text-emerald-500 font-bold">✓</span>
@@ -149,10 +149,10 @@ export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authU
               </div>
             ) : (
               <button
-                onClick={() => onNavigate('landing', 'pricing')}
+                onClick={() => (onUpgradePlan ? onUpgradePlan('starter') : onNavigate('landing', 'pricing'))}
                 className="w-full py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs"
               >
-                Upgrade to Starter
+                Upgrade to Starter (₹199)
               </button>
             )}
           </div>
@@ -169,10 +169,10 @@ export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authU
                 <span className="text-2xl mb-1">🔒</span>
                 <span className="text-xs font-bold text-slate-600 dark:text-wa-dmuted text-center px-4">Upgrade to unlock</span>
                 <button
-                  onClick={() => onNavigate('landing', 'pricing')}
+                  onClick={() => (onUpgradePlan ? onUpgradePlan('pro') : onNavigate('landing', 'pricing'))}
                   className="mt-2 px-4 py-1.5 text-xs font-bold rounded-xl bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 text-white transition-all shadow-xs"
                 >
-                  See Plans →
+                  Upgrade to Pro (₹499) →
                 </button>
               </div>
             )}
@@ -207,10 +207,10 @@ export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authU
               </div>
             ) : (
               <button
-                onClick={() => onNavigate('landing', 'pricing')}
+                onClick={() => (onUpgradePlan ? onUpgradePlan('pro') : onNavigate('landing', 'pricing'))}
                 className="w-full py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 text-white transition-all shadow-xs"
               >
-                Upgrade to Pro
+                Upgrade to Pro (₹499)
               </button>
             )}
           </div>

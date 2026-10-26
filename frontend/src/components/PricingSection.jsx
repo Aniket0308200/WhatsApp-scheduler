@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function PricingSection({ onGetStarted }) {
+export default function PricingSection({ onGetStarted, onUpgradePlan, currentPlan = 'free' }) {
   const [billingCycle, setBillingCycle] = useState('monthly'); // 'monthly' | 'yearly'
 
   return (
@@ -151,14 +151,17 @@ export default function PricingSection({ onGetStarted }) {
 
               {/* Price */}
               <div className="my-6">
-                <div className="flex items-baseline gap-1">
+                <div className="flex items-baseline gap-1.5">
                   <span className="text-4xl font-extrabold text-slate-900 dark:text-white">
-                    {billingCycle === 'monthly' ? '$2' : '$1.70'}
+                    ₹199
+                  </span>
+                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                    ($2 USD)
                   </span>
                   <span className="text-sm font-semibold text-slate-500 dark:text-wa-dmuted">/ month</span>
                 </div>
                 <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-semibold">
-                  {billingCycle === 'yearly' ? 'Billed annually ($20.40/yr · Save $3.60/yr)' : 'Cancel anytime · Risk-free'}
+                  Instant UPI Activation · Cancel anytime · Risk-free
                 </p>
               </div>
 
@@ -210,10 +213,14 @@ export default function PricingSection({ onGetStarted }) {
             </div>
 
             <button
-              onClick={onGetStarted}
-              className="mt-8 w-full py-3 px-4 rounded-xl font-extrabold text-xs sm:text-sm bg-gradient-to-r from-wa-teal to-emerald-500 hover:from-emerald-600 hover:to-wa-teal text-white shadow-lg shadow-emerald-500/25 active:scale-98 transition-all duration-200 focus:outline-none"
+              onClick={() => (onUpgradePlan ? onUpgradePlan('starter') : onGetStarted())}
+              className={`mt-8 w-full py-3 px-4 rounded-xl font-extrabold text-xs sm:text-sm shadow-lg shadow-emerald-500/25 active:scale-98 transition-all duration-200 focus:outline-none ${
+                currentPlan === 'starter'
+                  ? 'bg-emerald-600 text-white cursor-default'
+                  : 'bg-gradient-to-r from-wa-teal to-emerald-500 hover:from-emerald-600 hover:to-wa-teal text-white'
+              }`}
             >
-              Upgrade to Starter
+              {currentPlan === 'starter' ? '✓ Currently Active Tier' : 'Upgrade to Starter (₹199)'}
             </button>
           </div>
 
@@ -233,14 +240,17 @@ export default function PricingSection({ onGetStarted }) {
 
               {/* Price */}
               <div className="my-6">
-                <div className="flex items-baseline gap-1">
+                <div className="flex items-baseline gap-1.5">
                   <span className="text-4xl font-extrabold text-slate-900 dark:text-white">
-                    {billingCycle === 'monthly' ? '$5' : '$4.20'}
+                    ₹499
+                  </span>
+                  <span className="text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md">
+                    ($5 USD)
                   </span>
                   <span className="text-sm font-semibold text-slate-500 dark:text-wa-dmuted">/ month</span>
                 </div>
                 <p className="text-[11px] text-purple-600 dark:text-purple-400 mt-1 font-semibold">
-                  {billingCycle === 'yearly' ? 'Billed annually ($50.40/yr · Save $9.60/yr)' : 'Full pro suite access'}
+                  Full Pro Suite · Priority Dispatch & 24/7 VIP Support
                 </p>
               </div>
 
@@ -282,10 +292,14 @@ export default function PricingSection({ onGetStarted }) {
             </div>
 
             <button
-              onClick={onGetStarted}
-              className="mt-8 w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-slate-900 dark:bg-wa-dsurf text-white hover:bg-slate-800 dark:hover:bg-wa-dbdr border border-slate-800 dark:border-wa-dbdr transition-all duration-200 focus:outline-none"
+              onClick={() => (onUpgradePlan ? onUpgradePlan('pro') : onGetStarted())}
+              className={`mt-8 w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm border transition-all duration-200 focus:outline-none ${
+                currentPlan === 'pro'
+                  ? 'bg-purple-700 text-white cursor-default border-purple-700'
+                  : 'bg-slate-900 dark:bg-wa-dsurf text-white hover:bg-slate-800 dark:hover:bg-wa-dbdr border-slate-800 dark:border-wa-dbdr'
+              }`}
             >
-              Get Pro Access
+              {currentPlan === 'pro' ? '✓ Currently Active Tier' : 'Get Pro Access (₹499)'}
             </button>
           </div>
 

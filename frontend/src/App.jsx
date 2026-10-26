@@ -11,6 +11,7 @@ import TermsOfService from './components/TermsOfService';
 import toast from 'react-hot-toast';
 import LandingPage from './components/LandingPage';
 import AuthModal from './components/AuthModal';
+import PaymentModal from './components/PaymentModal';
 
 const POLL_INTERVAL_DISCONNECTED = 5_000;  // fast poll when waiting for QR/connection
 const POLL_INTERVAL_CONNECTED    = 15_000;  // slow poll when already connected (stable)
@@ -43,6 +44,15 @@ export default function App() {
     }
   });
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedUpgradePlan, setSelectedUpgradePlan] = useState('starter');
+  const [pendingUpgradePlan, setPendingUpgradePlan] = useState(() => {
+    try {
+      return localStorage.getItem('wa_pending_upgrade_plan');
+    } catch {
+      return null;
+    }
+  });
   const [quota, setQuota] = useState(null);
   const [loadingQuota, setLoadingQuota] = useState(false);
 
@@ -92,8 +102,21 @@ export default function App() {
         localStorage.setItem('wa_auth_user', JSON.stringify(userObj));
         localStorage.setItem('wa_auth_token', token);
         setAuthUser(userObj);
-        setActiveView('app');
-        toast.success(`Welcome, ${userObj.name}! (Verified by Google)`);
+
+        let pending = null;
+        try {
+          pending = localStorage.getItem('wa_pending_upgrade_plan');
+          localStorage.removeItem('wa_pending_upgrade_plan');
+        } catch (e) {}
+
+        if (pending) {
+          setSelectedUpgradePlan(pending);
+          setShowPaymentModal(true);
+          toast.success(`Welcome, ${userObj.name}! Continuing to ${pending === 'pro' ? 'Pro' : 'Starter'} plan checkout…`);
+        } else {
+          setActiveView('app');
+          toast.success(`Welcome, ${userObj.name}! (Verified by Google)`);
+        }
         window.history.replaceState({}, document.title, window.location.pathname);
       } catch (err) {
         console.error('Failed to parse Google login redirect:', err);
@@ -157,9 +180,27 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleUpgradePlan = (planKey = 'starter') => {
+    const targetPlan = planKey === 'pro' ? 'pro' : 'starter';
+    if (!authUser) {
+      // 1. Authentication & Routing Guard
+      try {
+        localStorage.setItem('wa_pending_upgrade_plan', targetPlan);
+      } catch (e) {}
+      setPendingUpgradePlan(targetPlan);
+      setShowAuthModal(true);
+      toast('Please sign in or create an account to upgrade your plan.', { icon: '🔒' });
+      return;
+    }
+
+    setSelectedUpgradePlan(targetPlan);
+    setShowPaymentModal(true);
+  };
+
   const handleAuthLogout = () => {
     localStorage.removeItem('wa_auth_user');
     localStorage.removeItem('wa_auth_token');
+    localStorage.removeItem('wa_pending_upgrade_plan');
     setAuthUser(null);
     setActiveView('landing');
     toast.success('Signed out of account.');
@@ -184,6 +225,8 @@ export default function App() {
           authUser={authUser}
           onOpenAuthModal={() => setShowAuthModal(true)}
           onAuthLogout={handleAuthLogout}
+          onUpgradePlan={handleUpgradePlan}
+          quota={quota}
         />
 
         {/* Spacer to push content below fixed header */}
@@ -202,6 +245,8 @@ export default function App() {
                     isConnected={isConnected}
                     waStatus={waStatus}
                     profile={profile}
+                    onUpgradePlan={handleUpgradePlan}
+                    currentPlan={quota?.plan || 'free'}
                   />
                 ) : activeView === 'quota' ? (
                   <QuotaPage
@@ -211,6 +256,7 @@ export default function App() {
                     onNavigate={handleNavigate}
                     authUser={authUser}
                     onOpenAuthModal={() => setShowAuthModal(true)}
+                    onUpgradePlan={handleUpgradePlan}
                   />
                 ) : (
                   <div className="space-y-6">
@@ -289,9 +335,35 @@ export default function App() {
         onSuccess={(user) => {
           setAuthUser(user);
           setShowAuthModal(false);
-          navigate('/');
-          setActiveView('app');
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+
+          let target = pendingUpgradePlan;
+          try {
+            if (!target) target = localStorage.getItem('wa_pending_upgrade_plan');
+            localStorage.removeItem('wa_pending_upgrade_plan');
+          } catch (e) {}
+          setPendingUpgradePlan(null);
+
+          if (target) {
+            setSelectedUpgradePlan(target);
+            setShowPaymentModal(true);
+            toast.success(`Signed in! Continuing to ${target === 'pro' ? 'Pro' : 'Starter'} plan upgrade…`);
+          } else {
+            navigate('/');
+            setActiveView('app');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        }}
+      />
+
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        initialPlan={selectedUpgradePlan}
+        authUser={authUser}
+        connectedPhone={profile?.phone}
+        currentPlan={quota?.plan || 'free'}
+        onSuccess={() => {
+          refreshQuota();
         }}
       />
     </div>

@@ -4,7 +4,7 @@ import HowItWorksSection from './HowItWorksSection';
 import PricingSection from './PricingSection';
 import FaqSection from './FaqSection';
 
-export default function LandingPage({ onGetStarted, isConnected, waStatus, profile }) {
+export default function LandingPage({ onGetStarted, isConnected, waStatus, profile, onUpgradePlan, currentPlan = 'free' }) {
   return (
     <div className="w-full space-y-12 sm:space-y-16 pb-12">
       
@@ -184,7 +184,7 @@ export default function LandingPage({ onGetStarted, isConnected, waStatus, profi
       <HowItWorksSection onGetStarted={onGetStarted} />
 
       {/* Pricing Plans */}
-      <PricingSection onGetStarted={onGetStarted} />
+      <PricingSection onGetStarted={onGetStarted} onUpgradePlan={onUpgradePlan} currentPlan={currentPlan} />
 
       {/* FAQs */}
       <FaqSection />

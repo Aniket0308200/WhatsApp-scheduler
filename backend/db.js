@@ -110,11 +110,34 @@ const AuthAccountSchema = new mongoose.Schema({
   linkedWhatsAppPhone: { type: String, default: null },
   linkedWhatsAppJid: { type: String, default: null },
   plan: { type: String, enum: ['free', 'starter', 'pro'], default: 'free' },
+  planStatus: { type: String, enum: ['free', 'pending', 'starter', 'pro', 'active'], default: 'free' },
   customMonthlyLimit: { type: Number, default: null },
   createdAt: { type: Date, default: Date.now }
 });
 
 const AuthAccount = mongoose.model('AuthAccount', AuthAccountSchema);
+
+// ─── Subscription & Payment Verification Model (UPI Manual Verification) ─────
+const SubscriptionRequestSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'AuthAccount', required: false },
+  email: { type: String, required: true, lowercase: true, trim: true },
+  phone: { type: String, required: true, trim: true },
+  plan: { type: String, enum: ['starter', 'pro'], required: true },
+  amount: { type: Number, required: true },
+  currency: { type: String, default: 'INR' },
+  utr: { type: String, required: true, trim: true },
+  screenshotUrl: { type: String, required: true }, // Base64 data URI or image URL
+  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  adminNotes: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now },
+  verifiedAt: { type: Date, default: null }
+});
+
+SubscriptionRequestSchema.index({ email: 1, createdAt: -1 });
+SubscriptionRequestSchema.index({ utr: 1 });
+SubscriptionRequestSchema.index({ status: 1 });
+
+const SubscriptionRequest = mongoose.model('SubscriptionRequest', SubscriptionRequestSchema);
 
 async function createAuthAccount({ name, email, password }) {
   const cleanEmail = email.toLowerCase().trim();
@@ -128,7 +151,7 @@ async function createAuthAccount({ name, email, password }) {
     email: cleanEmail,
     passwordHash
   });
-  return { id: account._id.toString(), name: account.name, email: account.email };
+  return { id: account._id.toString(), name: account.name, email: account.email, plan: account.plan, planStatus: account.planStatus || 'free' };
 }
 
 async function findAuthAccountByEmail(email) {
@@ -138,6 +161,104 @@ async function findAuthAccountByEmail(email) {
 function verifyAuthAccountPassword(inputPassword, storedHash) {
   const decrypted = decrypt(storedHash);
   return decrypted === inputPassword;
+}
+
+async function createSubscriptionRequest({ userId, email, phone, plan, amount, currency = 'INR', utr, screenshotUrl }) {
+  const cleanUtr = String(utr || '').trim();
+  const cleanEmail = String(email || '').toLowerCase().trim();
+
+  // Check if this UTR is already in use by any non-rejected request
+  const existingUtr = await SubscriptionRequest.findOne({
+    utr: cleanUtr,
+    status: { $in: ['pending', 'approved'] }
+  });
+
+  if (existingUtr) {
+    throw new Error('This 12-digit UTR has already been submitted. Please check your transaction reference ID.');
+  }
+
+  const subRequest = await SubscriptionRequest.create({
+    userId: userId || null,
+    email: cleanEmail,
+    phone: String(phone || '').trim(),
+    plan,
+    amount,
+    currency: currency || 'INR',
+    utr: cleanUtr,
+    screenshotUrl,
+    status: 'pending'
+  });
+
+  // Update AuthAccount planStatus to 'pending'
+  await AuthAccount.findOneAndUpdate(
+    { email: cleanEmail },
+    { $set: { planStatus: 'pending' } }
+  );
+
+  return subRequest;
+}
+
+async function getSubscriptionRequestsByEmail(email) {
+  return await SubscriptionRequest.find({ email: String(email).toLowerCase().trim() }).sort({ createdAt: -1 });
+}
+
+async function getLatestSubscriptionRequest(email) {
+  return await SubscriptionRequest.findOne({ email: String(email).toLowerCase().trim() }).sort({ createdAt: -1 });
+}
+
+async function getAllSubscriptionRequests(status = null) {
+  const query = status ? { status } : {};
+  return await SubscriptionRequest.find(query).sort({ createdAt: -1 }).limit(100);
+}
+
+async function approveSubscriptionRequest(requestId, adminNotes = '') {
+  const req = await SubscriptionRequest.findById(requestId);
+  if (!req) throw new Error('Subscription request not found');
+
+  req.status = 'approved';
+  req.adminNotes = adminNotes;
+  req.verifiedAt = new Date();
+  await req.save();
+
+  // Upgrade user's plan and set planStatus to the plan ('pro' or 'starter')
+  await AuthAccount.findOneAndUpdate(
+    { email: req.email },
+    {
+      $set: {
+        plan: req.plan,
+        planStatus: req.plan
+      }
+    }
+  );
+
+  return req;
+}
+
+async function rejectSubscriptionRequest(requestId, adminNotes = '') {
+  const req = await SubscriptionRequest.findById(requestId);
+  if (!req) throw new Error('Subscription request not found');
+
+  req.status = 'rejected';
+  req.adminNotes = adminNotes;
+  req.verifiedAt = new Date();
+  await req.save();
+
+  // Check if user has any other pending requests
+  const remainingPending = await SubscriptionRequest.findOne({
+    email: req.email,
+    status: 'pending',
+    _id: { $ne: req._id }
+  });
+
+  if (!remainingPending) {
+    const user = await AuthAccount.findOne({ email: req.email });
+    await AuthAccount.findOneAndUpdate(
+      { email: req.email },
+      { $set: { planStatus: user?.plan || 'free' } }
+    );
+  }
+
+  return req;
 }
 
 // ─── Feedback Model ──────────────────────────────────────────────────────────
@@ -325,8 +446,23 @@ async function getUserMonthlyQuota(sessionId) {
   const monthName = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
   const resetsOnFormatted = nextMonthReset.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 
+  const planStatus = userAccount?.planStatus || (plan === 'free' ? 'free' : plan);
+  let pendingSubscription = null;
+  if (userAccount?.email) {
+    pendingSubscription = await SubscriptionRequest.findOne({ email: userAccount.email, status: 'pending' }).lean();
+  }
+
   return {
     plan,
+    planStatus,
+    pendingSubscription: pendingSubscription ? {
+      id: pendingSubscription._id,
+      plan: pendingSubscription.plan,
+      amount: pendingSubscription.amount,
+      utr: pendingSubscription.utr,
+      createdAt: pendingSubscription.createdAt,
+      status: pendingSubscription.status
+    } : null,
     planName: plan === 'starter' ? 'Starter Plan' : (plan === 'pro' ? 'Pro Plan' : 'Free Plan'),
     monthlyLimit: limit,
     used,
@@ -517,4 +653,11 @@ module.exports = {
   PLAN_LIMITS,
   getUserMonthlyQuota,
   updateUserPlan,
+  SubscriptionRequest,
+  createSubscriptionRequest,
+  getSubscriptionRequestsByEmail,
+  getLatestSubscriptionRequest,
+  getAllSubscriptionRequests,
+  approveSubscriptionRequest,
+  rejectSubscriptionRequest,
 };

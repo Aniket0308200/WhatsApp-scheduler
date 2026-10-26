@@ -27,7 +27,8 @@ const app  = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 function toVerifiedContact(document) {
   const jid = document.jid;
@@ -86,7 +87,8 @@ app.use((req, res, next) => {
       req.path === '/api/status' ||
       req.path === '/api/health' ||
       req.path.startsWith('/api/auth/google') ||
-      req.path.startsWith('/api/auth/google-login')
+      req.path.startsWith('/api/auth/google-login') ||
+      req.path.startsWith('/api/subscription')
     ) {
       return next();
     }
@@ -95,6 +97,10 @@ app.use((req, res, next) => {
   req.sessionId = sessionId; 
   next();
 });
+
+// ─── Subscription & Payment Verification Routes ───────────────────────────────
+const subscriptionRouter = require('./routes/subscription');
+app.use('/api/subscription', subscriptionRouter);
 
 // ─── Google OAuth & Contacts Sync Routes ──────────────────────────────────────
 const googleContactsRouter = require('./routes/googleContacts');
@@ -156,7 +162,13 @@ app.post('/api/auth/login', async (req, res) => {
     if (!isValid) {
       return res.status(400).json({ error: 'Incorrect password. Please try again.' });
     }
-    const user = { id: account._id.toString(), name: account.name, email: account.email };
+    const user = {
+      id: account._id.toString(),
+      name: account.name,
+      email: account.email,
+      plan: account.plan || 'free',
+      planStatus: account.planStatus || (account.plan || 'free')
+    };
     const token = db.encrypt(JSON.stringify({ id: user.id, email: user.email, timestamp: Date.now() }));
     return res.json({ success: true, user, token });
   } catch (err) {
@@ -262,7 +274,13 @@ app.get('/api/auth/me', async (req, res) => {
       return res.status(401).json({ error: 'Account not found' });
     }
     return res.json({
-      user: { id: account._id.toString(), name: account.name, email: account.email, plan: account.plan || 'free' }
+      user: {
+        id: account._id.toString(),
+        name: account.name,
+        email: account.email,
+        plan: account.plan || 'free',
+        planStatus: account.planStatus || (account.plan || 'free')
+      }
     });
   } catch (err) {
     return res.status(401).json({ error: 'Session expired or invalid.' });

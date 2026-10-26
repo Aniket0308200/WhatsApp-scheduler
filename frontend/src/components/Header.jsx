@@ -50,7 +50,7 @@ const HamburgerIcon = ({ isOpen }) => (
   </svg>
 );
 
-export default function Header({ status, profile, onLogout, isSyncing, activeView, onNavigate, onGetStarted, authUser, onOpenAuthModal, onAuthLogout }) {
+export default function Header({ status, profile, onLogout, isSyncing, activeView, onNavigate, onGetStarted, authUser, onOpenAuthModal, onAuthLogout, onUpgradePlan, quota }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [syncTimerExceeded, setSyncTimerExceeded] = React.useState(false);
   const [editing, setEditing] = useState(false);
@@ -370,11 +370,40 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
                           <div className="text-[10px] text-slate-500 dark:text-wa-dmuted truncate">
                             {authUser.email}
                           </div>
-                          <div className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-wa-green mt-0.5">
-                            <span>✓</span> Verified Account
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.2 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                              {(quota?.plan || authUser.plan || 'free').toUpperCase()} PLAN
+                            </span>
+                            {(quota?.planStatus === 'pending' || quota?.pendingSubscription) && (
+                              <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
+                                ⏳ Pending
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
+
+                      {/* Upgrade Plan Action */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          if (onUpgradePlan) {
+                            onUpgradePlan(quota?.plan === 'starter' ? 'pro' : 'starter');
+                          } else {
+                            handleNavClick('landing', 'pricing');
+                          }
+                        }}
+                        className="w-full px-3 py-2 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/15 transition-colors flex items-center justify-between group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="group-hover:scale-110 transition-transform">⚡</span>
+                          <span>Upgrade / Manage Plan</span>
+                        </div>
+                        <span className="text-[10px] bg-emerald-600 text-white font-black px-1.5 py-0.5 rounded-full">
+                          UPI
+                        </span>
+                      </button>
 
                       <div className="border-t border-slate-100 dark:border-wa-dbdr/60 my-1" />
 

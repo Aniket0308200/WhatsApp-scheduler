@@ -108,3 +108,14 @@ export const fetchPersonalFeedback = ()        => api.get('/feedback/personal').
 export const submitFeedback        = (payload) => api.post('/feedback', payload).then(r => r.data);
 export const toggleFeedbackLike    = (id)      => api.post(`/feedback/${id}/like`).then(r => r.data);
 export const submitAdminReply      = (id, reply) => api.post(`/feedback/${id}/admin-reply`, { reply }).then(r => r.data);
+
+// ─── Subscription & UPI Manual Verification ──────────────────────────────────
+export const fetchSubscriptionConfig = () =>
+  api.get('/subscription/config').then(r => r.data);
+
+export const submitSubscriptionPayment = (payload) =>
+  api.post('/subscription/submit', payload).then(r => r.data);
+
+export const fetchSubscriptionStatus = (email) =>
+  api.get(`/subscription/status${email ? `?email=${encodeURIComponent(email)}` : ''}`).then(r => r.data);
+
