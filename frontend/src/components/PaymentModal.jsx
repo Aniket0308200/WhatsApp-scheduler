@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
+import { createWorker } from 'tesseract.js';
+import QRCode from 'qrcode';
 import { fetchSubscriptionConfig, submitSubscriptionPayment } from '../api';
 
 const DEFAULT_UPI_ID = 'aniketchouhan314@okicici';
@@ -80,8 +82,38 @@ export default function PaymentModal({
   const [submitting, setSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [submittedData, setSubmittedData] = useState(null);
+  const [isPlanActivated, setIsPlanActivated] = useState(false);
+
+  // Dynamic QR Code data URL based on exact amount and UPI ID
+  const [dynamicQrUrl, setDynamicQrUrl] = useState(null);
+
+  // Verification & OCR states
+  const [isCheckingOcr, setIsCheckingOcr] = useState(false);
+  const [ocrVerified, setOcrVerified] = useState(false);
+  const [ocrErrors, setOcrErrors] = useState([]);
+  const [ocrExtractedData, setOcrExtractedData] = useState(null);
 
   const fileInputRef = useRef(null);
+
+  // Generate dynamic QR code whenever selectedPlan or upiConfig changes
+  useEffect(() => {
+    const planInfo = PLANS[selectedPlan] || PLANS.starter;
+    const upiId = upiConfig.upiId || DEFAULT_UPI_ID;
+    const payeeName = 'Aniket Vinod Chouhan';
+    // Standard NPCI UPI URI with embedded fixed amount
+    const upiUri = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${planInfo.amount}&cu=INR&tn=${encodeURIComponent(`WA Scheduler ${planInfo.name}`)}`;
+    
+    QRCode.toDataURL(upiUri, {
+      width: 320,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#ffffff'
+      }
+    })
+      .then((url) => setDynamicQrUrl(url))
+      .catch(() => setDynamicQrUrl(null));
+  }, [selectedPlan, upiConfig.upiId]);
 
   // Sync initial plan and user details when opened
   useEffect(() => {
@@ -97,6 +129,7 @@ export default function PaymentModal({
         setPhone(cleanPhone.startsWith('+') ? cleanPhone : `+${cleanPhone}`);
       }
       setIsSuccess(false);
+      setIsPlanActivated(false);
       setSubmittedData(null);
       setUtr('');
       setScreenshotData(null);
@@ -105,8 +138,38 @@ export default function PaymentModal({
       setIsScannerVisible(false);
       setScannerActivatedAt(null);
       setSecondsRemaining(30 * 60);
+      setOcrVerified(false);
+      setOcrErrors([]);
+      setOcrExtractedData(null);
     }
   }, [isOpen, initialPlan, authUser, connectedPhone]);
+
+  // Reset verification state if user changes plan, UTR, or uploads new screenshot
+  const resetVerificationState = () => {
+    setOcrVerified(false);
+    setOcrErrors([]);
+    setOcrExtractedData(null);
+  };
+
+  // 10-Second Auto-Activation: Shows Done & Unlocks Plan automatically
+  useEffect(() => {
+    let autoTimer = null;
+    if (isSuccess && !isPlanActivated) {
+      autoTimer = setTimeout(() => {
+        setIsPlanActivated(true);
+        toast.success(`🎉 Plan Done & Activated! Your ${activePlanInfo.name} is now ACTIVE!`, { duration: 6000 });
+        
+        // Auto-close and refresh after showing Done status for 2.5 seconds
+        setTimeout(() => {
+          onClose?.();
+          window.location.reload();
+        }, 2500);
+      }, 10000); // 10 seconds exactly
+    }
+    return () => {
+      if (autoTimer) clearTimeout(autoTimer);
+    };
+  }, [isSuccess, isPlanActivated]);
 
   // Load backend UPI config
   useEffect(() => {
@@ -166,6 +229,7 @@ export default function PaymentModal({
   const handleUtrChange = (e) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 12);
     setUtr(value);
+    resetVerificationState();
   };
 
   // Handle Screenshot file upload
@@ -189,8 +253,139 @@ export default function PaymentModal({
       setScreenshotData(event.target?.result);
       setScreenshotName(file.name);
       setScreenshotSize((file.size / 1024).toFixed(1) + ' KB');
+      resetVerificationState();
     };
     reader.readAsDataURL(file);
+  };
+
+  /**
+   * Smart Verification / OCR Check
+   * Runs Tesseract OCR on the uploaded screenshot and checks:
+   * 1. 12-Digit UTR matching
+   * 2. Recipient Name: 'ANIKET' or 'ANIKET VINOD CHOUHAN'
+   * 3. Exact Plan Amount: 199 or 499 (detects wrong payments like ₹1)
+   * 4. 30-Minute Window & Date check
+   */
+  const handleVerifyProof = async () => {
+    if (!isScannerVisible) {
+      toast.error('Please click "Show Scanner" first before verifying.');
+      return;
+    }
+
+    if (secondsRemaining <= 0) {
+      toast.error('The 30-minute scanner window has expired. Please restart scanner.');
+      return;
+    }
+
+    if (!utr || utr.length !== 12) {
+      toast.error('Please enter the complete 12-digit UTR ID first.');
+      return;
+    }
+
+    if (!screenshotData) {
+      toast.error('Please upload your payment screenshot first.');
+      return;
+    }
+
+    setIsCheckingOcr(true);
+    setOcrErrors([]);
+    setOcrVerified(false);
+
+    const toastId = toast.loading('🔍 Scanning payment screenshot via AI OCR… Please wait.');
+
+    try {
+      const worker = await createWorker('eng');
+      const ret = await worker.recognize(screenshotData);
+      await worker.terminate();
+
+      const rawText = ret?.data?.text || '';
+      const upperText = rawText.toUpperCase();
+      console.log('[OCR Extracted Text]:', rawText);
+
+      const errors = [];
+
+      // ── 1. Amount Verification ──
+      const expectedAmount = activePlanInfo.amount; // e.g. 199 or 499
+      // Regex check for amount e.g. "₹199", "₹ 199", "199.00", "199"
+      const amountRegex = new RegExp(`(?:₹|RS\\.?|INR)?\\s*${expectedAmount}(?:\\.00)?\\b`, 'i');
+      const hasCorrectAmount = amountRegex.test(rawText);
+
+      // Check if user paid ₹1 or small wrong amount
+      if (!hasCorrectAmount) {
+        // Detect if ₹1, ₹10 or other wrong number exists
+        const oneRupeeMatch = /(?:₹|RS\\.?|INR)?\s*1(?:\.00)?\b/i.test(rawText);
+        if (oneRupeeMatch) {
+          errors.push(`Amount Mismatch: Screenshot shows ₹1 instead of required ₹${expectedAmount} for ${activePlanInfo.name}.`);
+        } else {
+          errors.push(`Amount Mismatch: Could not verify ₹${expectedAmount} in the screenshot. Please ensure full plan amount was paid.`);
+        }
+      }
+
+      // ── 2. Payee / Recipient Name Verification ──
+      // Must be paid TO Aniket Vinod Chouhan / Aniket Chouhan / aniketchouhan314
+      // Disallow payments TO other people (e.g. Bhavesh Chouhan, etc.)
+      const isPaidToAniket =
+        upperText.includes('TO ANIKET') ||
+        upperText.includes('ANIKET VINOD CHOUHAN') ||
+        upperText.includes('ANIKET CHOUHAN') ||
+        upperText.includes('ANIKETCHOUHAN314') ||
+        upperText.includes('ANIKET VINOD') ||
+        upperText.includes('ANIKET');
+
+      // Check if it's sent TO someone else (like "To BHAVESH CHOUHAN" or "From: ANIKET")
+      const paidToOther =
+        upperText.includes('TO BHAVESH') ||
+        upperText.includes('BHAVESH') ||
+        (upperText.includes('FROM: ANIKET') && !upperText.includes('TO: ANIKET') && !upperText.includes('TO ANIKET'));
+
+      if (!isPaidToAniket || paidToOther) {
+        errors.push(`Recipient Mismatch: Payment was not sent to official account (Aniket Vinod Chouhan). Detected recipient does not match.`);
+      }
+
+      // ── 3. 12-Digit UTR Match Verification ──
+      // Clean non-digits from UTR
+      const cleanUtr = utr.trim();
+      const hasUtrMatch = rawText.includes(cleanUtr);
+      if (!hasUtrMatch) {
+        errors.push(`UTR Mismatch: Entered UTR "${cleanUtr}" was not found in the uploaded screenshot.`);
+      }
+
+      // ── 4. Status Check ──
+      const isCompleted =
+        upperText.includes('COMPLETED') ||
+        upperText.includes('SUCCESS') ||
+        upperText.includes('SUCCESSFUL') ||
+        upperText.includes('PAID');
+
+      if (!isCompleted) {
+        errors.push(`Transaction Status: Screenshot does not confirm a 'Completed' or 'Successful' transaction.`);
+      }
+
+      setOcrExtractedData({
+        rawTextSnippet: rawText.slice(0, 160),
+        amountFound: hasCorrectAmount ? `₹${expectedAmount}` : 'Not Found / Mismatch',
+        utrFound: hasUtrMatch ? cleanUtr : 'Mismatch',
+        recipientMatch: isPaidToAniket && !paidToOther ? 'Verified' : 'Mismatch'
+      });
+
+      if (errors.length > 0) {
+        setOcrErrors(errors);
+        setOcrVerified(false);
+        toast.error(`Verification Failed! ${errors[0]}`, { id: toastId, duration: 6000 });
+      } else {
+        setOcrErrors([]);
+        setOcrVerified(true);
+        toast.success(`✓ Payment Screenshot 100% Verified! Amount (₹${expectedAmount}), UTR, and Recipient match.`, {
+          id: toastId,
+          duration: 5000
+        });
+      }
+    } catch (err) {
+      console.error('OCR check error:', err);
+      toast.error('Could not read image clearly. Please upload a higher resolution screenshot.', { id: toastId });
+    } finally {
+      setIsCheckingOcr(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -223,6 +418,11 @@ export default function PaymentModal({
 
     if (!screenshotData) {
       toast.error('Please upload a screenshot of your successful UPI transaction.');
+      return;
+    }
+
+    if (!ocrVerified) {
+      toast.error('Please click "Check Payment Proof" first to verify your screenshot and UTR.');
       return;
     }
 
@@ -385,17 +585,27 @@ export default function PaymentModal({
           {isSuccess && submittedData ? (
             <div className="py-6 space-y-6 animate-fade-in">
               <div className="text-center space-y-3">
-                <div className="w-16 h-16 rounded-full bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-3xl mx-auto shadow-inner border border-emerald-500/30 animate-bounce">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl mx-auto shadow-inner border transition-all duration-300 ${
+                  isPlanActivated
+                    ? 'bg-emerald-500 text-white border-emerald-400 scale-105'
+                    : 'bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 animate-bounce'
+                }`}>
                   ✓
                 </div>
-                <div className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30">
-                  ⏳ Verification In Progress
+                <div className={`inline-block px-3 py-1 rounded-full text-xs font-bold border transition-colors ${
+                  isPlanActivated
+                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
+                    : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30'
+                }`}>
+                  {isPlanActivated ? '🎉 Plan Activated (Done)' : '⏳ Verification In Progress'}
                 </div>
                 <h4 className="text-xl font-black text-slate-900 dark:text-white">
-                  Payment Details Received!
+                  {isPlanActivated ? 'Plan Activated Successfully!' : 'Payment Details Received!'}
                 </h4>
                 <p className="text-xs sm:text-sm text-slate-600 dark:text-wa-dmuted max-w-md mx-auto leading-relaxed">
-                  Your payment was received within the 30-minute window. Your plan will be activated shortly after admin verification.
+                  {isPlanActivated
+                    ? `Your ${submittedData.planName} is now active and unlocked! Closing window…`
+                    : 'Your payment was received within the 30-minute window. Your plan will be activated shortly after verification.'}
                 </p>
               </div>
 
@@ -423,11 +633,11 @@ export default function PaymentModal({
                 </div>
               </div>
 
-              {/* 30-Minute Tolerance Note */}
-              <div className="flex items-start gap-2.5 p-3.5 bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 rounded-xl text-xs text-blue-900 dark:text-blue-200">
+              {/* Notice Box matching exact user screenshot text */}
+              <div className="flex items-start gap-2.5 p-3.5 bg-amber-500/10 dark:bg-amber-950/20 border border-amber-500/30 rounded-xl text-xs text-amber-900 dark:text-amber-200">
                 <span className="text-base shrink-0">💡</span>
                 <p className="leading-relaxed">
-                  Our system cross-references your 12-digit UTR and payment screenshot against bank records. Verification typically takes <strong>5–15 minutes</strong>.
+                  Our system cross-references your 12-digit UTR and payment screenshot against bank records. Verification typically takes <strong>1–5 minutes</strong>.
                 </p>
               </div>
 
@@ -438,7 +648,7 @@ export default function PaymentModal({
                   onClick={onClose}
                   className="w-full py-3.5 px-4 rounded-xl font-extrabold text-sm text-white bg-gradient-to-r from-wa-teal via-emerald-600 to-wa-green hover:from-emerald-600 hover:to-wa-teal shadow-lg shadow-emerald-500/20 transition-all duration-200 transform hover:scale-[1.01] focus:outline-none"
                 >
-                  Close & Continue Using App →
+                  {isPlanActivated ? '✓ Plan Active — Continue Using App' : 'Close & Continue Using App →'}
                 </button>
               </div>
             </div>
@@ -657,30 +867,33 @@ export default function PaymentModal({
                     />
                   </div>
 
-                  {/* Scanner Card with Official QR */}
+                  {/* Scanner Card with Official QR & Auto Embedded Amount */}
                   <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
                     <div className="relative shrink-0 flex flex-col items-center">
-                      <div className="p-2 bg-white rounded-2xl shadow-lg border border-slate-200 dark:border-transparent max-w-[210px]">
+                      <div className="p-2.5 bg-white rounded-2xl shadow-lg border border-slate-200 dark:border-transparent max-w-[210px] relative group">
                         <img
-                          src={upiConfig.scannerImageUrl}
+                          src={dynamicQrUrl || upiConfig.scannerImageUrl}
                           alt="Official UPI QR Scanner"
                           className="w-48 sm:w-52 rounded-xl object-contain shadow-xs"
                         />
+                        <div className="absolute top-4 right-4 px-2 py-0.5 rounded-full bg-emerald-600 text-white font-mono font-black text-[10px] shadow-sm">
+                          ₹{activePlanInfo.amount} Auto
+                        </div>
                       </div>
                       <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 mt-1.5 uppercase tracking-wide">
-                        Verified Official UPI Scanner
+                        Verified Official UPI Scanner (₹{activePlanInfo.amount})
                       </span>
                     </div>
 
                     <div className="flex-1 space-y-2 text-center sm:text-left">
                       <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                        <span>📱 Scan with Any UPI App</span>
+                        <span>📱 Auto-Priced UPI Scanner</span>
                       </div>
                       <h4 className="text-xs sm:text-sm font-extrabold text-slate-800 dark:text-white">
-                        Pay ₹{activePlanInfo.amount} via UPI Scanner
+                        Pay ₹{activePlanInfo.amount} via Any UPI App
                       </h4>
                       <p className="text-[11px] text-slate-500 dark:text-wa-dmuted leading-relaxed">
-                        Open <strong>Google Pay, PhonePe, Paytm, or BHIM</strong>, scan the QR code above, and pay <strong>₹{activePlanInfo.amount}</strong>.
+                        Scan with <strong>Google Pay, PhonePe, Paytm, or BHIM</strong>. The exact amount (<strong>₹{activePlanInfo.amount}</strong>) will open automatically in your UPI app—just enter UPI PIN to pay!
                       </p>
 
                       <div className="text-[10px] text-slate-500 dark:text-wa-dmuted bg-white/80 dark:bg-wa-dpanel/80 p-2 rounded-xl border border-slate-200/80 dark:border-wa-dbdr/60">
@@ -800,17 +1013,71 @@ export default function PaymentModal({
                     <strong>30-Minute Rule:</strong> Please upload a screenshot of a payment made via the scanner within the 30-minute active window. Older or reused screenshots will be rejected.
                   </div>
                 </div>
+
+                {/* ── Check Payment Proof Button ── */}
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={handleVerifyProof}
+                    disabled={isCheckingOcr || !screenshotData || utr.length !== 12 || !isScannerVisible || secondsRemaining <= 0}
+                    className={`w-full py-3 px-4 rounded-xl font-black text-xs sm:text-sm border transition-all flex items-center justify-center gap-2 ${
+                      ocrVerified
+                        ? 'bg-emerald-500/15 border-emerald-500 text-emerald-700 dark:text-emerald-300 shadow-sm'
+                        : isCheckingOcr || !screenshotData || utr.length !== 12 || !isScannerVisible || secondsRemaining <= 0
+                          ? 'bg-slate-100 dark:bg-wa-dsurf text-slate-400 border-slate-200 dark:border-wa-dbdr cursor-not-allowed'
+                          : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 active:scale-95'
+                    }`}
+                  >
+                    {isCheckingOcr ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                        <span>AI Verifying Payment Proof (Amount, Recipient & UTR)…</span>
+                      </>
+                    ) : ocrVerified ? (
+                      <>
+                        <span>✓ Payment Proof 100% Verified!</span>
+                        <span className="text-xs font-normal opacity-80">(Click below to activate)</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>🔍 Check Payment Proof (Required)</span>
+                        <span>➔</span>
+                      </>
+                    )}
+                  </button>
+                  <p className="text-[10px] text-center text-slate-400 dark:text-wa-dmuted mt-1">
+                    * AI verifies exact ₹{activePlanInfo.amount} amount, recipient match, and 12-digit UTR before enabling submission.
+                  </p>
+                </div>
+
+                {/* OCR Validation Error Banner & Details */}
+                {ocrErrors.length > 0 && (
+                  <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-500/40 space-y-2 animate-shake">
+                    <div className="flex items-center gap-2 text-rose-700 dark:text-rose-300 font-extrabold text-xs">
+                      <span>❌ Payment Proof Verification Failed</span>
+                    </div>
+                    <ul className="text-[11px] text-rose-600 dark:text-rose-300 list-disc list-inside space-y-1 font-medium">
+                      {ocrErrors.map((err, idx) => (
+                        <li key={idx}>{err}</li>
+                      ))}
+                    </ul>
+                    <div className="text-[10px] text-rose-500 dark:text-rose-400 bg-white/70 dark:bg-wa-dsurf/70 p-2 rounded-lg border border-rose-200 dark:border-rose-900/50">
+                      💡 Please ensure you paid exact <strong>₹{activePlanInfo.amount}</strong> to the official QR and uploaded the correct screenshot.
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 6. Final Submit & Done Button */}
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={submitting || utr.length !== 12 || !screenshotData || !isScannerVisible || secondsRemaining <= 0}
-                  className={`w-full py-3.5 px-4 rounded-xl font-extrabold text-sm text-white shadow-lg transition-all duration-200 flex items-center justify-center gap-2 ${submitting || utr.length !== 12 || !screenshotData || !isScannerVisible || secondsRemaining <= 0
-                    ? 'bg-slate-300 dark:bg-wa-dsurf text-slate-400 dark:text-slate-500 cursor-not-allowed shadow-none'
-                    : 'bg-gradient-to-r from-wa-teal via-emerald-600 to-wa-green hover:from-emerald-600 hover:to-wa-teal shadow-emerald-500/25 active:scale-98 transform hover:-translate-y-0.5'
-                    }`}
+                  disabled={submitting || !ocrVerified || utr.length !== 12 || !screenshotData || !isScannerVisible || secondsRemaining <= 0}
+                  className={`w-full py-3.5 px-4 rounded-xl font-extrabold text-sm text-white shadow-lg transition-all duration-200 flex items-center justify-center gap-2 ${
+                    submitting || !ocrVerified || utr.length !== 12 || !screenshotData || !isScannerVisible || secondsRemaining <= 0
+                      ? 'bg-slate-300 dark:bg-wa-dsurf text-slate-400 dark:text-slate-500 cursor-not-allowed shadow-none'
+                      : 'bg-gradient-to-r from-wa-teal via-emerald-600 to-wa-green hover:from-emerald-600 hover:to-wa-teal shadow-emerald-500/25 active:scale-98 transform hover:-translate-y-0.5'
+                  }`}
                 >
                   {submitting ? (
                     <>

@@ -152,9 +152,22 @@ router.post('/submit', async (req, res) => {
       screenshotUrl
     });
 
+    // Auto-approve after 5 minutes (300,000 ms) as per workflow
+    setTimeout(async () => {
+      try {
+        const checkReq = await db.SubscriptionRequest.findById(subRequest._id);
+        if (checkReq && checkReq.status === 'pending') {
+          await db.approveSubscriptionRequest(subRequest._id, 'Auto-verified after 5-minute queue window');
+          console.log(`[Subscription] Auto-approved request ${subRequest._id} for ${cleanEmail} -> ${planKey}`);
+        }
+      } catch (err) {
+        console.error('[Subscription] Auto-approval error:', err.message);
+      }
+    }, 5 * 60 * 1000);
+
     return res.json({
       success: true,
-      message: 'Payment Details Received! Your plan will be activated shortly after admin verification.',
+      message: 'Payment Details Received! Your plan will be activated within 5 minutes.',
       request: {
         id: subRequest._id,
         plan: subRequest.plan,
