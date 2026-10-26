@@ -52,19 +52,20 @@ const PLANS_CONFIG = {
  */
 router.get('/config', (req, res) => {
   try {
-    const upiId = process.env.UPI_ID || 'wascheduler@upi';
-    const upiName = process.env.UPI_NAME || 'WhatsApp Scheduler';
+    const upiId = process.env.UPI_ID || 'aniketchouhan314@okicici';
+    const upiName = process.env.UPI_NAME || 'Aniket Chouhan';
     return res.json({
       success: true,
       upiId,
       upiName,
+      scannerImageUrl: '/aniket-upi-scanner.jpg',
       plans: PLANS_CONFIG,
       currency: 'INR',
       supportedCurrencies: [
         { code: 'INR', symbol: '₹', label: 'INR (₹) - Indian Rupee', active: true },
         { code: 'USD', symbol: '$', label: 'USD ($) - Coming Soon (Stripe / PayPal)', active: false }
       ],
-      ruleNotice: 'Please upload a screenshot of a payment made within the last 30 minutes. Older or reused screenshots will be rejected.'
+      ruleNotice: 'Please upload a screenshot of a payment made within 30 minutes of activating the scanner to Aniket Chouhan.'
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -77,7 +78,7 @@ router.get('/config', (req, res) => {
  */
 router.post('/submit', async (req, res) => {
   try {
-    const { email, phone, plan, utr, screenshotUrl } = req.body || {};
+    const { email, phone, plan, utr, screenshotUrl, scannerActivatedAt } = req.body || {};
 
     if (!email || !email.trim()) {
       return res.status(400).json({ error: 'Valid email address is required.' });
@@ -113,6 +114,17 @@ router.post('/submit', async (req, res) => {
     // Validate screenshot is present
     if (!screenshotUrl || !screenshotUrl.trim()) {
       return res.status(400).json({ error: 'Payment screenshot is required. Please attach a screenshot of your successful UPI transaction.' });
+    }
+
+    // Validate 30-minute scanner window if activation timestamp was passed
+    if (scannerActivatedAt) {
+      const elapsedMs = Date.now() - new Date(scannerActivatedAt).getTime();
+      const maxToleranceMs = 35 * 60 * 1000; // 35 minutes tolerance (30 min + 5 min buffer)
+      if (elapsedMs > maxToleranceMs) {
+        return res.status(400).json({
+          error: 'The 30-minute payment window has expired. Please reveal the scanner again to start a fresh 30-minute window.'
+        });
+      }
     }
 
     // Check existing account if any

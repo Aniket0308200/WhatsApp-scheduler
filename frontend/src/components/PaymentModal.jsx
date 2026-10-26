@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
-import QRCode from 'qrcode';
 import { fetchSubscriptionConfig, submitSubscriptionPayment } from '../api';
 
-const DEFAULT_UPI_ID = 'wascheduler@upi';
-const DEFAULT_UPI_NAME = 'WhatsApp Scheduler';
+const DEFAULT_UPI_ID = 'aniketchouhan314@okicici';
+const DEFAULT_UPI_NAME = 'Aniket Chouhan';
+const SCANNER_IMAGE_URL = '/aniket-upi-scanner.jpg';
 
 const PLANS = {
   starter: {
@@ -65,14 +65,18 @@ export default function PaymentModal({
   const [screenshotData, setScreenshotData] = useState(null);
   const [screenshotName, setScreenshotName] = useState('');
   const [screenshotSize, setScreenshotSize] = useState('');
+
+  // 30-Minute Scanner Reveal & Live Countdown Timer State
+  const [isScannerVisible, setIsScannerVisible] = useState(false);
+  const [scannerActivatedAt, setScannerActivatedAt] = useState(null);
+  const [secondsRemaining, setSecondsRemaining] = useState(30 * 60); // 1800 seconds (30 mins)
   
-  const [qrDataUrl, setQrDataUrl] = useState('');
   const [upiConfig, setUpiConfig] = useState({
     upiId: DEFAULT_UPI_ID,
-    upiName: DEFAULT_UPI_NAME
+    upiName: DEFAULT_UPI_NAME,
+    scannerImageUrl: SCANNER_IMAGE_URL
   });
   
-  const [copiedUpi, setCopiedUpi] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [submittedData, setSubmittedData] = useState(null);
@@ -98,6 +102,9 @@ export default function PaymentModal({
       setScreenshotData(null);
       setScreenshotName('');
       setScreenshotSize('');
+      setIsScannerVisible(false);
+      setScannerActivatedAt(null);
+      setSecondsRemaining(30 * 60);
     }
   }, [isOpen, initialPlan, authUser, connectedPhone]);
 
@@ -109,7 +116,8 @@ export default function PaymentModal({
         if (isMounted && data) {
           setUpiConfig({
             upiId: data.upiId || DEFAULT_UPI_ID,
-            upiName: data.upiName || DEFAULT_UPI_NAME
+            upiName: data.upiName || DEFAULT_UPI_NAME,
+            scannerImageUrl: data.scannerImageUrl || SCANNER_IMAGE_URL
           });
         }
       })
@@ -119,35 +127,40 @@ export default function PaymentModal({
     return () => { isMounted = false; };
   }, []);
 
-  // Generate Dynamic UPI QR Code whenever plan or UPI config changes
+  // Live 30-Minute Countdown Timer once Scanner is shown
   useEffect(() => {
-    const planInfo = PLANS[selectedPlan] || PLANS.starter;
-    const amount = planInfo.amount;
-    const upiId = upiConfig.upiId;
-    const upiName = upiConfig.upiName;
-    const note = `WA Scheduler ${planInfo.name}`;
-
-    // Dynamic UPI URI per NPCI specification:
-    // upi://pay?pa=...&pn=...&am=199&cu=INR&tn=...
-    const upiUri = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(note)}`;
-
-    QRCode.toDataURL(upiUri, {
-      margin: 2,
-      scale: 7,
-      color: {
-        dark: '#0f172a',
-        light: '#ffffff'
-      }
-    })
-      .then((url) => setQrDataUrl(url))
-      .catch((err) => console.error('Error generating QR code:', err));
-  }, [selectedPlan, upiConfig]);
+    let timer = null;
+    if (isScannerVisible && secondsRemaining > 0) {
+      timer = setInterval(() => {
+        setSecondsRemaining((prev) => Math.max(0, prev - 1));
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isScannerVisible, secondsRemaining]);
 
   if (!isOpen) return null;
 
   const activePlanInfo = PLANS[selectedPlan] || PLANS.starter;
   const isStarterOwned = currentPlan === 'starter';
   const isProOwned = currentPlan === 'pro';
+
+  // Format seconds to MM:SS
+  const formatTime = (totalSecs) => {
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
+  // Handler to reveal scanner & start 30-min window
+  const handleShowScanner = () => {
+    setIsScannerVisible(true);
+    const now = new Date();
+    setScannerActivatedAt(now);
+    setSecondsRemaining(30 * 60);
+    toast.success('Scanner opened! Your 30-minute payment window has started.');
+  };
 
   // Handle UTR change (allow numbers only, max 12 digits)
   const handleUtrChange = (e) => {
@@ -180,15 +193,18 @@ export default function PaymentModal({
     reader.readAsDataURL(file);
   };
 
-  const handleCopyUpi = () => {
-    navigator.clipboard.writeText(upiConfig.upiId);
-    setCopiedUpi(true);
-    toast.success('UPI ID copied to clipboard!');
-    setTimeout(() => setCopiedUpi(false), 2500);
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!isScannerVisible) {
+      toast.error('Please click "Show Scanner" to activate your 30-minute payment window before submitting.');
+      return;
+    }
+
+    if (secondsRemaining <= 0) {
+      toast.error('The 30-minute payment window has expired. Please click "Show Scanner" to restart.');
+      return;
+    }
 
     if (!phone || phone.trim().length < 10) {
       toast.error('Please enter your WhatsApp phone number with country code (e.g. +91 9876543210).');
@@ -218,7 +234,8 @@ export default function PaymentModal({
         phone: phone.trim(),
         plan: selectedPlan,
         utr: utr.trim(),
-        screenshotUrl: screenshotData
+        screenshotUrl: screenshotData,
+        scannerActivatedAt: scannerActivatedAt ? scannerActivatedAt.toISOString() : new Date().toISOString()
       });
 
       setIsSuccess(true);
@@ -250,25 +267,25 @@ export default function PaymentModal({
         className="w-full max-w-4xl bg-white dark:bg-wa-dpanel text-slate-900 dark:text-wa-dtext rounded-3xl shadow-2xl border border-slate-200 dark:border-wa-dbdr overflow-hidden flex flex-col md:flex-row transition-all duration-300 max-h-[94vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ── LEFT HERO BRANDING COLUMN (Desktop Split Banner) ── */}
-        <div className="hidden md:flex flex-col justify-between w-5/12 bg-gradient-to-br from-[#0c2423] via-[#075e54] to-[#128c7e] text-white p-7 relative overflow-hidden shrink-0 select-none">
-          {/* WhatsApp Pattern Background Overlay */}
+        {/* ── LEFT HERO BRANDING COLUMN (Desktop Split Banner - Exact Match to Auth/Login) ── */}
+        <div className="hidden md:flex flex-col justify-between w-5/12 bg-gradient-to-br from-wa-dark via-emerald-700 to-teal-800 text-white p-7 relative overflow-hidden shrink-0 select-none">
+          {/* WhatsApp Pattern Background Image overlay */}
           <div
-            className="absolute inset-0 opacity-[0.06] bg-cover bg-center pointer-events-none mix-blend-overlay"
+            className="absolute inset-0 opacity-20 bg-cover bg-center pointer-events-none mix-blend-overlay"
             style={{ backgroundImage: "url('/green-bg-wp.jpg')" }}
           />
 
-          {/* Ambient Glow Orbs */}
-          <div className="absolute -top-12 -left-12 w-48 h-48 bg-emerald-400/25 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-12 -right-12 w-56 h-56 bg-teal-300/25 rounded-full blur-3xl pointer-events-none" />
+          {/* Background Ambient Glow Circles */}
+          <div className="absolute -top-10 -left-10 w-44 h-44 bg-emerald-400/20 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute -bottom-10 -right-10 w-52 h-52 bg-teal-300/20 rounded-full blur-2xl pointer-events-none" />
 
           {/* Top Brand Info */}
           <div className="relative z-10 space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 shadow-sm">
-              <span className="w-6 h-6 rounded-lg bg-emerald-400/20 flex items-center justify-center text-sm">
-                ⚡
+            <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 shadow-sm">
+              <span className="w-7 h-7 rounded-xl bg-emerald-500/30 flex items-center justify-center text-base">
+                📲
               </span>
-              <span className="font-extrabold text-xs tracking-wider uppercase text-emerald-100">
+              <span className="font-extrabold text-sm text-white tracking-wide">
                 WA Scheduler VIP
               </span>
             </div>
@@ -278,7 +295,7 @@ export default function PaymentModal({
               <div className="inline-block px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-white/20 text-white border border-white/30 backdrop-blur-sm">
                 Selected: {activePlanInfo.name}
               </div>
-              <h2 className="text-2xl lg:text-3xl font-black text-white leading-tight">
+              <h2 className="text-2xl lg:text-3xl font-black text-white leading-tight tracking-tight">
                 Supercharge Your WhatsApp Automation
               </h2>
               <p className="text-xs text-emerald-100/90 leading-relaxed">
@@ -306,11 +323,11 @@ export default function PaymentModal({
             <div className="pt-2 space-y-2 border-t border-white/15">
               <div className="flex items-center gap-2 text-[11px] text-emerald-100/90 font-medium">
                 <span className="text-emerald-300 text-sm">🛡️</span>
-                <span>Direct UPI Payment with Zero Gateway Surcharges</span>
+                <span>Direct UPI Payment to Aniket Chouhan</span>
               </div>
               <div className="flex items-center gap-2 text-[11px] text-emerald-100/90 font-medium">
                 <span className="text-emerald-300 text-sm">⏱️</span>
-                <span>Fast 15-Minute Admin Manual Verification</span>
+                <span>Active 30-Minute Payment Window Verification</span>
               </div>
               <div className="flex items-center gap-2 text-[11px] text-emerald-100/90 font-medium">
                 <span className="text-emerald-300 text-sm">🔒</span>
@@ -323,7 +340,7 @@ export default function PaymentModal({
           <div className="relative z-10 pt-5 border-t border-white/15 flex items-center justify-between text-[10px] text-emerald-200 font-medium">
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Dynamic UPI Gateway Ready
+              Verified UPI Gateway
             </span>
             <span>₹ INR Official</span>
           </div>
@@ -345,7 +362,7 @@ export default function PaymentModal({
               <p className="text-xs text-slate-500 dark:text-wa-dmuted mt-0.5">
                 {isSuccess
                   ? 'Your transaction has been submitted for fast admin verification'
-                  : 'Scan the dynamic UPI QR code or pay manually, then enter your 12-digit UTR'}
+                  : 'Click "Show Scanner" to activate your 30-min window, pay via any UPI app, and enter your 12-digit UTR'}
               </p>
             </div>
 
@@ -373,7 +390,7 @@ export default function PaymentModal({
                   Payment Details Received!
                 </h4>
                 <p className="text-xs sm:text-sm text-slate-600 dark:text-wa-dmuted max-w-md mx-auto leading-relaxed">
-                  Your plan will be activated shortly after admin verification. You can close this window and continue scheduling your messages as normal.
+                  Your payment to <strong>Aniket Chouhan</strong> was received within the 30-minute window. Your plan will be activated shortly after admin verification.
                 </p>
               </div>
 
@@ -581,57 +598,106 @@ export default function PaymentModal({
                 </div>
               </div>
 
-              {/* 4. Dynamic UPI QR Code & Instructions */}
-              <div className="bg-slate-50 dark:bg-wa-dsurf/50 p-4 rounded-2xl border border-slate-200 dark:border-wa-dbdr flex flex-col sm:flex-row items-center gap-4">
-                {/* QR Code Container */}
-                <div className="relative shrink-0 flex flex-col items-center">
-                  <div className="p-2.5 bg-white rounded-2xl shadow-md border border-slate-200 dark:border-transparent">
-                    {qrDataUrl ? (
-                      <img
-                        src={qrDataUrl}
-                        alt="Dynamic UPI QR Code"
-                        className="w-32 h-32 sm:w-36 sm:h-36 rounded-lg object-contain"
-                      />
-                    ) : (
-                      <div className="w-32 h-32 sm:w-36 sm:h-36 flex items-center justify-center bg-slate-100 rounded-lg">
-                        <span className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                      </div>
-                    )}
+              {/* 4. Scanner Section: "Show Scanner" Button & Live 30-Minute Window */}
+              {!isScannerVisible ? (
+                <div className="bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/10 dark:bg-wa-dsurf/50 p-5 rounded-2xl border-2 border-dashed border-emerald-500/40 dark:border-emerald-600/40 flex flex-col items-center justify-center text-center space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 flex items-center justify-center text-2xl shadow-inner">
+                    📷
                   </div>
-                  <span className="text-[10px] font-extrabold text-emerald-700 dark:text-emerald-400 mt-1.5 uppercase tracking-wide">
-                    ₹{activePlanInfo.amount} Auto-Loaded
-                  </span>
-                </div>
-
-                {/* QR Info and Manual Copy Option */}
-                <div className="flex-1 space-y-2 text-center sm:text-left">
                   <div>
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 mb-1">
-                      <span>📱 Scan with Any UPI App</span>
-                    </div>
-                    <h4 className="text-xs font-bold text-slate-800 dark:text-white">
-                      Google Pay, PhonePe, Paytm, BHIM, Cred
+                    <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                      UPI QR Scanner (Aniket Chouhan)
                     </h4>
-                    <p className="text-[11px] text-slate-500 dark:text-wa-dmuted mt-0.5 leading-relaxed">
-                      Scanning automatically fills exact amount <strong>₹{activePlanInfo.amount}</strong> and verification reference.
+                    <p className="text-xs text-slate-600 dark:text-wa-dmuted mt-0.5 max-w-sm mx-auto">
+                      Click below to reveal the official scanner. Your <strong>30-minute verification timer</strong> will start immediately.
                     </p>
                   </div>
-
-                  {/* Manual UPI ID Box */}
-                  <div className="flex items-center gap-2 pt-1">
-                    <div className="flex-1 px-2.5 py-1.5 bg-white dark:bg-wa-dpanel rounded-xl border border-slate-200 dark:border-wa-dbdr text-[11px] font-mono text-slate-800 dark:text-slate-200 select-all truncate">
-                      {upiConfig.upiId}
+                  <button
+                    type="button"
+                    onClick={handleShowScanner}
+                    className="px-6 py-3 rounded-xl font-black text-xs sm:text-sm text-white bg-gradient-to-r from-wa-teal via-emerald-600 to-wa-green hover:from-emerald-600 hover:to-wa-teal shadow-lg shadow-emerald-500/25 active:scale-95 transition-all transform hover:-translate-y-0.5 flex items-center gap-2"
+                  >
+                    <span>📷 Show Scanner</span>
+                    <span>→</span>
+                  </button>
+                  <span className="text-[10px] text-slate-400 dark:text-wa-dmuted">
+                    Payments made to Aniket Chouhan within 30 mins will unlock the plan
+                  </span>
+                </div>
+              ) : (
+                <div className="bg-emerald-50/40 dark:bg-wa-dsurf/60 p-4 sm:p-5 rounded-2xl border border-emerald-500/30 dark:border-emerald-700/40 space-y-3 animate-fade-in">
+                  {/* Live 30-Minute Countdown Banner */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-white dark:bg-wa-dpanel rounded-xl border border-emerald-500/30 shadow-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-xs font-extrabold text-slate-800 dark:text-white">
+                        30-Minute Payment Window Active
+                      </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleCopyUpi}
-                      className="px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-200 dark:bg-wa-dsurf hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 text-slate-700 dark:text-wa-dtext transition-colors shrink-0"
-                    >
-                      {copiedUpi ? '✓ Copied' : 'Copy UPI'}
-                    </button>
+
+                    <div className="flex items-center gap-2 self-start sm:self-auto">
+                      <span className="text-[11px] text-slate-500 dark:text-wa-dmuted">Remaining:</span>
+                      <span className={`font-mono text-sm font-black px-2.5 py-0.5 rounded-lg border ${
+                        secondsRemaining > 300
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                          : 'bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30 animate-pulse'
+                      }`}>
+                        ⏱️ {formatTime(secondsRemaining)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="w-full bg-slate-200 dark:bg-wa-dsurf h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-1000 ${secondsRemaining > 300 ? 'bg-gradient-to-r from-wa-teal to-emerald-500' : 'bg-rose-500'}`}
+                      style={{ width: `${(secondsRemaining / 1800) * 100}%` }}
+                    />
+                  </div>
+
+                  {/* Scanner Card with Aniket Chouhan QR */}
+                  <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
+                    <div className="relative shrink-0 flex flex-col items-center">
+                      <div className="p-2 bg-white rounded-2xl shadow-lg border border-slate-200 dark:border-transparent max-w-[210px]">
+                        <img
+                          src={upiConfig.scannerImageUrl}
+                          alt="Aniket Chouhan UPI Scanner"
+                          className="w-48 sm:w-52 rounded-xl object-contain shadow-xs"
+                        />
+                      </div>
+                      <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 mt-1.5 uppercase tracking-wide">
+                        Aniket Chouhan · Google Pay / UPI
+                      </span>
+                    </div>
+
+                    <div className="flex-1 space-y-2 text-center sm:text-left">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                        <span>📱 Scan with Any UPI App</span>
+                      </div>
+                      <h4 className="text-xs sm:text-sm font-extrabold text-slate-800 dark:text-white">
+                        Pay ₹{activePlanInfo.amount} to Aniket Chouhan
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-wa-dmuted leading-relaxed">
+                        Open <strong>Google Pay, PhonePe, Paytm, or BHIM</strong>, scan the QR code above, and pay <strong>₹{activePlanInfo.amount}</strong>.
+                      </p>
+
+                      <div className="text-[10px] text-slate-500 dark:text-wa-dmuted bg-white/80 dark:bg-wa-dpanel/80 p-2 rounded-xl border border-slate-200/80 dark:border-wa-dbdr/60">
+                        ⏱️ Started at: <span className="font-bold text-slate-700 dark:text-slate-200">{scannerActivatedAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>. Upload your payment screenshot within 30 minutes to unlock your plan.
+                      </div>
+
+                      {secondsRemaining === 0 && (
+                        <button
+                          type="button"
+                          onClick={handleShowScanner}
+                          className="text-xs font-bold text-rose-600 dark:text-rose-400 hover:underline block pt-1"
+                        >
+                          ⚠️ Timer expired! Click here to restart 30-min window
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* 5. UTR & Screenshot Upload Section */}
               <div className="space-y-3 pt-1">
@@ -730,7 +796,7 @@ export default function PaymentModal({
                 <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-800 dark:text-amber-300">
                   <span className="text-sm shrink-0">⚠️</span>
                   <div className="leading-relaxed">
-                    <strong>30-Minute Rule:</strong> Please upload a screenshot of a payment made within the last 30 minutes. Older or reused screenshots will be rejected by our verification system.
+                    <strong>30-Minute Rule:</strong> Please upload a screenshot of a payment made to Aniket Chouhan within the 30-minute active window. Older or reused screenshots will be rejected.
                   </div>
                 </div>
               </div>
@@ -739,9 +805,9 @@ export default function PaymentModal({
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={submitting || utr.length !== 12 || !screenshotData}
+                  disabled={submitting || utr.length !== 12 || !screenshotData || !isScannerVisible || secondsRemaining <= 0}
                   className={`w-full py-3.5 px-4 rounded-xl font-extrabold text-sm text-white shadow-lg transition-all duration-200 flex items-center justify-center gap-2 ${
-                    submitting || utr.length !== 12 || !screenshotData
+                    submitting || utr.length !== 12 || !screenshotData || !isScannerVisible || secondsRemaining <= 0
                       ? 'bg-slate-300 dark:bg-wa-dsurf text-slate-400 dark:text-slate-500 cursor-not-allowed shadow-none'
                       : 'bg-gradient-to-r from-wa-teal via-emerald-600 to-wa-green hover:from-emerald-600 hover:to-wa-teal shadow-emerald-500/25 active:scale-98 transform hover:-translate-y-0.5'
                   }`}
