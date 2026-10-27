@@ -208,10 +208,39 @@ export default function MessageTable({ messages, loading, onRefresh }) {
                       )}
                     </td>
 
-                    {/* Message + error */}
-                    <td className="px-5 py-3.5 max-w-[200px]">
+                    {/* Message + media + error */}
+                    <td className="px-5 py-3.5 max-w-[240px]">
+                      {msg.mediaType && (
+                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                          {msg.mediaType === 'image' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                              📷 Photo
+                            </span>
+                          )}
+                          {msg.mediaType === 'video' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                              🎥 Video
+                            </span>
+                          )}
+                          {msg.mediaType === 'audio' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                              🎵 Audio
+                            </span>
+                          )}
+                          {msg.mediaType === 'sticker' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-pink-50 dark:bg-pink-950/50 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800">
+                              🏷️ Sticker
+                            </span>
+                          )}
+                          {msg.mediaName && (
+                            <span className="text-[11px] text-gray-500 dark:text-wa-dmuted truncate max-w-[120px]" title={msg.mediaName}>
+                              {msg.mediaName}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <p className="truncate text-gray-700 dark:text-wa-dtext" title={msg.message}>
-                        {msg.message}
+                        {msg.message || (msg.mediaType ? <span className="italic text-gray-400 dark:text-wa-dmuted text-xs font-normal">(Media only)</span> : '')}
                       </p>
                       {msg.error && (
                         <p className="text-[11px] text-red-500 truncate mt-0.5" title={msg.error}>

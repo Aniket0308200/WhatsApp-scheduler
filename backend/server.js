@@ -614,7 +614,7 @@ app.get('/api/messages', async (req, res) => {
  * Body: { phone, message, scheduledAt, recipientName? }
  */
 app.post('/api/messages', async (req, res) => {
-  const { phone, message, scheduledAt, recipientName } = req.body;
+  const { phone, message, scheduledAt, recipientName, mediaType, mediaData, mediaName } = req.body;
 
   if (whatsapp.getStatus(req.sessionId) !== 'connected') {
     return res.status(400).json({ error: 'WhatsApp is not connected for this session.' });
@@ -630,9 +630,13 @@ app.post('/api/messages', async (req, res) => {
       return res.status(400).json({ error: 'Invalid phone number (digits only, 7–15 chars).' });
     }
   }
-  if (!message || !message.trim()) {
+
+  // If there's no media, message cannot be empty. If media is attached, caption (message) is optional.
+  const hasMedia = Boolean(mediaType && mediaData);
+  if (!hasMedia && (!message || !message.trim())) {
     return res.status(400).json({ error: 'Message cannot be empty.' });
   }
+
   if (!scheduledAt || isNaN(Date.parse(scheduledAt))) {
     return res.status(400).json({ error: 'Invalid scheduledAt datetime.' });
   }
@@ -653,6 +657,17 @@ app.post('/api/messages', async (req, res) => {
       });
     }
 
+    // Media & Sticker is an exclusive feature for Starter & Pro plans
+    if (hasMedia) {
+      const userPlan = (quota?.plan || 'free').toLowerCase();
+      if (userPlan === 'free') {
+        return res.status(403).json({
+          error: 'Image, Video & Sticker scheduling is an exclusive Starter and Pro feature. Please upgrade your plan to attach media.',
+          planUpgradeRequired: true
+        });
+      }
+    }
+
     const senderPhone = await getSenderPhoneFromSession(req);
     if (!senderPhone) {
       return res.status(400).json({ error: 'Connected WhatsApp number could not be identified.' });
@@ -668,13 +683,24 @@ app.post('/api/messages', async (req, res) => {
       }
     }
 
-    const id = await db.insertMessage(req.sessionId, cleanPhone, message.trim(), schedDate, cleanName);
+    const id = await db.insertMessage(
+      req.sessionId,
+      cleanPhone,
+      message ? message.trim() : '',
+      schedDate,
+      cleanName,
+      mediaType || null,
+      mediaData || null,
+      mediaName || null
+    );
 
     res.status(201).json({
       id,
       phone:          cleanPhone,
       recipient_name: cleanName,
-      message:        message.trim(),
+      message:        message ? message.trim() : '',
+      mediaType:      mediaType || null,
+      mediaName:      mediaName || null,
       scheduled_at:   db.toSqliteUtc(schedDate),
       status:         'pending',
     });

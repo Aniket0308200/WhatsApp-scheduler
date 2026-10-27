@@ -181,7 +181,7 @@ export default function PricingSection({ onGetStarted, onUpgradePlan, currentPla
                 </div>
                 <div className="flex items-start gap-2.5">
                   <span className="text-emerald-500 font-black shrink-0">✓</span>
-                  <span>Images, Audio & Stickers support</span>
+                  <span>Images, Videos, Audio & Stickers support</span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <span className="text-emerald-500 font-black shrink-0">✓</span>
@@ -207,7 +207,7 @@ export default function PricingSection({ onGetStarted, onUpgradePlan, currentPla
                 {/* Excluded Feature */}
                 <div className="flex items-start gap-2.5 text-slate-400 dark:text-slate-600 line-through">
                   <span className="text-slate-300 dark:text-slate-700 font-bold shrink-0">✕</span>
-                  <span>Video, Documents & PDF attachments</span>
+                  <span>Documents & PDF attachments (Pro only)</span>
                 </div>
               </div>
             </div>

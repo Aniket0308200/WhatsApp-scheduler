@@ -343,7 +343,10 @@ const ScheduledMessageSchema = new mongoose.Schema({
   sessionId: { type: String, required: true },
   encryptedNumber: { type: String, required: true }, // Encrypted recipient
   encryptedRecipientName: { type: String, default: '' }, // Encrypted display name
-  encryptedMessageText: { type: String, required: true }, // Encrypted message body
+  encryptedMessageText: { type: String, default: '' }, // Encrypted message body / caption
+  mediaType: { type: String, enum: ['image', 'video', 'audio', 'sticker', null], default: null },
+  mediaData: { type: String, default: null }, // Base64 data URI (encrypted or raw)
+  mediaName: { type: String, default: null }, // Original filename
   scheduledAt: { type: Date, required: true },
   status: { type: String, default: 'pending' }, // 'pending' | 'submitted' | 'sent' | 'failed' | 'cancelled'
   error: { type: String, default: null },
@@ -501,13 +504,16 @@ function toSqliteUtc(dateInput) {
 
 // ─── Message Query Functions ──────────────────────────────────────────────────
 
-async function insertMessage(sessionId, phone, message, scheduledAt, recipientName = null) {
+async function insertMessage(sessionId, phone, message, scheduledAt, recipientName = null, mediaType = null, mediaData = null, mediaName = null) {
   const schedDate = new Date(scheduledAt);
   const msg = new ScheduledMessage({
     sessionId,
     encryptedNumber: encrypt(phone),
     encryptedRecipientName: encrypt(recipientName),
-    encryptedMessageText: encrypt(message),
+    encryptedMessageText: encrypt(message || ''),
+    mediaType: mediaType || null,
+    mediaData: mediaData || null,
+    mediaName: mediaName || null,
     scheduledAt: schedDate,
     status: 'pending'
   });
@@ -541,6 +547,9 @@ async function getAllMessages(sessionId) {
       phone,
       recipient_name: name,
       message: decrypt(m.encryptedMessageText),
+      mediaType: m.mediaType || null,
+      mediaData: m.mediaData || null,
+      mediaName: m.mediaName || null,
       scheduled_at: toSqliteUtc(m.scheduledAt),
       status: m.status,
       error: m.error,
@@ -563,6 +572,9 @@ async function getPendingDueMessages() {
     phone: decrypt(m.encryptedNumber),
     recipient_name: decrypt(m.encryptedRecipientName) || null,
     message: decrypt(m.encryptedMessageText),
+    mediaType: m.mediaType || null,
+    mediaData: m.mediaData || null,
+    mediaName: m.mediaName || null,
     scheduled_at: toSqliteUtc(m.scheduledAt),
     status: m.status,
     error: m.error,

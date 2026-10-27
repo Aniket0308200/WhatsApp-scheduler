@@ -1239,7 +1239,7 @@ function getAllContacts(sessionId) {
 
 // ─── Send message ─────────────────────────────────────────────────────────────
 
-async function sendMessage(sessionId, phone, text) {
+async function sendMessage(sessionId, phone, text, mediaType = null, mediaData = null, mediaName = null) {
   const session = sessions.get(sessionId);
   if (!session || session.status !== 'connected' || !session.sock) {
     throw new Error('WhatsApp is not connected for this session.');
@@ -1249,16 +1249,54 @@ async function sendMessage(sessionId, phone, text) {
   const jid = isGroup ? phone : await resolveRecipientJid(sessionId, phone.replace(/\D/g, ''));
 
   try {
-    const result = await session.sock.sendMessage(jid, { text });
+    let messagePayload;
+
+    if (mediaType && mediaData) {
+      // Decode base64 data URI: data:[<mediatype>];base64,<data>
+      let buffer;
+      if (mediaData.startsWith('data:')) {
+        const base64Part = mediaData.split(',')[1] || mediaData;
+        buffer = Buffer.from(base64Part, 'base64');
+      } else {
+        buffer = Buffer.from(mediaData, 'base64');
+      }
+
+      if (mediaType === 'image') {
+        messagePayload = {
+          image: buffer,
+          caption: text || ''
+        };
+      } else if (mediaType === 'video') {
+        messagePayload = {
+          video: buffer,
+          caption: text || ''
+        };
+      } else if (mediaType === 'audio') {
+        messagePayload = {
+          audio: buffer,
+          mimetype: 'audio/mp4'
+        };
+      } else if (mediaType === 'sticker') {
+        messagePayload = {
+          sticker: buffer
+        };
+      } else {
+        messagePayload = { text: text || '' };
+      }
+    } else {
+      messagePayload = { text: text || '' };
+    }
+
+    const result = await session.sock.sendMessage(jid, messagePayload);
     if (!result?.key?.id) throw new Error('WhatsApp did not return a message id.');
-    console.log(`[WA] [${sessionId}] Message submitted to ${jid}; id=${result.key.id}`);
+    console.log(`[WA] [${sessionId}] Message (${mediaType || 'text'}) submitted to ${jid}; id=${result.key.id}`);
 
     // Cache message object to instantly answer decryption retry requests from primary phone
     if (!session.messageCache) session.messageCache = new Map();
     if (result.message) {
       session.messageCache.set(result.key.id, result.message);
     } else {
-      session.messageCache.set(result.key.id, { conversation: text });
+      session.messageCache.set(result.key.id, { conversation: text || '' });
     }
     if (session.messageCache.size > 500) {
       const oldestKey = session.messageCache.keys().next().value;

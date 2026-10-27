@@ -207,6 +207,25 @@ const WHATSAPP_EMOJI_CATEGORIES = {
   flags: { label: 'Flags', icon: '🏳️', emojis: '🏁 🚩 🎌 🏴 🏳️ 🏳️‍🌈 🏳️‍⚧️ 🇮🇳 🇺🇸 🇬🇧 🇨🇦 🇦🇺 🇳🇿 🇿🇦 🇦🇪 🇸🇦 🇸🇬 🇲🇾 🇮🇩 🇹🇭 🇯🇵 🇰🇷 🇨🇳 🇭🇰 🇹🇼 🇫🇷 🇩🇪 🇮🇹 🇪🇸 🇵🇹 🇳🇱 🇧🇪 🇨🇭 🇦🇹 🇸🇪 🇳🇴 🇩🇰 🇫🇮 🇵🇱 🇷🇴 🇺🇦 🇷🇺 🇹🇷 🇬🇷 🇮🇱 🇪🇬 🇳🇬 🇰🇪 🇧🇷 🇦🇷 🇲🇽 🇨🇱 🇨🇴 🇵🇪 🇵🇭 🇵🇰 🇧🇩 🇳🇵 🇱🇰 🇻🇳 🇮🇷 🇮🇶 🇶🇦 🇰🇼 🏴‍☠️'.split(' ') },
 };
 
+const POPULAR_STICKERS = [
+  { id: 'celebrate', emoji: '🎉', label: 'Party', bg: '#fef08a' },
+  { id: 'love', emoji: '❤️', label: 'Love', bg: '#fecdd3' },
+  { id: 'thumbsup', emoji: '👍', label: 'Great!', bg: '#bae6fd' },
+  { id: 'laugh', emoji: '😂', label: 'Haha', bg: '#fef08a' },
+  { id: 'namaste', emoji: '🙏', label: 'Namaste', bg: '#fed7aa' },
+  { id: 'fire', emoji: '🔥', label: 'Superb', bg: '#ffedd5' },
+  { id: 'cake', emoji: '🎂', label: 'Birthday', bg: '#fbcfe8' },
+  { id: 'morning', emoji: '🌅', label: 'Morning', bg: '#fed7aa' },
+  { id: 'night', emoji: '🌙', label: 'Good Night', bg: '#e0e7ff' },
+  { id: 'congrats', emoji: '✨', label: 'Congrats', bg: '#fef9c3' },
+  { id: 'rocket', emoji: '🚀', label: 'Let’s Go', bg: '#ddd6fe' },
+  { id: 'clap', emoji: '👏', label: 'Claps', bg: '#bbf7d0' },
+  { id: 'cool', emoji: '😎', label: 'Cool', bg: '#fef08a' },
+  { id: '100', emoji: '💯', label: '100%', bg: '#fee2e2' },
+  { id: 'flower', emoji: '🌸', label: 'Flowers', bg: '#fce7f3' },
+  { id: 'superstar', emoji: '⭐', label: 'Star', bg: '#fef08a' },
+];
+
 // ─── SchedulerForm ────────────────────────────────────────────────────────────
 function ContactsImportModal({ onClose, onImported }) {
   const [file, setFile] = useState(null);
@@ -324,8 +343,14 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
   // ── Multi-recipient chips ─────────────────────────────────────────────────
   // Each chip: { phone, name, isGroup }
   const [recipients,    setRecipients]    = useState([]); // confirmed recipient chips
-  const MAX_PERSONAL = 5;
-  const MAX_GROUPS   = 2;
+  
+  // Dynamic Limits based on Plan:
+  // Free: 5 contacts, 2 groups
+  // Starter: 20 contacts, 10 groups
+  // Pro: Unlimited (1000 contacts, 100 groups)
+  const userPlanKey = (quota?.plan || 'free').toLowerCase();
+  const MAX_PERSONAL = userPlanKey === 'pro' ? 1000 : userPlanKey === 'starter' ? 20 : 5;
+  const MAX_GROUPS   = userPlanKey === 'pro' ? 100 : userPlanKey === 'starter' ? 10 : 2;
   const personalCount = recipients.filter(r => !r.isGroup).length;
   const groupCount    = recipients.filter(r =>  r.isGroup).length;
   // ─────────────────────────────────────────────────────────────────────────
@@ -541,6 +566,108 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
   const textareaRef = useRef(null);
   const emojiPickerRef = useRef(null);
 
+  // ── Media Attachment & Sticker states & refs (Exclusive to Starter & Pro) ─
+  const attachmentInputRef = useRef(null);
+  const stickerInputRef = useRef(null);
+  const stickerPickerRef = useRef(null);
+  const [attachedMedia, setAttachedMedia] = useState(null); // { type, data, name, size, preview }
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
+
+  const handleAttachmentFileInput = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 12 * 1024 * 1024) {
+      toast.error('Attachment file size must be less than 12MB.');
+      return;
+    }
+    let mediaType = 'image';
+    if (file.type.startsWith('video/')) mediaType = 'video';
+    else if (file.type.startsWith('audio/')) mediaType = 'audio';
+    else if (file.type === 'image/webp') mediaType = 'sticker';
+    else mediaType = 'image';
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAttachedMedia({
+        type: mediaType,
+        data: reader.result,
+        name: file.name,
+        size: file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(file.size / 1024)} KB`,
+        preview: file.type.startsWith('image/') ? reader.result : null
+      });
+      setShowStickerPicker(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleStickerFileInput = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Sticker file size must be less than 5MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAttachedMedia({
+        type: 'sticker',
+        data: reader.result,
+        name: file.name,
+        size: `${Math.round(file.size / 1024)} KB`,
+        preview: reader.result
+      });
+      setShowStickerPicker(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSelectStickerPreset = (item) => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, 512, 512);
+        ctx.beginPath();
+        ctx.arc(256, 256, 230, 0, Math.PI * 2);
+        ctx.fillStyle = item.bg || '#ffffff';
+        ctx.fill();
+        ctx.lineWidth = 14;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+
+        ctx.font = '230px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(item.emoji, 256, 235);
+
+        ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillStyle = '#0f172a';
+        ctx.fillText(item.label, 256, 420);
+
+        const dataUrl = canvas.toDataURL('image/png');
+        setAttachedMedia({
+          type: 'sticker',
+          data: dataUrl,
+          name: `sticker_${item.id}.png`,
+          size: 'Sticker',
+          preview: dataUrl
+        });
+        setShowStickerPicker(false);
+      }
+    } catch (err) {
+      console.error('Error generating sticker preset:', err);
+      toast.error('Could not load sticker preset.');
+    }
+  };
+
+  const handleRemoveMedia = () => {
+    setAttachedMedia(null);
+    if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+    if (stickerInputRef.current) stickerInputRef.current.value = '';
+  };
+
   const handleInsertEmoji = (emoji) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -559,11 +686,14 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
     }, 10);
   };
 
-  // Close emoji picker on outside click
+  // Close emoji picker & sticker picker on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) {
         setShowEmojiPicker(false);
+      }
+      if (stickerPickerRef.current && !stickerPickerRef.current.contains(e.target)) {
+        setShowStickerPicker(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -762,8 +892,8 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
       toast.error('Add at least one recipient.');
       return;
     }
-    if (!message.trim()) {
-      toast.error('Message cannot be empty.');
+    if (!message.trim() && !attachedMedia) {
+      toast.error('Please enter a message or attach an image, video or sticker.');
       return;
     }
 
@@ -786,7 +916,10 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
             phone: recipient.phone,
             message: message.trim(),
             scheduledAt: utcISO,
-            recipientName: recipient.name
+            recipientName: recipient.name,
+            mediaType: attachedMedia?.type || null,
+            mediaData: attachedMedia?.data || null,
+            mediaName: attachedMedia?.name || null
           });
           successCount++;
         } catch (err) {
@@ -807,6 +940,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
       // Reset form
       setPhone('');
       setMessage('');
+      handleRemoveMedia();
       setScheduledAt(getDefaultTime());
       setTimeConfirmed(false);
       setContactName(null);
@@ -1105,60 +1239,204 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
               ref={textareaRef}
               value={message}
               onChange={e => setMessage(e.target.value)}
-              placeholder="Type your message here… (e.g: Happy birthday 🎉)"
+              placeholder={attachedMedia ? "Add an optional caption for your media..." : "Type your message here… (e.g: Happy birthday 🎉)"}
               rows={4}
-              required
+              required={!attachedMedia}
               className="w-full px-4 py-2.5 text-sm bg-transparent text-gray-900 dark:text-wa-dtext focus:outline-none resize-y min-h-[80px] custom-scroll"
             />
-            {/* Toolbar under textarea */}
-            <div className="flex items-center justify-between px-3 py-1.5 border-t border-slate-200/60 dark:border-wa-dbdr/50 bg-slate-50/50 dark:bg-wa-dpanel/50 transition-colors">
-              {/* Emoji button */}
-              <div className="relative">
+
+            {/* Attached media preview card */}
+            {attachedMedia && (
+              <div className="mx-3 mb-2.5 p-2 rounded-xl bg-emerald-50/90 dark:bg-wa-dpanel border border-emerald-200/90 dark:border-wa-dbdr flex items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {attachedMedia.preview ? (
+                    <img
+                      src={attachedMedia.preview}
+                      alt={attachedMedia.name}
+                      className="w-12 h-12 rounded-lg object-cover border border-emerald-200/80 dark:border-wa-dbdr shadow-xs shrink-0 bg-white dark:bg-black/20"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-center text-xl shrink-0">
+                      {attachedMedia.type === 'video' ? '🎥' : attachedMedia.type === 'audio' ? '🎵' : '📎'}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-200/80 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300">
+                        {attachedMedia.type === 'image' ? '📷 Image' : attachedMedia.type === 'video' ? '🎥 Video' : attachedMedia.type === 'audio' ? '🎵 Audio' : '🏷️ Sticker'}
+                      </span>
+                      {attachedMedia.size && (
+                        <span className="text-[10px] text-gray-500 dark:text-wa-dmuted font-medium">
+                          {attachedMedia.size}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs font-semibold text-gray-800 dark:text-wa-dtext truncate mt-0.5 max-w-[200px] sm:max-w-[320px]" title={attachedMedia.name}>
+                      {attachedMedia.name}
+                    </p>
+                  </div>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-wa-teal dark:text-wa-dmuted dark:hover:text-wa-green hover:bg-gray-200 dark:hover:bg-wa-dsurf transition-colors"
-                  title="Insert emoji"
+                  onClick={handleRemoveMedia}
+                  className="p-1.5 text-gray-400 hover:text-red-500 dark:text-wa-dmuted dark:hover:text-red-400 rounded-lg hover:bg-white dark:hover:bg-wa-dsurf transition-colors shrink-0"
+                  title="Remove attachment"
                 >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                     <path strokeLinecap="round" strokeLinejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
+              </div>
+            )}
 
-                {/* Emoji Picker Popup */}
-                {showEmojiPicker && (
-                  <div
-                    ref={emojiPickerRef}
-                    className="absolute left-0 mb-2 w-[288px] min-[360px]:w-[320px] sm:w-[22rem] max-w-[92vw] bg-white dark:bg-[#202c33] border-[3px] border-gray-800 dark:border-wa-dbdr rounded-xl shadow-2xl z-[80] p-3 overflow-hidden transition-all"
+            {/* Toolbar under textarea */}
+            <div className="flex items-center justify-between px-3 py-1.5 border-t border-slate-200/60 dark:border-wa-dbdr/50 bg-slate-50/50 dark:bg-wa-dpanel/50 transition-colors">
+              <div className="flex items-center gap-1">
+                {/* Emoji button */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-wa-teal dark:text-wa-dmuted dark:hover:text-wa-green hover:bg-gray-200 dark:hover:bg-wa-dsurf transition-colors"
+                    title="Insert emoji"
                   >
-                    <div className="flex overflow-x-auto custom-scroll border-b border-gray-100 dark:border-wa-dbdr/50 pb-2 mb-2 gap-1 justify-start text-lg">
-                      {Object.entries(WHATSAPP_EMOJI_CATEGORIES).map(([cat, config]) => (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => setEmojiCategory(cat)}
-                          title={config.label}
-                          aria-label={config.label}
-                          className={`w-8 h-8 shrink-0 rounded-lg transition-colors ${emojiCategory === cat ? 'bg-emerald-500/15 ring-1 ring-emerald-500/30' : 'hover:bg-gray-100 dark:hover:bg-white/10'}`}
-                        >
-                          {config.icon}
-                        </button>
-                      ))}
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                       <path strokeLinecap="round" strokeLinejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </button>
+
+                  {/* Emoji Picker Popup */}
+                  {showEmojiPicker && (
+                    <div
+                      ref={emojiPickerRef}
+                      className="absolute left-0 mb-2 w-[288px] min-[360px]:w-[320px] sm:w-[22rem] max-w-[92vw] bg-white dark:bg-[#202c33] border-[3px] border-gray-800 dark:border-wa-dbdr rounded-xl shadow-2xl z-[80] p-3 overflow-hidden transition-all"
+                    >
+                      <div className="flex overflow-x-auto custom-scroll border-b border-gray-100 dark:border-wa-dbdr/50 pb-2 mb-2 gap-1 justify-start text-lg">
+                        {Object.entries(WHATSAPP_EMOJI_CATEGORIES).map(([cat, config]) => (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => setEmojiCategory(cat)}
+                            title={config.label}
+                            aria-label={config.label}
+                            className={`w-8 h-8 shrink-0 rounded-lg transition-colors ${emojiCategory === cat ? 'bg-emerald-500/15 ring-1 ring-emerald-500/30' : 'hover:bg-gray-100 dark:hover:bg-white/10'}`}
+                          >
+                            {config.icon}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="mb-2 text-[11px] font-semibold text-gray-500 dark:text-gray-300">{WHATSAPP_EMOJI_CATEGORIES[emojiCategory].label}</p>
+                      <div className="grid grid-cols-9 gap-1 max-h-56 overflow-y-auto custom-scroll pr-1">
+                        {WHATSAPP_EMOJI_CATEGORIES[emojiCategory].emojis.map((emoji, index) => (
+                          <button
+                            key={emoji + index}
+                            type="button"
+                            onClick={() => handleInsertEmoji(emoji)}
+                            className="w-8 h-8 text-xl flex items-center justify-center hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <p className="mb-2 text-[11px] font-semibold text-gray-500 dark:text-gray-300">{WHATSAPP_EMOJI_CATEGORIES[emojiCategory].label}</p>
-                    <div className="grid grid-cols-9 gap-1 max-h-56 overflow-y-auto custom-scroll pr-1">
-                      {WHATSAPP_EMOJI_CATEGORIES[emojiCategory].emojis.map((emoji, index) => (
-                        <button
-                          key={emoji + index}
-                          type="button"
-                          onClick={() => handleInsertEmoji(emoji)}
-                          className="w-8 h-8 text-xl flex items-center justify-center hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors"
+                  )}
+                </div>
+
+                {/* ── Attachment Pin & Sticker buttons (Visible ONLY for Starter & Pro plans) ── */}
+                {!isFreePlan && (
+                  <>
+                    {/* Attachment Pin button (Image, Video, Audio) */}
+                    <button
+                      type="button"
+                      onClick={() => attachmentInputRef.current?.click()}
+                      className={`p-1.5 rounded-lg transition-colors ${
+                        attachedMedia && attachedMedia.type !== 'sticker'
+                          ? 'text-wa-teal dark:text-wa-green bg-emerald-100/70 dark:bg-emerald-950/60 ring-1 ring-emerald-400/40'
+                          : 'text-gray-400 hover:text-wa-teal dark:text-wa-dmuted dark:hover:text-wa-green hover:bg-gray-200 dark:hover:bg-wa-dsurf'
+                      }`}
+                      title="Attach Image, Video, or Audio"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.37l-9.878 9.878a1.5 1.5 0 01-2.122-2.122l8.82-8.82" />
+                      </svg>
+                    </button>
+
+                    {/* Sticker button & Dropdown Popup */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowStickerPicker(!showStickerPicker)}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          attachedMedia?.type === 'sticker'
+                            ? 'text-pink-600 dark:text-pink-400 bg-pink-100/70 dark:bg-pink-950/60 ring-1 ring-pink-400/40'
+                            : 'text-gray-400 hover:text-pink-500 dark:text-wa-dmuted dark:hover:text-pink-400 hover:bg-gray-200 dark:hover:bg-wa-dsurf'
+                        }`}
+                        title="Choose WhatsApp Sticker"
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm6 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75z" />
+                        </svg>
+                      </button>
+
+                      {/* Sticker Dropdown Popup */}
+                      {showStickerPicker && (
+                        <div
+                          ref={stickerPickerRef}
+                          className="absolute left-0 bottom-full mb-2 w-[288px] min-[360px]:w-[320px] bg-white dark:bg-[#202c33] border border-gray-200 dark:border-wa-dbdr rounded-2xl shadow-2xl z-[85] p-3 overflow-hidden transition-all"
                         >
-                          {emoji}
-                        </button>
-                      ))}
+                          <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-100 dark:border-wa-dbdr/50">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-base">🏷️</span>
+                              <span className="text-xs font-bold text-gray-800 dark:text-white">Choose a Sticker</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => stickerInputRef.current?.click()}
+                              className="text-[11px] font-semibold text-wa-teal dark:text-wa-green hover:underline flex items-center gap-1"
+                            >
+                              <span>📁 Custom File</span>
+                            </button>
+                          </div>
+
+                          {/* Grid of popular stickers */}
+                          <div className="grid grid-cols-4 gap-2 max-h-56 overflow-y-auto custom-scroll pr-1 py-1">
+                            {POPULAR_STICKERS.map((stk) => (
+                              <button
+                                key={stk.id}
+                                type="button"
+                                onClick={() => handleSelectStickerPreset(stk)}
+                                className="p-2 flex flex-col items-center justify-center rounded-xl hover:scale-105 active:scale-95 hover:bg-slate-50 dark:hover:bg-white/10 border border-slate-100 dark:border-wa-dbdr/40 transition-all text-center group"
+                                title={stk.label}
+                              >
+                                <span className="text-3xl filter drop-shadow-xs group-hover:scale-110 transition-transform">
+                                  {stk.emoji}
+                                </span>
+                                <span className="text-[10px] text-gray-500 dark:text-gray-300 font-medium truncate w-full mt-1">
+                                  {stk.label}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
+
+                    {/* Hidden file inputs */}
+                    <input
+                      ref={attachmentInputRef}
+                      type="file"
+                      accept="image/*,video/mp4,video/3gpp,video/quicktime,video/webm,audio/*"
+                      className="hidden"
+                      onChange={handleAttachmentFileInput}
+                    />
+                    <input
+                      ref={stickerInputRef}
+                      type="file"
+                      accept="image/webp,image/png,image/jpeg"
+                      className="hidden"
+                      onChange={handleStickerFileInput}
+                    />
+                  </>
                 )}
               </div>
               <p className="text-[10px] text-gray-400 dark:text-wa-dmuted">{message.length} chars</p>
@@ -1193,9 +1471,9 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
         {/* ── Submit ────────────────────────────────────────────────────── */}
         <button
           type="submit"
-          disabled={loading || !isConnected || !timeConfirmed || (quota && quota.remaining <= 0) || (recipients.length === 0 && !phone.trim())}
+          disabled={loading || !isConnected || !timeConfirmed || (quota && quota.remaining <= 0) || (recipients.length === 0 && !phone.trim()) || (!message.trim() && !attachedMedia)}
           className={`w-full font-semibold py-3 rounded-xl text-sm shadow-sm flex items-center justify-center gap-2 transition-colors
-            ${timeConfirmed && isConnected && !(quota && quota.remaining <= 0) && (recipients.length > 0 || phone.trim())
+            ${timeConfirmed && isConnected && !(quota && quota.remaining <= 0) && (recipients.length > 0 || phone.trim()) && (message.trim() || attachedMedia)
               ? 'bg-wa-green hover:bg-wa-teal text-white'
               : 'bg-gray-200 dark:bg-wa-dsurf text-gray-400 dark:text-wa-dmuted cursor-not-allowed border dark:border-wa-dbdr'}`}
         >

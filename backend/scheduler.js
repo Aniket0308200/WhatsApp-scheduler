@@ -45,7 +45,14 @@ async function processAllDueMessages() {
         }
 
         try {
-          const result = await whatsapp.sendMessage(sessionId, msg.phone, msg.message);
+          const result = await whatsapp.sendMessage(
+            sessionId,
+            msg.phone,
+            msg.message,
+            msg.mediaType,
+            msg.mediaData,
+            msg.mediaName
+          );
           // Atomically mark as sent and store WhatsApp message id
           await db.ScheduledMessage.updateOne(
             { _id: msg.id },

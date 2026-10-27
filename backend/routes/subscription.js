@@ -17,7 +17,7 @@ const PLANS_CONFIG = {
       '250 Scheduled Messages / month',
       'Send to up to 20 Contacts at once',
       'Send to up to 10 Groups at once',
-      'Images, Audio & Stickers support',
+      'Images, Videos, Audio & Stickers support',
       'Recurring Schedules (Daily / Weekly repeats)',
       'Smart Name Variables ({Name})',
       'Google Contacts Sync (up to 2 accounts)',
