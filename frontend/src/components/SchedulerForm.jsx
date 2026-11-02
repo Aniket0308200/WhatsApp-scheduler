@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { format, addMinutes, addSeconds } from 'date-fns';
 import { scheduleMessage, fetchContactName, resolveContactLive, importContacts, fetchAllContacts, fetchGoogleAuthUrl, fetchLinkedGoogleAccounts, syncGroups, deleteGoogleAccount } from '../api';
 import DateTimePicker from './DateTimePicker';
+import GifStickerPickerModal, { WhatsAppStickerIcon, WhatsAppGifIcon, convertImageFileToWebpSticker } from './GifStickerPickerModal';
 
 // ─── Complete country-code list ───────────────────────────────────────────────
 // ─── Complete country-code list ───────────────────────────────────────────────
@@ -207,24 +208,6 @@ const WHATSAPP_EMOJI_CATEGORIES = {
   flags: { label: 'Flags', icon: '🏳️', emojis: '🏁 🚩 🎌 🏴 🏳️ 🏳️‍🌈 🏳️‍⚧️ 🇮🇳 🇺🇸 🇬🇧 🇨🇦 🇦🇺 🇳🇿 🇿🇦 🇦🇪 🇸🇦 🇸🇬 🇲🇾 🇮🇩 🇹🇭 🇯🇵 🇰🇷 🇨🇳 🇭🇰 🇹🇼 🇫🇷 🇩🇪 🇮🇹 🇪🇸 🇵🇹 🇳🇱 🇧🇪 🇨🇭 🇦🇹 🇸🇪 🇳🇴 🇩🇰 🇫🇮 🇵🇱 🇷🇴 🇺🇦 🇷🇺 🇹🇷 🇬🇷 🇮🇱 🇪🇬 🇳🇬 🇰🇪 🇧🇷 🇦🇷 🇲🇽 🇨🇱 🇨🇴 🇵🇪 🇵🇭 🇵🇰 🇧🇩 🇳🇵 🇱🇰 🇻🇳 🇮🇷 🇮🇶 🇶🇦 🇰🇼 🏴‍☠️'.split(' ') },
 };
 
-const POPULAR_STICKERS = [
-  { id: 'celebrate', emoji: '🎉', label: 'Party', bg: '#fef08a' },
-  { id: 'love', emoji: '❤️', label: 'Love', bg: '#fecdd3' },
-  { id: 'thumbsup', emoji: '👍', label: 'Great!', bg: '#bae6fd' },
-  { id: 'laugh', emoji: '😂', label: 'Haha', bg: '#fef08a' },
-  { id: 'namaste', emoji: '🙏', label: 'Namaste', bg: '#fed7aa' },
-  { id: 'fire', emoji: '🔥', label: 'Superb', bg: '#ffedd5' },
-  { id: 'cake', emoji: '🎂', label: 'Birthday', bg: '#fbcfe8' },
-  { id: 'morning', emoji: '🌅', label: 'Morning', bg: '#fed7aa' },
-  { id: 'night', emoji: '🌙', label: 'Good Night', bg: '#e0e7ff' },
-  { id: 'congrats', emoji: '✨', label: 'Congrats', bg: '#fef9c3' },
-  { id: 'rocket', emoji: '🚀', label: 'Let’s Go', bg: '#ddd6fe' },
-  { id: 'clap', emoji: '👏', label: 'Claps', bg: '#bbf7d0' },
-  { id: 'cool', emoji: '😎', label: 'Cool', bg: '#fef08a' },
-  { id: '100', emoji: '💯', label: '100%', bg: '#fee2e2' },
-  { id: 'flower', emoji: '🌸', label: 'Flowers', bg: '#fce7f3' },
-  { id: 'superstar', emoji: '⭐', label: 'Star', bg: '#fef08a' },
-];
 
 // ─── SchedulerForm ────────────────────────────────────────────────────────────
 function ContactsImportModal({ onClose, onImported }) {
@@ -566,12 +549,13 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
   const textareaRef = useRef(null);
   const emojiPickerRef = useRef(null);
 
-  // ── Media Attachment & Sticker states & refs (Exclusive to Starter & Pro) ─
+  // ── Media Attachment, GIF & Sticker states & refs (Exclusive to Starter & Pro) ──
   const attachmentInputRef = useRef(null);
   const stickerInputRef = useRef(null);
-  const stickerPickerRef = useRef(null);
+  const gifInputRef = useRef(null);
   const [attachedMedia, setAttachedMedia] = useState(null); // { type, data, name, size, preview }
-  const [showStickerPicker, setShowStickerPicker] = useState(false);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [mediaPickerTab, setMediaPickerTab] = useState('sticker');
 
   const handleAttachmentFileInput = (e) => {
     const file = e.target.files?.[0];
@@ -583,6 +567,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
     let mediaType = 'image';
     if (file.type.startsWith('video/')) mediaType = 'video';
     else if (file.type.startsWith('audio/')) mediaType = 'audio';
+    else if (file.type === 'image/gif') mediaType = 'gif';
     else if (file.type === 'image/webp') mediaType = 'sticker';
     else mediaType = 'image';
 
@@ -595,77 +580,60 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
         size: file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(file.size / 1024)} KB`,
         preview: file.type.startsWith('image/') ? reader.result : null
       });
-      setShowStickerPicker(false);
+      setShowMediaPicker(false);
     };
     reader.readAsDataURL(file);
   };
 
-  const handleStickerFileInput = (e) => {
+  const handleStickerFileInput = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Sticker file size must be less than 5MB.');
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error('Sticker file size must be less than 8MB.');
+      return;
+    }
+    try {
+      const webpData = await convertImageFileToWebpSticker(file);
+      setAttachedMedia({
+        type: 'sticker',
+        data: webpData,
+        name: file.name.replace(/\.[^/.]+$/, '') + '.webp',
+        size: 'Sticker (WebP)',
+        preview: webpData
+      });
+      setShowMediaPicker(false);
+    } catch (err) {
+      console.error('Custom sticker error:', err);
+      toast.error('Failed to convert image to WebP sticker.');
+    }
+  };
+
+  const handleGifFileInput = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 12 * 1024 * 1024) {
+      toast.error('GIF file size must be less than 12MB.');
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
       setAttachedMedia({
-        type: 'sticker',
+        type: 'gif',
         data: reader.result,
         name: file.name,
-        size: `${Math.round(file.size / 1024)} KB`,
+        size: file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(file.size / 1024)} KB`,
         preview: reader.result
       });
-      setShowStickerPicker(false);
+      setShowMediaPicker(false);
     };
     reader.readAsDataURL(file);
-  };
-
-  const handleSelectStickerPreset = (item) => {
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = 512;
-      canvas.height = 512;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.clearRect(0, 0, 512, 512);
-        ctx.beginPath();
-        ctx.arc(256, 256, 230, 0, Math.PI * 2);
-        ctx.fillStyle = item.bg || '#ffffff';
-        ctx.fill();
-        ctx.lineWidth = 14;
-        ctx.strokeStyle = '#ffffff';
-        ctx.stroke();
-
-        ctx.font = '230px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(item.emoji, 256, 235);
-
-        ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.fillStyle = '#0f172a';
-        ctx.fillText(item.label, 256, 420);
-
-        const dataUrl = canvas.toDataURL('image/png');
-        setAttachedMedia({
-          type: 'sticker',
-          data: dataUrl,
-          name: `sticker_${item.id}.png`,
-          size: 'Sticker',
-          preview: dataUrl
-        });
-        setShowStickerPicker(false);
-      }
-    } catch (err) {
-      console.error('Error generating sticker preset:', err);
-      toast.error('Could not load sticker preset.');
-    }
   };
 
   const handleRemoveMedia = () => {
     setAttachedMedia(null);
     if (attachmentInputRef.current) attachmentInputRef.current.value = '';
     if (stickerInputRef.current) stickerInputRef.current.value = '';
+    if (gifInputRef.current) gifInputRef.current.value = '';
   };
 
   const handleInsertEmoji = (emoji) => {
@@ -1263,7 +1231,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-200/80 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300">
-                        {attachedMedia.type === 'image' ? '📷 Image' : attachedMedia.type === 'video' ? '🎥 Video' : attachedMedia.type === 'audio' ? '🎵 Audio' : '🏷️ Sticker'}
+                        {attachedMedia.type === 'image' ? '📷 Image' : attachedMedia.type === 'video' ? '🎥 Video' : attachedMedia.type === 'audio' ? '🎵 Audio' : attachedMedia.type === 'gif' ? '🎞️ GIF' : '🏷️ Sticker'}
                       </span>
                       {attachedMedia.size && (
                         <span className="text-[10px] text-gray-500 dark:text-wa-dmuted font-medium">
@@ -1342,7 +1310,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
                   )}
                 </div>
 
-                {/* ── Attachment Pin & Sticker buttons (Visible ONLY for Starter & Pro plans) ── */}
+                {/* ── Attachment Pin, GIF & Sticker buttons (Visible ONLY for Starter & Pro plans) ── */}
                 {!isFreePlan && (
                   <>
                     {/* Attachment Pin button (Image, Video, Audio) */}
@@ -1350,7 +1318,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
                       type="button"
                       onClick={() => attachmentInputRef.current?.click()}
                       className={`p-1.5 rounded-lg transition-colors ${
-                        attachedMedia && attachedMedia.type !== 'sticker'
+                        attachedMedia && attachedMedia.type !== 'sticker' && attachedMedia.type !== 'gif'
                           ? 'text-wa-teal dark:text-wa-green bg-emerald-100/70 dark:bg-emerald-950/60 ring-1 ring-emerald-400/40'
                           : 'text-gray-400 hover:text-wa-teal dark:text-wa-dmuted dark:hover:text-wa-green hover:bg-gray-200 dark:hover:bg-wa-dsurf'
                       }`}
@@ -1361,65 +1329,39 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
                       </svg>
                     </button>
 
-                    {/* Sticker button & Dropdown Popup */}
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setShowStickerPicker(!showStickerPicker)}
-                        className={`p-1.5 rounded-lg transition-colors ${
-                          attachedMedia?.type === 'sticker'
-                            ? 'text-pink-600 dark:text-pink-400 bg-pink-100/70 dark:bg-pink-950/60 ring-1 ring-pink-400/40'
-                            : 'text-gray-400 hover:text-pink-500 dark:text-wa-dmuted dark:hover:text-pink-400 hover:bg-gray-200 dark:hover:bg-wa-dsurf'
-                        }`}
-                        title="Choose WhatsApp Sticker"
-                      >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm6 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75z" />
-                        </svg>
-                      </button>
+                    {/* GIF button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMediaPickerTab('gif');
+                        setShowMediaPicker(true);
+                      }}
+                      className={`p-1.5 rounded-lg transition-colors ${
+                        attachedMedia?.type === 'gif'
+                          ? 'text-violet-600 dark:text-violet-400 bg-violet-100/70 dark:bg-violet-950/60 ring-1 ring-violet-400/40'
+                          : 'text-gray-400 hover:text-violet-500 dark:text-wa-dmuted dark:hover:text-violet-400 hover:bg-gray-200 dark:hover:bg-wa-dsurf'
+                      }`}
+                      title="Search & Attach WhatsApp GIF"
+                    >
+                      <WhatsAppGifIcon className="w-5 h-5" />
+                    </button>
 
-                      {/* Sticker Dropdown Popup */}
-                      {showStickerPicker && (
-                        <div
-                          ref={stickerPickerRef}
-                          className="absolute left-0 bottom-full mb-2 w-[288px] min-[360px]:w-[320px] bg-white dark:bg-[#202c33] border border-gray-200 dark:border-wa-dbdr rounded-2xl shadow-2xl z-[85] p-3 overflow-hidden transition-all"
-                        >
-                          <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-100 dark:border-wa-dbdr/50">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-base">🏷️</span>
-                              <span className="text-xs font-bold text-gray-800 dark:text-white">Choose a Sticker</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => stickerInputRef.current?.click()}
-                              className="text-[11px] font-semibold text-wa-teal dark:text-wa-green hover:underline flex items-center gap-1"
-                            >
-                              <span>📁 Custom File</span>
-                            </button>
-                          </div>
-
-                          {/* Grid of popular stickers */}
-                          <div className="grid grid-cols-4 gap-2 max-h-56 overflow-y-auto custom-scroll pr-1 py-1">
-                            {POPULAR_STICKERS.map((stk) => (
-                              <button
-                                key={stk.id}
-                                type="button"
-                                onClick={() => handleSelectStickerPreset(stk)}
-                                className="p-2 flex flex-col items-center justify-center rounded-xl hover:scale-105 active:scale-95 hover:bg-slate-50 dark:hover:bg-white/10 border border-slate-100 dark:border-wa-dbdr/40 transition-all text-center group"
-                                title={stk.label}
-                              >
-                                <span className="text-3xl filter drop-shadow-xs group-hover:scale-110 transition-transform">
-                                  {stk.emoji}
-                                </span>
-                                <span className="text-[10px] text-gray-500 dark:text-gray-300 font-medium truncate w-full mt-1">
-                                  {stk.label}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    {/* Sticker button (WhatsApp folded corner icon) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMediaPickerTab('sticker');
+                        setShowMediaPicker(true);
+                      }}
+                      className={`p-1.5 rounded-lg transition-colors ${
+                        attachedMedia?.type === 'sticker'
+                          ? 'text-pink-600 dark:text-pink-400 bg-pink-100/70 dark:bg-pink-950/60 ring-1 ring-pink-400/40'
+                          : 'text-gray-400 hover:text-pink-500 dark:text-wa-dmuted dark:hover:text-pink-400 hover:bg-gray-200 dark:hover:bg-wa-dsurf'
+                      }`}
+                      title="Search & Attach WhatsApp Sticker"
+                    >
+                      <WhatsAppStickerIcon className="w-5 h-5" />
+                    </button>
 
                     {/* Hidden file inputs */}
                     <input
@@ -1432,9 +1374,16 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
                     <input
                       ref={stickerInputRef}
                       type="file"
-                      accept="image/webp,image/png,image/jpeg"
+                      accept="image/webp,image/png,image/jpeg,image/svg+xml"
                       className="hidden"
                       onChange={handleStickerFileInput}
+                    />
+                    <input
+                      ref={gifInputRef}
+                      type="file"
+                      accept="image/gif,video/mp4"
+                      className="hidden"
+                      onChange={handleGifFileInput}
                     />
                   </>
                 )}
@@ -1488,6 +1437,17 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
             ? `📅 Schedule to ${recipients.length} Recipients`
             : '📅 Schedule Message'}
         </button>
+        {/* WhatsApp GIF & Sticker Picker Modal */}
+        <GifStickerPickerModal
+          isOpen={showMediaPicker}
+          initialTab={mediaPickerTab}
+          onClose={() => setShowMediaPicker(false)}
+          onSelectMedia={(media) => {
+            setAttachedMedia(media);
+          }}
+          customStickerInputRef={stickerInputRef}
+          customGifInputRef={gifInputRef}
+        />
       </form>
       {showImportModal && (
         <ContactsImportModal

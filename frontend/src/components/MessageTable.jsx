@@ -232,6 +232,11 @@ export default function MessageTable({ messages, loading, onRefresh }) {
                               🏷️ Sticker
                             </span>
                           )}
+                          {msg.mediaType === 'gif' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800">
+                              🎞️ GIF
+                            </span>
+                          )}
                           {msg.mediaName && (
                             <span className="text-[11px] text-gray-500 dark:text-wa-dmuted truncate max-w-[120px]" title={msg.mediaName}>
                               {msg.mediaName}

@@ -1277,8 +1277,19 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
           mimetype: 'audio/mp4'
         };
       } else if (mediaType === 'sticker') {
+        const { formatStickerBuffer } = require('./mediaHelper');
+        const stickerBuffer = await formatStickerBuffer(buffer);
         messagePayload = {
-          sticker: buffer
+          sticker: stickerBuffer,
+          mimetype: 'image/webp'
+        };
+      } else if (mediaType === 'gif') {
+        const { formatGifBuffer } = require('./mediaHelper');
+        const gifBuffer = await formatGifBuffer(buffer);
+        messagePayload = {
+          video: gifBuffer,
+          gifPlayback: true,
+          caption: text || ''
         };
       } else {
         messagePayload = { text: text || '' };

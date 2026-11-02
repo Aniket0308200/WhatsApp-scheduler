@@ -344,7 +344,7 @@ const ScheduledMessageSchema = new mongoose.Schema({
   encryptedNumber: { type: String, required: true }, // Encrypted recipient
   encryptedRecipientName: { type: String, default: '' }, // Encrypted display name
   encryptedMessageText: { type: String, default: '' }, // Encrypted message body / caption
-  mediaType: { type: String, enum: ['image', 'video', 'audio', 'sticker', null], default: null },
+  mediaType: { type: String, enum: ['image', 'video', 'audio', 'sticker', 'gif', null], default: null },
   mediaData: { type: String, default: null }, // Base64 data URI (encrypted or raw)
   mediaName: { type: String, default: null }, // Original filename
   scheduledAt: { type: Date, required: true },
