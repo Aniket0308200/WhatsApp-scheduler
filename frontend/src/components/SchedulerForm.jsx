@@ -273,7 +273,7 @@ function ContactsImportModal({ onClose, onImported }) {
   );
 }
 
-export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quota, onViewQuota }) {
+export default function SchedulerForm({ isConnected, isReconnecting = false, onScheduled, isSyncing, quota, onViewQuota }) {
   const getFullPhone = (cc, ph) => {
     if (ph && ph.endsWith('@g.us')) {
       return ph;
@@ -339,7 +339,7 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
   // ─────────────────────────────────────────────────────────────────────────
   const [message,       setMessage]       = useState('');
   const [scheduledAt,   setScheduledAt]   = useState(getDefaultTime);
-  const [timeConfirmed, setTimeConfirmed] = useState(false);  // "Done" clicked
+  const [timeConfirmed, setTimeConfirmed] = useState(true);  // Initialized to true for default 30s-ahead time
   const [loading,       setLoading]       = useState(false);
   const [isMobile,      setIsMobile]      = useState(() => typeof window !== 'undefined' && window.innerWidth < 640);
 
@@ -820,17 +820,24 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
     return () => clearTimeout(nameTimer.current);
   }, [countryCode, phone, lookupContact]);
 
-  // Reset time confirmation if datetime changes
+  // Update time and auto-confirm if valid future time
   const handleDateChange = (val) => {
     setScheduledAt(val);
-    setTimeConfirmed(false);
+    const d = new Date(val ? val.replace(' ', 'T') : '');
+    if (!isNaN(d.getTime()) && d.getTime() > Date.now() + 5000) {
+      setTimeConfirmed(true);
+    } else {
+      setTimeConfirmed(false);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!timeConfirmed) {
-      toast.error('Please confirm the scheduled time first.');
+    const parsedScheduled = new Date(scheduledAt ? scheduledAt.replace(' ', 'T') : '');
+    const isFuture = !isNaN(parsedScheduled.getTime()) && parsedScheduled.getTime() > Date.now();
+    if (!timeConfirmed && !isFuture) {
+      toast.error('Please pick a future date & time.');
       return;
     }
 
@@ -1418,25 +1425,55 @@ export default function SchedulerForm({ isConnected, onScheduled, isSyncing, quo
         )}
 
         {/* ── Submit ────────────────────────────────────────────────────── */}
-        <button
-          type="submit"
-          disabled={loading || !isConnected || !timeConfirmed || (quota && quota.remaining <= 0) || (recipients.length === 0 && !phone.trim()) || (!message.trim() && !attachedMedia)}
-          className={`w-full font-semibold py-3 rounded-xl text-sm shadow-sm flex items-center justify-center gap-2 transition-colors
-            ${timeConfirmed && isConnected && !(quota && quota.remaining <= 0) && (recipients.length > 0 || phone.trim()) && (message.trim() || attachedMedia)
-              ? 'bg-wa-green hover:bg-wa-teal text-white'
-              : 'bg-gray-200 dark:bg-wa-dsurf text-gray-400 dark:text-wa-dmuted cursor-not-allowed border dark:border-wa-dbdr'}`}
-        >
-          {loading && (
-            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          )}
-          {loading
-            ? 'Scheduling…'
-            : (quota && quota.remaining <= 0)
-            ? '🚫 Monthly Limit Reached'
-            : recipients.length > 1
-            ? `📅 Schedule to ${recipients.length} Recipients`
-            : '📅 Schedule Message'}
-        </button>
+        {(() => {
+          const scheduledDateObj = scheduledAt ? new Date(scheduledAt.replace(' ', 'T')) : null;
+          const isScheduledInFuture = Boolean(scheduledDateObj && !isNaN(scheduledDateObj.getTime()) && scheduledDateObj.getTime() > Date.now());
+          const hasValidRecipient = recipients.length > 0 || Boolean(phone.trim());
+          const hasValidContent = Boolean(message.trim() || attachedMedia);
+          const canConnect = isConnected || isReconnecting;
+          const isQuotaExhausted = Boolean(quota && quota.remaining <= 0);
+
+          const isSubmitDisabled = loading ||
+            !canConnect ||
+            isQuotaExhausted ||
+            !hasValidRecipient ||
+            !hasValidContent ||
+            (!timeConfirmed && !isScheduledInFuture);
+
+          const isReady = !isSubmitDisabled;
+
+          return (
+            <button
+              type="submit"
+              disabled={isSubmitDisabled}
+              className={`w-full font-semibold py-3 rounded-xl text-sm shadow-sm flex items-center justify-center gap-2 transition-colors
+                ${isReady
+                  ? 'bg-wa-green hover:bg-wa-teal text-white cursor-pointer active:scale-[0.99]'
+                  : 'bg-gray-200 dark:bg-wa-dsurf text-gray-400 dark:text-wa-dmuted cursor-not-allowed border dark:border-wa-dbdr'}`}
+            >
+              {loading && (
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              )}
+              {loading ? (
+                'Scheduling…'
+              ) : isQuotaExhausted ? (
+                '🚫 Monthly Limit Reached'
+              ) : !canConnect ? (
+                '⚠️ Connect WhatsApp First'
+              ) : !hasValidRecipient ? (
+                '📱 Add Recipient Phone Number'
+              ) : !hasValidContent ? (
+                '✍️ Enter Message or Attach Media'
+              ) : (!timeConfirmed && !isScheduledInFuture) ? (
+                '⏰ Pick a Future Date & Time'
+              ) : recipients.length > 1 ? (
+                `📅 Schedule to ${recipients.length} Recipients`
+              ) : (
+                '📅 Schedule Message'
+              )}
+            </button>
+          );
+        })()}
         {/* WhatsApp GIF & Sticker Picker Modal */}
         <GifStickerPickerModal
           isOpen={showMediaPicker}

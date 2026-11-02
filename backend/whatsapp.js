@@ -740,13 +740,13 @@ async function _performInitWhatsApp(sessionId) {
     },
     getMessage,
     printQRInTerminal: false,
-    browser: Browsers.ubuntu('Chrome'),
+    browser: Browsers.windows('Desktop'),
     syncFullHistory: false,
     generateHighQualityLinkPreview: false,
-    markOnlineOnConnect: false, // Prevents session conflict/stealing from user's primary phone
-    keepAliveIntervalMs: 30_000, // Standard 30s keepAlive prevents premature 15s connectionLost drops
-    retryRequestDelayMs: 5_000,
-    connectTimeoutMs: 60_000,
+    markOnlineOnConnect: true,
+    keepAliveIntervalMs: 15_000,
+    retryRequestDelayMs: 250,
+    connectTimeoutMs: 30_000,
     defaultQueryTimeoutMs: 60_000,
     emitOwnEvents: true,
   });
@@ -839,6 +839,14 @@ async function _performInitWhatsApp(sessionId) {
 
       const groupSyncPromise = (async () => {
         try {
+          const now = Date.now();
+          const lastSync = session.lastGroupSyncTime || 0;
+          if (now - lastSync < 10 * 60 * 1000) {
+            console.log(`[WA] [${sessionId}] Skipping group sync (throttled 10m)`);
+            return;
+          }
+          session.lastGroupSyncTime = now;
+          await new Promise(r => setTimeout(r, 4000));
           console.log(`[WA] [${sessionId}] Fetching groups for single-pass sync...`);
           const groups = await sock.groupFetchAllParticipating().catch(() => ({}));
           const groupContacts = [];
@@ -1277,14 +1285,12 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
           mimetype: 'audio/mp4'
         };
       } else if (mediaType === 'sticker') {
-        const { formatStickerBuffer } = require('./mediaHelper');
         const stickerBuffer = await formatStickerBuffer(buffer);
         messagePayload = {
           sticker: stickerBuffer,
           mimetype: 'image/webp'
         };
       } else if (mediaType === 'gif') {
-        const { formatGifBuffer } = require('./mediaHelper');
         const gifBuffer = await formatGifBuffer(buffer);
         messagePayload = {
           video: gifBuffer,

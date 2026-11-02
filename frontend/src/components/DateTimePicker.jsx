@@ -55,7 +55,11 @@ export default function DateTimePicker({
       const d = parseISO(combined);
       if (isValid(d)) {
         onChange(formatToInternal(d));
-        if (timeConfirmed) setTimeConfirmed(false);
+        if (d.getTime() > Date.now() + 5000) {
+          setTimeConfirmed(true);
+        } else {
+          setTimeConfirmed(false);
+        }
       }
     } catch (e) {
       console.error('Error changing date:', e);
@@ -72,7 +76,11 @@ export default function DateTimePicker({
       const d = parseISO(combined);
       if (isValid(d)) {
         onChange(formatToInternal(d));
-        if (timeConfirmed) setTimeConfirmed(false);
+        if (d.getTime() > Date.now() + 5000) {
+          setTimeConfirmed(true);
+        } else {
+          setTimeConfirmed(false);
+        }
       }
     } catch (e) {
       console.error('Error changing time:', e);
@@ -116,8 +124,8 @@ export default function DateTimePicker({
     }
 
     onChange(formatToInternal(target));
-    if (timeConfirmed) setTimeConfirmed(false);
-    toast.success('Scheduled time updated!');
+    setTimeConfirmed(true);
+    toast.success('Scheduled time updated & confirmed!');
   };
 
   return (
@@ -237,7 +245,12 @@ export default function DateTimePicker({
             onChange={(e) => {
               if (e.target.value) {
                 onChange(e.target.value);
-                if (timeConfirmed) setTimeConfirmed(false);
+                const d = parseISO(e.target.value);
+                if (isValid(d) && d.getTime() > Date.now() + 5000) {
+                  setTimeConfirmed(true);
+                } else {
+                  setTimeConfirmed(false);
+                }
               }
             }}
             className="w-full bg-white dark:bg-wa-dpanel border border-slate-200 dark:border-wa-dbdr rounded-xl px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-wa-dtext focus:border-wa-teal focus:ring-1 focus:ring-wa-teal transition-all cursor-pointer"

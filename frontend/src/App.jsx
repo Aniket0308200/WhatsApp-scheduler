@@ -279,6 +279,7 @@ export default function App() {
 
                     <SchedulerForm
                       isConnected={isConnected}
+                      isReconnecting={isReconnecting}
                       onScheduled={() => {
                         refreshMessages();
                         refreshQuota();

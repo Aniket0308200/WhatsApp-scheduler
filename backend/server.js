@@ -616,8 +616,11 @@ app.get('/api/messages', async (req, res) => {
 app.post('/api/messages', async (req, res) => {
   const { phone, message, scheduledAt, recipientName, mediaType, mediaData, mediaName } = req.body;
 
-  if (whatsapp.getStatus(req.sessionId) !== 'connected') {
-    return res.status(400).json({ error: 'WhatsApp is not connected for this session.' });
+  const status = whatsapp.getStatus(req.sessionId);
+  const profile = whatsapp.getConnectedProfile(req.sessionId);
+  const isLinked = Boolean(profile?.phone);
+  if (status !== 'connected' && !(status === 'connecting' && isLinked)) {
+    return res.status(400).json({ error: 'WhatsApp is not connected for this session. Please connect your WhatsApp first.' });
   }
 
   const isGroup = phone && phone.endsWith('@g.us');
