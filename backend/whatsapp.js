@@ -25,6 +25,7 @@ const path = require('path');
 const fs = require('fs');
 const db = require('./db');
 const { Contact } = db;
+const { formatStickerBuffer, formatGifBuffer } = require('./mediaHelper');
 
 const SESSIONS_ROOT = path.join(__dirname, '..', 'data', 'session');
 if (!fs.existsSync(SESSIONS_ROOT)) {

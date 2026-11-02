@@ -1,22 +1,25 @@
 /**
  * scheduler.js — Cron-based message dispatcher (Multi-User support via MongoDB)
  *
- * Runs every minute. Queries pending due messages from MongoDB,
- * and attempts delivery via Baileys.
+ * Runs every 5 seconds. Queries pending due messages from MongoDB,
+ * and attempts delivery via Baileys with safety timeouts and recovery guards.
  */
 
-const cron     = require('node-cron');
 const db       = require('./db');
 const whatsapp = require('./whatsapp');
 
 let isRunning = false;
+let lastRunStart = 0;
 
 async function processAllDueMessages() {
-  if (isRunning) {
+  const now = Date.now();
+  // Prevent parallel runs, but auto-recover after 45 seconds if a previous run hung
+  if (isRunning && (now - lastRunStart < 45_000)) {
     console.log('[Scheduler] Previous run still in progress — skipping tick.');
     return;
   }
   isRunning = true;
+  lastRunStart = now;
 
   try {
     const due = await db.getPendingDueMessages();
@@ -45,7 +48,8 @@ async function processAllDueMessages() {
         }
 
         try {
-          const result = await whatsapp.sendMessage(
+          // 30-second timeout per message send so socket deadlocks cannot freeze the scheduler
+          const sendPromise = whatsapp.sendMessage(
             sessionId,
             msg.phone,
             msg.message,
@@ -53,6 +57,11 @@ async function processAllDueMessages() {
             msg.mediaData,
             msg.mediaName
           );
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('WhatsApp message delivery timed out after 30s')), 30_000)
+          );
+
+          const result = await Promise.race([sendPromise, timeoutPromise]);
           // Atomically mark as sent and store WhatsApp message id
           await db.ScheduledMessage.updateOne(
             { _id: msg.id },

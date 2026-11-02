@@ -1,4 +1,9 @@
-const sharp = require('sharp');
+let sharp = null;
+try {
+  sharp = require('sharp');
+} catch (e) {
+  console.warn('[mediaHelper] sharp module not loaded, using raw buffer pass-through:', e.message);
+}
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -9,6 +14,9 @@ const { execSync } = require('child_process');
  * Fixes the issue where stickers wouldn't render on WhatsApp mobile (Android/iOS).
  */
 async function formatStickerBuffer(buffer) {
+  if (!sharp) {
+    return buffer;
+  }
   try {
     let sharpInstance;
     try {
