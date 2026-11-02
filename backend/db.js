@@ -600,11 +600,11 @@ async function markMessageSubmitted(sessionId, id, waMessageId) {
 async function updateMessageStatusByWhatsAppId(senderPhone, waMessageId, status) {
   if (!waMessageId) return 0;
   // Valid transitions:
-  // sent / submitted -> delivered
-  // sent / submitted / delivered -> read
+  // pending / sent / submitted -> delivered
+  // pending / sent / submitted / delivered -> read
   const permitted = status === 'read'
-    ? ['submitted', 'sent', 'delivered']
-    : ['submitted', 'sent'];
+    ? ['pending', 'submitted', 'sent', 'delivered']
+    : ['pending', 'submitted', 'sent'];
   const res = await ScheduledMessage.updateOne(
     { waMessageId, status: { $in: permitted } },
     { $set: { status } }
