@@ -3,8 +3,9 @@ import FeaturesSection from './FeaturesSection';
 import HowItWorksSection from './HowItWorksSection';
 import PricingSection from './PricingSection';
 import FaqSection from './FaqSection';
+import ContactSection from './ContactSection';
 
-export default function LandingPage({ onGetStarted, isConnected, waStatus, profile, onUpgradePlan, currentPlan = 'free' }) {
+export default function LandingPage({ onGetStarted, isConnected, waStatus, profile, onUpgradePlan, currentPlan = 'free', authUser }) {
   return (
     <div className="w-full space-y-12 sm:space-y-16 pb-12">
       
@@ -188,6 +189,9 @@ export default function LandingPage({ onGetStarted, isConnected, waStatus, profi
 
       {/* FAQs */}
       <FaqSection />
+
+      {/* Contact Us & Priority Support */}
+      <ContactSection authUser={authUser} profile={profile} />
 
       {/* Bottom CTA Banner */}
       <section className="max-w-5xl mx-auto px-2 sm:px-4">

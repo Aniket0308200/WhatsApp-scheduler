@@ -10,7 +10,9 @@ import {
   adminUpdateUserLock,
   adminGetSubscriptions,
   adminApproveSubscription,
-  adminRejectSubscription
+  adminRejectSubscription,
+  adminGetContactMessages,
+  adminUpdateContactStatus
 } from '../api';
 
 const ADMIN_STORAGE_KEY = 'wa_admin_token';
@@ -45,10 +47,11 @@ export default function AdminPanel() {
   const [loggingIn, setLoggingIn] = useState(false);
 
   // ── Dashboard Data State ──────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState('users'); // 'users' | 'subscriptions'
+  const [activeTab, setActiveTab] = useState('users'); // 'users' | 'subscriptions' | 'inquiries'
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
+  const [contactMessages, setContactMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
 
@@ -110,10 +113,11 @@ export default function AdminPanel() {
     if (!isBackground) setLoading(true);
 
     try {
-      const [statsRes, usersRes, subsRes] = await Promise.allSettled([
+      const [statsRes, usersRes, subsRes, contactRes] = await Promise.allSettled([
         adminGetStats(token),
         adminGetUsers(token),
-        adminGetSubscriptions(token)
+        adminGetSubscriptions(token),
+        adminGetContactMessages(token)
       ]);
 
       if (statsRes.status === 'fulfilled' && statsRes.value?.success) {
@@ -124,6 +128,9 @@ export default function AdminPanel() {
       }
       if (subsRes.status === 'fulfilled' && subsRes.value?.success) {
         setSubscriptions(subsRes.value.requests || []);
+      }
+      if (contactRes.status === 'fulfilled' && contactRes.value?.success) {
+        setContactMessages(contactRes.value.messages || []);
       }
     } catch (err) {
       if (err.response?.status === 401) {
@@ -553,6 +560,22 @@ export default function AdminPanel() {
               </span>
             )}
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('inquiries')}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 ${
+              activeTab === 'inquiries'
+                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+          >
+            ✉️ Contact Inquiries ({contactMessages.length})
+            {contactMessages.filter(m => m.status === 'new').length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-500 text-white">
+                {contactMessages.filter(m => m.status === 'new').length} New
+              </span>
+            )}
+          </button>
         </div>
 
         {/* ─────────────────────────────────────────────────────────────────── */}
@@ -910,6 +933,137 @@ export default function AdminPanel() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {/* TAB 3: CONTACT INQUIRIES & HELPDESK                                 */}
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {activeTab === 'inquiries' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-black text-white">Customer Support & Contact Inquiries</h3>
+                <p className="text-xs text-slate-400">
+                  Messages submitted via the homepage contact form (routed to aniketchouhan243@gmail.com)
+                </p>
+              </div>
+              <span className="text-xs font-bold text-slate-400 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl">
+                {contactMessages.length} Total Messages
+              </span>
+            </div>
+
+            {contactMessages.length === 0 ? (
+              <div className="p-12 text-center bg-slate-900/60 border border-slate-800 rounded-3xl space-y-2">
+                <span className="text-3xl">📭</span>
+                <h4 className="text-sm font-bold text-slate-300">No Inquiries Received Yet</h4>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  When users fill out the Contact Us form on the homepage, their messages and account details will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {contactMessages.map((msg) => (
+                  <div
+                    key={msg._id}
+                    className={`p-4 sm:p-5 rounded-2xl border transition-all ${
+                      msg.status === 'resolved'
+                        ? 'bg-slate-900/40 border-slate-800/60 opacity-80'
+                        : 'bg-slate-900 border-slate-800 shadow-md'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+                      <div className="flex items-center gap-2.5">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          msg.status === 'resolved'
+                            ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800'
+                            : 'bg-blue-950/60 text-blue-300 border border-blue-800 animate-pulse'
+                        }`}>
+                          {msg.status}
+                        </span>
+                        <span className="text-xs font-bold text-white">{msg.subject}</span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 font-mono">
+                        {new Date(msg.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 py-3 text-xs border-b border-slate-800/60">
+                      <div>
+                        <span className="text-slate-500 block text-[10px] font-semibold">User Login Info:</span>
+                        <span className="text-slate-200 font-medium">{msg.loginName || '—'}</span>
+                        <span className="text-slate-400 block text-[11px]">{msg.loginEmail || 'No login email'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[10px] font-semibold">Connected WhatsApp:</span>
+                        <span className="text-emerald-400 font-mono font-medium">{msg.whatsappNumber || 'Not connected'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[10px] font-semibold">Contact / Reply Email:</span>
+                        <a
+                          href={`mailto:${msg.contactEmail}?subject=Re: [WA Scheduler Support] ${encodeURIComponent(msg.subject)}`}
+                          className="text-wa-teal hover:underline font-medium"
+                        >
+                          {msg.contactEmail} ↗
+                        </a>
+                      </div>
+                    </div>
+
+                    {/* Payment Info if marked as paid */}
+                    {msg.paymentDetails?.hasPaid && (
+                      <div className="my-2.5 p-2.5 rounded-xl bg-purple-950/30 border border-purple-900/50 text-xs">
+                        <span className="text-purple-300 font-bold block mb-1">💳 Payment Verification Details:</span>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-purple-200">
+                          <span>Payer Name: <strong>{msg.paymentDetails.payerName || '—'}</strong></span>
+                          <span>Payer Email: <strong>{msg.paymentDetails.payerEmail || '—'}</strong></span>
+                          <span>UPI Ref / UTR: <strong>{msg.paymentDetails.payerRef || '—'}</strong></span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Message Body */}
+                    <div className="pt-2">
+                      <span className="text-slate-500 block text-[10px] font-semibold mb-1">User Message:</span>
+                      <p className="text-xs sm:text-sm text-slate-200 whitespace-pre-wrap bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
+                        {msg.message}
+                      </p>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="mt-3 flex items-center justify-between pt-2">
+                      <a
+                        href={`mailto:${msg.contactEmail}?subject=Re: [WA Scheduler Support] ${encodeURIComponent(msg.subject)}`}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-all flex items-center gap-1.5"
+                      >
+                        <span>✉️</span>
+                        <span>Reply to User</span>
+                      </a>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const nextStatus = msg.status === 'resolved' ? 'new' : 'resolved';
+                          try {
+                            await adminUpdateContactStatus(token, msg._id, { status: nextStatus });
+                            setContactMessages(prev => prev.map(m => m._id === msg._id ? { ...m, status: nextStatus } : m));
+                            toast.success(`Marked as ${nextStatus}!`);
+                          } catch (err) {
+                            toast.error('Failed to update status.');
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                          msg.status === 'resolved'
+                            ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                            : 'bg-emerald-950 text-emerald-300 border-emerald-800 hover:bg-emerald-900'
+                        }`}
+                      >
+                        {msg.status === 'resolved' ? 'Mark as Unresolved' : '✓ Mark as Resolved'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </main>

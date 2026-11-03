@@ -361,6 +361,7 @@ export default function App() {
                     profile={profile}
                     onUpgradePlan={handleUpgradePlan}
                     currentPlan={quota?.plan || 'free'}
+                    authUser={authUser}
                   />
                 ) : activeView === 'quota' ? (
                   <QuotaPage
@@ -430,6 +431,8 @@ export default function App() {
               <button onClick={() => handleNavigate('landing', 'features')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Features</button>
               <span className="opacity-40">|</span>
               <button onClick={() => handleNavigate('landing', 'pricing')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Pricing</button>
+              <span className="opacity-40">|</span>
+              <button onClick={() => handleNavigate('landing', 'contact')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Contact Us</button>
               <span className="opacity-40">|</span>
               <Link to="/privacy-policy" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Privacy Policy</Link>
               <span className="opacity-40">|</span>

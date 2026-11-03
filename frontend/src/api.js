@@ -109,6 +109,13 @@ export const submitFeedback        = (payload) => api.post('/feedback', payload)
 export const toggleFeedbackLike    = (id)      => api.post(`/feedback/${id}/like`).then(r => r.data);
 export const submitAdminReply      = (id, reply) => api.post(`/feedback/${id}/admin-reply`, { reply }).then(r => r.data);
 
+// ─── Contact Us & Support Inquiries ──────────────────────────────────────────
+export const submitContactForm     = (payload) => api.post('/contact', payload).then(r => r.data);
+export const adminGetContactMessages = (token) =>
+  api.get('/contact/messages', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+export const adminUpdateContactStatus = (token, id, data) =>
+  api.put(`/contact/messages/${id}`, data, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+
 // ─── Subscription & UPI Manual Verification ──────────────────────────────────
 export const fetchSubscriptionConfig = () =>
   api.get('/subscription/config').then(r => r.data);

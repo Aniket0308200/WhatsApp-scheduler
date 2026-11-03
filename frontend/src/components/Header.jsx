@@ -240,6 +240,12 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
                   Free
                 </span>
               </button>
+              <button
+                onClick={() => handleNavClick('landing', 'contact')}
+                className="px-3 py-1.5 rounded-lg hover:text-white hover:bg-white/10 dark:hover:text-wa-dtext transition-colors"
+              >
+                Contact
+              </button>
             </nav>
           )}
 
@@ -529,6 +535,12 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
                 >
                   <span>Pricing</span>
                   <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500 text-white uppercase">Free</span>
+                </button>
+                <button
+                  onClick={() => { handleNavClick('landing', 'contact'); setMobileMenuOpen(false); }}
+                  className="text-left px-3 py-2 rounded-lg hover:bg-white/10 dark:hover:bg-wa-dsurf"
+                >
+                  Contact Us
                 </button>
               </div>
             )}

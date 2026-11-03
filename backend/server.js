@@ -120,6 +120,10 @@ app.use('/api/auth/google', googleContactsRouter);
 const feedbackRouter = require('./routes/feedback');
 app.use('/api/feedback', feedbackRouter);
 
+// ─── Contact Us & Helpdesk Routes ────────────────────────────────────────────
+const contactRouter = require('./routes/contact');
+app.use('/api/contact', contactRouter);
+
 // ─── User Authentication Routes (Sign Up, Sign In, Session) ────────────────────
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 

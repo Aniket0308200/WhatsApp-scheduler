@@ -283,6 +283,30 @@ FeedbackSchema.index({ type: 1, createdAt: -1 });
 
 const Feedback = mongoose.model('Feedback', FeedbackSchema);
 
+// ─── Contact Us Message Model ────────────────────────────────────────────────
+const ContactMessageSchema = new mongoose.Schema({
+  loginName: { type: String, default: '' },
+  loginEmail: { type: String, default: '' },
+  whatsappNumber: { type: String, default: '' },
+  contactEmail: { type: String, required: true },
+  paymentDetails: {
+    hasPaid: { type: Boolean, default: false },
+    payerName: { type: String, default: '' },
+    payerEmail: { type: String, default: '' },
+    payerRef: { type: String, default: '' }
+  },
+  subject: { type: String, default: 'General Support' },
+  message: { type: String, required: true },
+  sessionId: { type: String, default: '' },
+  ip: { type: String, default: '' },
+  status: { type: String, enum: ['new', 'in_progress', 'resolved'], default: 'new' },
+  adminReply: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now }
+});
+ContactMessageSchema.index({ createdAt: -1 });
+
+const ContactMessage = mongoose.model('ContactMessage', ContactMessageSchema);
+
 function cleanContactName(name) {
   if (!name) return null;
   const trimmed = String(name).trim();
@@ -1019,4 +1043,5 @@ module.exports = {
   updateUserLockByAdmin,
   updateUserHeartbeat,
   getUserActivityOverviewForAdmin,
+  ContactMessage,
 };
