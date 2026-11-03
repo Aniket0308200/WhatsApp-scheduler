@@ -597,6 +597,13 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       else if (file.type.startsWith('audio/')) mType = 'audio';
       else if (file.type === 'image/gif') mType = 'gif';
       else if (file.type === 'image/webp') mType = 'sticker';
+      else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf') || file.name.toLowerCase().endsWith('.doc') || file.name.toLowerCase().endsWith('.docx') || file.name.toLowerCase().endsWith('.txt')) {
+        if (userPlanKey !== 'pro') {
+          toast.error('Document and PDF attachments are exclusive to the Pro Plan. Upgrade to Pro!');
+          continue;
+        }
+        mType = 'document';
+      }
       else mType = 'image';
 
       if (mType === 'image') {
@@ -1178,20 +1185,65 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
 
         {/* ── Recipients (multi-chip) ────────────────────────────────────── */}
         <div>
-          <div className="mb-2">
-            <label htmlFor="scheduler-recipient-input" className="block text-sm font-medium text-gray-700 dark:text-wa-dtext">
-              Recipients
-            </label>
-            <p className="text-[11px] text-gray-400 dark:text-wa-dmuted mt-0.5">
-              {userPlanKey === 'pro' ? (
-                <><strong>Unlimited personal contacts</strong> + <strong>unlimited groups</strong> at once.</>
-              ) : userPlanKey === 'starter' ? (
-                <>Up to <strong>20 personal contacts</strong> + <strong>10 groups</strong> at once.</>
-              ) : (
-                <>Up to <strong>5 personal contacts</strong> + <strong>2 groups</strong> at once.</>
-              )}{' '}
-              Search or type a number, then press <kbd className="px-1 py-0.5 rounded bg-slate-100 dark:bg-wa-dsurf text-[10px] font-mono border border-slate-200 dark:border-wa-dbdr">Enter</kbd> or select from suggestions.
-            </p>
+          <div className="mb-2 flex items-start justify-between flex-wrap gap-2">
+            <div>
+              <label htmlFor="scheduler-recipient-input" className="block text-sm font-medium text-gray-700 dark:text-wa-dtext">
+                Recipients
+              </label>
+              <p className="text-[11px] text-gray-400 dark:text-wa-dmuted mt-0.5">
+                {userPlanKey === 'pro' ? (
+                  <><strong>Unlimited personal contacts</strong> + <strong>unlimited groups</strong> at once.</>
+                ) : userPlanKey === 'starter' ? (
+                  <>Up to <strong>20 personal contacts</strong> + <strong>10 groups</strong> at once.</>
+                ) : (
+                  <>Up to <strong>5 personal contacts</strong> + <strong>2 groups</strong> at once.</>
+                )}{' '}
+                Search or type a number, then press <kbd className="px-1 py-0.5 rounded bg-slate-100 dark:bg-wa-dsurf text-[10px] font-mono border border-slate-200 dark:border-wa-dbdr">Enter</kbd> or select from suggestions.
+              </p>
+            </div>
+
+            {/* Quick Button: WhatsApp Status / Story (Pro Feature) */}
+            <button
+              type="button"
+              onClick={() => {
+                if (userPlanKey !== 'pro') {
+                  toast('👑 WhatsApp Status & Story scheduling is a Pro Plan exclusive feature.', {
+                    icon: '🚀',
+                    duration: 3500
+                  });
+                  onViewQuota?.();
+                  return;
+                }
+                const hasStatus = recipients.some(r => r.phone === 'status@broadcast');
+                if (hasStatus) {
+                  setRecipients(prev => prev.filter(r => r.phone !== 'status@broadcast'));
+                  toast('Removed WhatsApp Status recipient.', { icon: 'ℹ️' });
+                } else {
+                  setRecipients(prev => [...prev, {
+                    phone: 'status@broadcast',
+                    name: 'WhatsApp Status (Story)',
+                    isStatus: true
+                  }]);
+                  toast.success('📱 Added WhatsApp Status (Story) as recipient!');
+                }
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs ${
+                recipients.some(r => r.phone === 'status@broadcast')
+                  ? 'bg-purple-600 text-white ring-2 ring-purple-400'
+                  : userPlanKey === 'pro'
+                  ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/40'
+                  : 'bg-slate-100 dark:bg-wa-dsurf text-slate-500 dark:text-wa-dmuted border border-slate-200 dark:border-wa-dbdr hover:text-purple-600'
+              }`}
+              title={userPlanKey === 'pro' ? 'Schedule automated WhatsApp Status / Story' : 'Pro Plan Exclusive: WhatsApp Status Scheduling'}
+            >
+              <span>📱</span>
+              <span>{recipients.some(r => r.phone === 'status@broadcast') ? '✓ Status / Story Added' : '+ WhatsApp Status (Story)'}</span>
+              {userPlanKey !== 'pro' && (
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-500 text-slate-900">
+                  PRO
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Input row: country picker + search box — always clean, no chips inside */}
@@ -1292,14 +1344,16 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                 <span
                   key={r.phone}
                   className={`inline-flex items-center gap-2 pl-3 pr-2 py-1 rounded-full text-xs font-medium border shadow-2xs transition-all ${
-                    r.isGroup
+                    r.phone === 'status@broadcast'
+                      ? 'bg-purple-100 dark:bg-purple-950/70 text-purple-900 dark:text-purple-200 border-purple-300 dark:border-purple-700'
+                      : r.isGroup
                       ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 border-purple-200/80 dark:border-purple-800/60'
                       : 'bg-white dark:bg-wa-dpanel text-slate-800 dark:text-slate-100 border-slate-300 dark:border-wa-dbdr'
                   }`}
                 >
-                  <span className="text-[11px] opacity-75">{r.isGroup ? '👥' : '👤'}</span>
+                  <span className="text-[11px] opacity-75">{r.phone === 'status@broadcast' ? '📱' : r.isGroup ? '👥' : '👤'}</span>
                   <span className="max-w-[150px] truncate font-semibold">
-                    {r.name || (r.isGroup ? r.phone : `+${r.phone}`)}
+                    {r.phone === 'status@broadcast' ? 'WhatsApp Status' : (r.name || (r.isGroup ? r.phone : `+${r.phone}`))}
                   </span>
                   <button
                     type="button"
@@ -1633,12 +1687,38 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                       <WhatsAppStickerIcon className="w-5 h-5" />
                     </button>
 
+                    {/* Smart Name Variable Pills (Starter & Pro) */}
+                    <div className="flex items-center gap-1.5 ml-1.5 border-l border-slate-200 dark:border-wa-dbdr pl-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMessage(prev => prev + (prev && !prev.endsWith(' ') ? ' ' : '') + '{Name}');
+                          toast.success('Added {Name} variable!');
+                        }}
+                        className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+                        title="Auto-replaces with each recipient's actual name"
+                      >
+                        + {'{Name}'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMessage(prev => prev + (prev && !prev.endsWith(' ') ? ' ' : '') + '{FirstName}');
+                          toast.success('Added {FirstName} variable!');
+                        }}
+                        className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/60 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors"
+                        title="Auto-replaces with recipient's first name"
+                      >
+                        + {'{FirstName}'}
+                      </button>
+                    </div>
+
                     {/* Hidden file inputs with MULTIPLE file support */}
                     <input
                       ref={attachmentInputRef}
                       type="file"
                       multiple
-                      accept="image/*,video/mp4,video/3gpp,video/quicktime,video/webm,audio/*"
+                      accept="image/*,video/mp4,video/3gpp,video/quicktime,video/webm,audio/*,.pdf,.doc,.docx,.txt"
                       className="hidden"
                       onChange={handleAttachmentFileInput}
                     />

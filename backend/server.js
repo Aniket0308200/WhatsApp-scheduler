@@ -684,8 +684,21 @@ app.post('/api/messages', async (req, res) => {
     } catch (e) {}
   }
 
+  let targetPhone = phone;
+  const isStatus = phone === 'status@broadcast' || phone === 'status' || phone === '__status__';
   const isGroup = phone && phone.endsWith('@g.us');
-  if (isGroup) {
+
+  if (isStatus) {
+    targetPhone = 'status@broadcast';
+    // WhatsApp Status / Story is an exclusive feature for Pro users
+    const userQuota = await db.getUserMonthlyQuota(req.sessionId);
+    if ((userQuota?.plan || 'free').toLowerCase() !== 'pro') {
+      return res.status(403).json({
+        error: 'WhatsApp Status scheduling is an exclusive Pro Plan feature. Upgrade to Pro to post automated Stories.',
+        planUpgradeRequired: true
+      });
+    }
+  } else if (isGroup) {
     if (!/^\d+@g\.us$/.test(phone)) {
       return res.status(400).json({ error: 'Invalid group JID.' });
     }
@@ -715,7 +728,8 @@ app.post('/api/messages', async (req, res) => {
   try {
     // ─── Enforce Monthly Message Limit (50 for Free, 250 for Starter, 1000 for Pro) ───
     const quota = await db.getUserMonthlyQuota(req.sessionId);
-    if (quota && quota.remaining <= 0) {
+    const isPro = quota && (quota.plan === 'pro' || quota.isUnlimited);
+    if (!isPro && quota && typeof quota.remaining === 'number' && quota.remaining <= 0) {
       return res.status(403).json({
         error: `Monthly quota reached (${quota.monthlyLimit}/${quota.monthlyLimit} scheduled messages used for ${quota.monthName}). Your quota resets on ${quota.resetsOnFormatted}. Upgrade your plan for higher limits.`,
         quotaExceeded: true,
@@ -738,8 +752,8 @@ app.post('/api/messages', async (req, res) => {
     if (!senderPhone) {
       return res.status(400).json({ error: 'Connected WhatsApp number could not be identified.' });
     }
-    const cleanPhone = isGroup ? phone : phone.replace(/\D/g, '');
-    let cleanName  = recipientName ? String(recipientName).trim().slice(0, 100) : null;
+    const cleanPhone = isStatus ? 'status@broadcast' : (isGroup ? targetPhone : targetPhone.replace(/\D/g, ''));
+    let cleanName  = recipientName ? String(recipientName).trim().slice(0, 100) : (isStatus ? 'WhatsApp Status (Story)' : null);
 
     if (!cleanName) {
       try {

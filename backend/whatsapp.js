@@ -1254,8 +1254,13 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
     throw new Error('WhatsApp is not connected for this session.');
   }
 
+  const isStatus = phone === 'status@broadcast' || phone === 'status' || phone.includes('broadcast');
   const isGroup = phone.endsWith('@g.us');
-  const jid = isGroup ? phone : await resolveRecipientJid(sessionId, phone.replace(/\D/g, ''));
+  const jid = isStatus
+    ? 'status@broadcast'
+    : isGroup
+    ? phone
+    : await resolveRecipientJid(sessionId, phone.replace(/\D/g, ''));
 
   try {
     let messagePayload;
@@ -1322,6 +1327,20 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
           caption: text || '',
           mimetype: 'video/mp4'
         };
+      } else if (mediaType === 'document' || mediaType === 'pdf') {
+        let docMime = detectedMime || 'application/pdf';
+        if (mediaName && mediaName.toLowerCase().endsWith('.pdf')) docMime = 'application/pdf';
+        else if (mediaName && mediaName.toLowerCase().endsWith('.docx')) docMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        else if (mediaName && mediaName.toLowerCase().endsWith('.xlsx')) docMime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        else if (mediaName && mediaName.toLowerCase().endsWith('.zip')) docMime = 'application/zip';
+        else if (mediaName && mediaName.toLowerCase().endsWith('.txt')) docMime = 'text/plain';
+
+        messagePayload = {
+          document: buffer,
+          mimetype: docMime,
+          fileName: mediaName || 'Document.pdf',
+          caption: text || ''
+        };
       } else {
         messagePayload = { text: text || '' };
       }
@@ -1329,7 +1348,22 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
       messagePayload = { text: text || '' };
     }
 
-    const result = await session.sock.sendMessage(jid, messagePayload);
+    let sendOptions = {};
+    if (isStatus) {
+      try {
+        const contacts = await db.Contact.find({ sessionId }).lean();
+        const statusJidList = (contacts || [])
+          .map(c => c.jid)
+          .filter(j => j && j.endsWith('@s.whatsapp.net'));
+        if (statusJidList.length > 0) {
+          sendOptions.statusJidList = statusJidList;
+        }
+      } catch (e) {
+        console.warn(`[WA Status] [${sessionId}] Note: sending status without explicit contact filter:`, e.message);
+      }
+    }
+
+    const result = await session.sock.sendMessage(jid, messagePayload, sendOptions);
     if (!result?.key?.id) throw new Error('WhatsApp did not return a message id.');
     console.log(`[WA] [${sessionId}] Message (${mediaType || 'text'}) submitted to ${jid}; id=${result.key.id}`);
 

@@ -350,7 +350,7 @@ const ScheduledMessageSchema = new mongoose.Schema({
   encryptedNumber: { type: String, required: true }, // Encrypted recipient
   encryptedRecipientName: { type: String, default: '' }, // Encrypted display name
   encryptedMessageText: { type: String, default: '' }, // Encrypted message body / caption
-  mediaType: { type: String, enum: ['image', 'video', 'audio', 'sticker', 'gif', 'multiple', null], default: null },
+  mediaType: { type: String, enum: ['image', 'video', 'audio', 'sticker', 'gif', 'document', 'pdf', 'multiple', null], default: null },
   mediaData: { type: String, default: null }, // Base64 data URI (encrypted or raw)
   mediaName: { type: String, default: null }, // Original filename
   mediaList: {
@@ -381,7 +381,7 @@ const ScheduledMessage = mongoose.model('ScheduledMessage', ScheduledMessageSche
 const PLAN_LIMITS = {
   free: 50,
   starter: 250,
-  pro: 1000
+  pro: 100000 // Effectively unlimited for Pro users
 };
 
 // ─── Rolling Cap Helper (retains recent history safely without deleting monthly allocations) ──
@@ -460,8 +460,9 @@ async function getUserMonthlyQuota(sessionId) {
   // Active messages (excluding cancelled) count toward user's monthly quota
   const activeCount = monthMessages.filter(m => m.status !== 'cancelled').length;
   const used = activeCount;
-  const remaining = Math.max(0, limit - used);
-  const percentUsed = Math.min(100, Math.round((used / limit) * 100));
+  const isUnlimited = plan === 'pro' || limit >= 100000;
+  const remaining = isUnlimited ? 'Unlimited' : Math.max(0, limit - used);
+  const percentUsed = isUnlimited ? 0 : Math.min(100, Math.round((used / limit) * 100));
 
   const monthName = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
   const resetsOnFormatted = nextMonthReset.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -475,6 +476,11 @@ async function getUserMonthlyQuota(sessionId) {
   return {
     plan,
     planStatus,
+    isUnlimited,
+    monthlyLimit: isUnlimited ? 'Unlimited' : limit,
+    used,
+    remaining,
+    percentUsed,
     pendingSubscription: pendingSubscription ? {
       id: pendingSubscription._id,
       plan: pendingSubscription.plan,

@@ -80,8 +80,9 @@ export default function QuotaDashboard({ quota, onUpgrade, onRefresh, loading = 
     breakdown = {}
   } = quota;
 
-  const isLimitReached = remaining <= 0;
-  const isNearLimit = remaining > 0 && remaining <= 10;
+  const isUnlimited = quota?.isUnlimited || plan === 'pro' || monthlyLimit === 'Unlimited' || remaining === 'Unlimited';
+  const isLimitReached = !isUnlimited && (typeof remaining === 'number' && remaining <= 0);
+  const isNearLimit = !isUnlimited && (typeof remaining === 'number' && remaining > 0 && remaining <= 10);
 
   // Plan badge styling
   const planBadge = {
@@ -188,7 +189,7 @@ export default function QuotaDashboard({ quota, onUpgrade, onRefresh, loading = 
               </span>
             </div>
             <span className="text-[11px] font-medium text-slate-500 dark:text-wa-dmuted">
-              {percentUsed}% capacity utilized
+              {isUnlimited ? 'Unlimited scheduling enabled' : `${percentUsed}% capacity utilized`}
             </span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
@@ -205,7 +206,9 @@ export default function QuotaDashboard({ quota, onUpgrade, onRefresh, loading = 
             <div className="flex items-baseline gap-1 mt-1">
               <span
                 className={`text-2xl sm:text-3xl font-black ${
-                  isLimitReached
+                  isUnlimited
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : isLimitReached
                     ? 'text-rose-600 dark:text-rose-400'
                     : isNearLimit
                     ? 'text-amber-600 dark:text-amber-400'
@@ -219,7 +222,7 @@ export default function QuotaDashboard({ quota, onUpgrade, onRefresh, loading = 
               </span>
             </div>
             <span className="text-[11px] font-medium text-slate-500 dark:text-wa-dmuted">
-              {isLimitReached ? 'Monthly quota finished' : 'Ready to schedule'}
+              {isUnlimited ? 'No monthly cap' : isLimitReached ? 'Monthly quota finished' : 'Ready to schedule'}
             </span>
           </div>
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
@@ -254,12 +257,14 @@ export default function QuotaDashboard({ quota, onUpgrade, onRefresh, loading = 
       <div className="mt-4">
         <div className="flex items-center justify-between text-xs font-medium text-slate-600 dark:text-wa-dmuted mb-2">
           <span>Monthly Allowance Usage</span>
-          <span className="font-bold text-slate-800 dark:text-slate-200">{percentUsed}%</span>
+          <span className="font-bold text-slate-800 dark:text-slate-200">
+            {isUnlimited ? 'Unlimited (Active)' : `${percentUsed}%`}
+          </span>
         </div>
         <div className="h-3.5 w-full bg-slate-100 dark:bg-wa-dsurf rounded-full overflow-hidden p-0.5 border border-slate-200/70 dark:border-wa-dbdr">
           <div
             className={`h-full rounded-full transition-all duration-700 ease-out ${progressGradient}`}
-            style={{ width: `${Math.min(100, Math.max(used > 0 ? 3 : 0, percentUsed))}%` }}
+            style={{ width: isUnlimited ? '100%' : `${Math.min(100, Math.max(used > 0 ? 3 : 0, percentUsed))}%` }}
           />
         </div>
       </div>
@@ -285,7 +290,11 @@ export default function QuotaDashboard({ quota, onUpgrade, onRefresh, loading = 
         </div>
 
         <span className="text-[11px] text-slate-500 dark:text-wa-dmuted">
-          Free plan allows up to 50 schedules / month
+          {isUnlimited
+            ? 'Pro plan includes unlimited scheduled messages & priority delivery'
+            : plan === 'starter'
+            ? 'Starter plan allows up to 250 schedules / month'
+            : 'Free plan allows up to 50 schedules / month'}
         </span>
       </div>
 

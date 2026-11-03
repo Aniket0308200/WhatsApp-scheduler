@@ -193,7 +193,19 @@ export default function MessageTable({ messages, loading, onRefresh }) {
                   <tr key={msg.id} className="hover:bg-slate-50/60 dark:hover:bg-wa-dsurf/20 transition-colors">
                     {/* Recipient */}
                     <td className="px-5 py-3.5 whitespace-nowrap text-gray-700 dark:text-wa-dtext">
-                      {msg.recipient_name ? (
+                      {msg.phone === 'status@broadcast' ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-base p-1.5 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">📱</span>
+                          <div className="flex flex-col">
+                            <span className="font-bold text-sm text-purple-700 dark:text-purple-300">
+                              WhatsApp Status
+                            </span>
+                            <span className="text-[10px] text-purple-600/80 dark:text-purple-400 font-semibold">
+                              My Story Broadcast
+                            </span>
+                          </div>
+                        </div>
+                      ) : msg.recipient_name ? (
                         <div className="flex flex-col">
                           <span className="font-semibold text-sm">{msg.recipient_name}</span>
                           <span className="font-mono text-[11px] text-gray-400 dark:text-wa-dmuted">
@@ -297,6 +309,19 @@ export default function MessageTable({ messages, loading, onRefresh }) {
                               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 hover:bg-violet-100 dark:hover:bg-violet-900/40 cursor-pointer"
                             >
                               🎞️ GIF ↗
+                            </button>
+                          )}
+                          {(msg.mediaType === 'document' || msg.mediaType === 'pdf') && (
+                            <button
+                              type="button"
+                              onClick={() => (msg.mediaData || msg.mediaName) && setGalleryData({
+                                title: msg.mediaName || 'Document',
+                                items: [{ id: '1', type: 'document', name: msg.mediaName, data: msg.mediaData }],
+                                purged: Boolean(msg.mediaPurged)
+                              })}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 cursor-pointer"
+                            >
+                              📄 PDF / Doc ↗
                             </button>
                           )}
                           {msg.mediaName && (

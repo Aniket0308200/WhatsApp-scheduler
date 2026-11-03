@@ -50,12 +50,18 @@ async function processAllDueMessages() {
         try {
           let lastResult = null;
 
+          // Personalize smart name variables ({Name}, {FirstName})
+          const recipientDisplayName = (msg.recipient_name && !msg.recipient_name.includes('@')) ? msg.recipient_name : '';
+          const personalizedText = (msg.message || '')
+            .replace(/\{Name\}/gi, recipientDisplayName || '')
+            .replace(/\{FirstName\}/gi, recipientDisplayName ? recipientDisplayName.split(' ')[0] : '');
+
           if (msg.mediaList && Array.isArray(msg.mediaList) && msg.mediaList.length > 0) {
-            console.log(`[Scheduler] [${sessionId}] Sending batch of ${msg.mediaList.length} media items to +${msg.phone}`);
+            console.log(`[Scheduler] [${sessionId}] Sending batch of ${msg.mediaList.length} media items to ${msg.phone}`);
             for (let i = 0; i < msg.mediaList.length; i++) {
               const item = msg.mediaList[i];
               // First item carries the text caption; subsequent items send clean media
-              const caption = i === 0 ? (msg.message || '') : '';
+              const caption = i === 0 ? personalizedText : '';
 
               const sendPromise = whatsapp.sendMessage(
                 sessionId,
@@ -81,7 +87,7 @@ async function processAllDueMessages() {
             const sendPromise = whatsapp.sendMessage(
               sessionId,
               msg.phone,
-              msg.message,
+              personalizedText,
               msg.mediaType,
               msg.mediaData,
               msg.mediaName

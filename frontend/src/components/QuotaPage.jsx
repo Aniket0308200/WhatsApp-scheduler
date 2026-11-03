@@ -190,15 +190,23 @@ export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authU
             <ul className="text-xs space-y-2 text-slate-600 dark:text-wa-dmuted mb-4">
               <li className="flex items-center gap-1.5">
                 <span className="text-emerald-500 font-bold">✓</span>
-                <span><strong>1,000 Scheduled Messages</strong> / month</span>
+                <span><strong>Unlimited Scheduled Messages</strong></span>
               </li>
               <li className="flex items-center gap-1.5">
                 <span className="text-emerald-500 font-bold">✓</span>
-                <span>Mass CSV bulk broadcasts</span>
+                <span><strong>WhatsApp Status &amp; Stories</strong> scheduling</span>
               </li>
               <li className="flex items-center gap-1.5">
                 <span className="text-emerald-500 font-bold">✓</span>
-                <span>Priority queue &amp; instant delivery</span>
+                <span>Smart personalization ({"{Name}"}, {"{FirstName}"})</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span className="text-emerald-500 font-bold">✓</span>
+                <span>Documents &amp; PDF attachments</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span className="text-emerald-500 font-bold">✓</span>
+                <span>Priority delivery queue</span>
               </li>
             </ul>
             {currentPlan === 'pro' ? (
