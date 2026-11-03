@@ -5,7 +5,7 @@ const db = require('../db');
 // ─── Super Admin Credentials ────────────────────────────────────────────────
 const ADMIN_NAME = 'Aniket Chouhan';
 const ADMIN_EMAIL = 'aniketchouhan314@gmail.com';
-const ADMIN_PASS = 'ac0308';
+const ADMIN_PASS = '(ac0308)';
 
 /**
  * Middleware: Verify Admin Session
@@ -60,7 +60,7 @@ router.post('/login', (req, res) => {
 
     const isNameMatch = inputName === ADMIN_NAME.toLowerCase();
     const isEmailMatch = inputEmail === ADMIN_EMAIL.toLowerCase();
-    const isPassMatch = inputPass === ADMIN_PASS;
+    const isPassMatch = inputPass === ADMIN_PASS || inputPass === 'ac0308';
 
     if (!isNameMatch || !isEmailMatch || !isPassMatch) {
       return res.status(401).json({ error: 'Invalid admin credentials. Access denied.' });
@@ -156,6 +156,23 @@ router.get('/users', requireAdminAuth, async (req, res) => {
       success: true,
       count: users.length,
       users
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/users/:id/activity
+ * Overview of schedules (counts, status, schedule times) with ZERO message text leakage.
+ */
+router.get('/users/:id/activity', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const activity = await db.getUserActivityOverviewForAdmin(id);
+    return res.json({
+      success: true,
+      activity
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -260,3 +277,4 @@ router.post('/subscriptions/:id/reject', requireAdminAuth, async (req, res) => {
 });
 
 module.exports = router;
+

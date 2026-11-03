@@ -5,6 +5,7 @@ import {
   adminGetMe,
   adminGetStats,
   adminGetUsers,
+  adminGetUserActivity,
   adminUpdateUserPlan,
   adminUpdateUserLock,
   adminGetSubscriptions,
@@ -172,6 +173,22 @@ export default function AdminPanel() {
   };
 
   // ── Handle Lock / Unlock Account ──────────────────────────────────────────
+  const openUserDetails = async (u) => {
+    setSelectedUserForDetails(u);
+    setUserActivity(null);
+    setLoadingActivity(true);
+    try {
+      const res = await adminGetUserActivity(token, u.id);
+      if (res?.activity) {
+        setUserActivity(res.activity);
+      }
+    } catch (err) {
+      toast.error('Could not load user activity.');
+    } finally {
+      setLoadingActivity(false);
+    }
+  };
+
   const handleToggleLock = async (userId, currentLocked, userName) => {
     const actionWord = currentLocked ? 'unlock and restore access for' : 'lock and suspend';
     if (!window.confirm(`Are you sure you want to ${actionWord} ${userName || 'this account'}?`)) {
@@ -289,7 +306,7 @@ export default function AdminPanel() {
                 type="text"
                 value={loginForm.name}
                 onChange={e => setLoginForm(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Aniket Chouhan"
+                placeholder="Arjun Kapoor"
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-sm text-white placeholder-slate-500 transition-all outline-none"
                 required
               />
@@ -301,7 +318,7 @@ export default function AdminPanel() {
                 type="email"
                 value={loginForm.email}
                 onChange={e => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
-                placeholder="aniketchouhan314@gmail.com"
+                placeholder="email@gmail.com"
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-sm text-white placeholder-slate-500 transition-all outline-none"
                 required
               />
@@ -314,7 +331,7 @@ export default function AdminPanel() {
                   type={showPassword ? 'text' : 'password'}
                   value={loginForm.password}
                   onChange={e => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                  placeholder="Master password"
+                  placeholder=""
                   className="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-slate-900/80 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-sm text-white placeholder-slate-500 transition-all outline-none"
                   required
                 />
@@ -609,13 +626,17 @@ export default function AdminPanel() {
                         >
                           {/* 1. User Identity */}
                           <td className="px-5 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-slate-700 to-slate-600 flex items-center justify-center font-bold text-sm text-white flex-shrink-0">
+                            <div
+                              onClick={() => openUserDetails(u)}
+                              className="flex items-center gap-3 cursor-pointer group p-1 -m-1 rounded-xl hover:bg-slate-800/60 transition-all"
+                              title="Click to view schedule activity and dispatch statistics"
+                            >
+                              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-slate-700 to-slate-600 group-hover:from-emerald-600 group-hover:to-teal-500 transition-all flex items-center justify-center font-bold text-sm text-white flex-shrink-0 shadow-xs">
                                 {(u.name || 'U').charAt(0).toUpperCase()}
                               </div>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="font-bold text-white text-sm truncate max-w-[150px]">
+                                  <span className="font-bold text-white text-sm truncate max-w-[150px] group-hover:text-emerald-400 group-hover:underline transition-colors">
                                     {u.name || 'Unnamed User'}
                                   </span>
                                   {u.isLocked && (
@@ -624,9 +645,14 @@ export default function AdminPanel() {
                                     </span>
                                   )}
                                 </div>
-                                <span className="text-[10px] text-slate-400">
-                                  Joined: {formatDateTime(u.createdAt)}
-                                </span>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] text-slate-400">
+                                    Joined: {formatDateTime(u.createdAt)}
+                                  </span>
+                                  <span className="text-[10px] text-emerald-400 font-bold opacity-80 group-hover:opacity-100 flex items-center gap-0.5">
+                                    📊 Activity ↗
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           </td>
@@ -914,6 +940,170 @@ export default function AdminPanel() {
                 className="px-5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white transition-colors"
               >
                 Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── User Activity & Schedules Overview Modal ────────────────────── */}
+      {selectedUserForDetails && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in"
+          onClick={() => setSelectedUserForDetails(null)}
+        >
+          <div
+            className="max-w-2xl w-full bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-xl font-bold text-white shadow-md shadow-emerald-500/20">
+                  {(selectedUserForDetails.name || 'U').charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-black text-base sm:text-lg text-white">
+                      {selectedUserForDetails.name || 'User Activity'}
+                    </h3>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                      selectedUserForDetails.plan === 'pro'
+                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
+                        : selectedUserForDetails.plan === 'starter'
+                        ? 'bg-teal-950 text-teal-300 border border-teal-700'
+                        : 'bg-slate-800 text-slate-300 border border-slate-700'
+                    }`}>
+                      {selectedUserForDetails.plan} Plan
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    {selectedUserForDetails.email} • {selectedUserForDetails.phone ? `+${selectedUserForDetails.phone}` : 'No phone linked'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedUserForDetails(null)}
+                className="text-slate-400 hover:text-white text-xl font-bold p-1 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="py-4 overflow-y-auto custom-scroll space-y-4">
+              {/* Privacy Notice Banner */}
+              <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400 flex items-center gap-2">
+                <span className="text-sm">🛡️</span>
+                <span>
+                  <strong className="text-slate-300">Privacy Safeguard Active:</strong> Private message captions, images, and contact names are end-to-end encrypted and hidden. Only schedule activity counts, timestamps, and delivery statuses are displayed.
+                </span>
+              </div>
+
+              {loadingActivity ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-400 text-xs">
+                  <span className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                  <span>Loading schedule records…</span>
+                </div>
+              ) : (
+                <>
+                  {/* Quick Activity Metric Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-center">
+                      <span className="text-[10px] text-slate-400 block font-semibold">Total Schedules</span>
+                      <span className="text-xl font-black text-white mt-0.5 block">
+                        {userActivity?.totalSchedules ?? 0}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-yellow-950/20 border border-yellow-900/40 text-center">
+                      <span className="text-[10px] text-yellow-400 block font-semibold">Pending / In Queue</span>
+                      <span className="text-xl font-black text-yellow-300 mt-0.5 block">
+                        {userActivity?.statusBreakdown?.pending ?? 0}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-900/40 text-center">
+                      <span className="text-[10px] text-emerald-400 block font-semibold">Sent / Delivered</span>
+                      <span className="text-xl font-black text-emerald-300 mt-0.5 block">
+                        {(userActivity?.statusBreakdown?.sent ?? 0) + (userActivity?.statusBreakdown?.delivered ?? 0) + (userActivity?.statusBreakdown?.read ?? 0)}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-red-950/20 border border-red-900/40 text-center">
+                      <span className="text-[10px] text-red-400 block font-semibold">Failed</span>
+                      <span className="text-xl font-black text-red-300 mt-0.5 block">
+                        {userActivity?.statusBreakdown?.failed ?? 0}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Activity Timeline List */}
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-300 mb-2 uppercase tracking-wider">
+                      Recent Activity Log ({userActivity?.recentActivities?.length ?? 0})
+                    </h4>
+                    {!userActivity?.recentActivities || userActivity.recentActivities.length === 0 ? (
+                      <div className="p-6 text-center text-xs text-slate-500 bg-slate-950/50 rounded-2xl border border-slate-800/60">
+                        No scheduled messages found for this user account.
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[35vh] overflow-y-auto custom-scroll pr-1">
+                        {userActivity.recentActivities.map((act, idx) => (
+                          <div
+                            key={act.id || idx}
+                            className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between gap-3 text-xs"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-base">
+                                {act.mediaType === 'image' ? '📷' :
+                                 act.mediaType === 'video' ? '🎥' :
+                                 act.mediaType === 'audio' ? '🎵' :
+                                 act.mediaType === 'multiple' ? '📁' : '💬'}
+                              </span>
+                              <div>
+                                <div className="text-slate-300 font-semibold">
+                                  Scheduled for: <strong className="text-white">{formatDateTime(act.scheduledAt)}</strong>
+                                </div>
+                                <div className="text-[10px] text-slate-500">
+                                  Created: {formatDateTime(act.createdAt)}
+                                  {act.mediaType && (
+                                    <span className="ml-2 text-emerald-400">
+                                      • {act.mediaType.toUpperCase()} ({act.mediaCount} file{act.mediaCount > 1 ? 's' : ''})
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
+                                act.status === 'read' || act.status === 'delivered' || act.status === 'sent'
+                                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                                  : act.status === 'pending'
+                                  ? 'bg-yellow-950 text-yellow-300 border border-yellow-800'
+                                  : act.status === 'failed'
+                                  ? 'bg-red-950 text-red-300 border border-red-800'
+                                  : 'bg-slate-800 text-slate-400 border border-slate-700'
+                              }`}>
+                                {act.status}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-3 border-t border-slate-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedUserForDetails(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white transition-colors"
+              >
+                Close Overview
               </button>
             </div>
           </div>

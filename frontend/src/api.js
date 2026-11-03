@@ -138,6 +138,9 @@ export const adminGetStats = (token) =>
 export const adminGetUsers = (token) =>
   api.get('/admin/users', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
 
+export const adminGetUserActivity = (token, userId) =>
+  api.get(`/admin/users/${userId}/activity`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+
 export const adminUpdateUserPlan = (token, userId, plan) =>
   api.post(`/admin/users/${userId}/plan`, { plan }, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
 

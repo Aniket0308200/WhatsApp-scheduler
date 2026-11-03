@@ -825,6 +825,69 @@ async function updateUserHeartbeat(emailOrId) {
   } catch (e) {}
 }
 
+async function getUserActivityOverviewForAdmin(userId) {
+  let sessionIds = [`user_acc_${userId}`, userId];
+
+  if (userId.startsWith('wa_')) {
+    const actualId = userId.replace('wa_', '');
+    const wu = await User.findById(actualId).lean();
+    if (wu && wu.sessionId) {
+      sessionIds.push(wu.sessionId);
+    }
+  } else {
+    // Registered AuthAccount
+    const account = await AuthAccount.findById(userId).lean();
+    if (account?.linkedWhatsAppPhone) {
+      const digits = account.linkedWhatsAppPhone.replace(/\D/g, '');
+      const waUsers = await User.find({ phoneNumber: { $regex: digits } }).lean();
+      waUsers.forEach(w => sessionIds.push(w.sessionId));
+    }
+  }
+
+  // Deduplicate
+  sessionIds = Array.from(new Set(sessionIds.filter(Boolean)));
+
+  const messages = await ScheduledMessage.find({ sessionId: { $in: sessionIds } })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  let pending = 0, sent = 0, delivered = 0, read = 0, failed = 0, cancelled = 0;
+  const recentActivities = [];
+
+  for (const m of messages) {
+    if (m.status === 'pending') pending++;
+    else if (m.status === 'delivered') delivered++;
+    else if (m.status === 'read') read++;
+    else if (m.status === 'failed') failed++;
+    else if (m.status === 'cancelled') cancelled++;
+    else sent++; // 'sent' or 'submitted'
+
+    if (recentActivities.length < 30) {
+      recentActivities.push({
+        id: m._id.toString(),
+        createdAt: m.createdAt,
+        scheduledAt: m.scheduledAt,
+        status: m.status,
+        mediaType: m.mediaType,
+        mediaCount: (m.mediaList && m.mediaList.length) ? m.mediaList.length : (m.mediaType ? 1 : 0)
+      });
+    }
+  }
+
+  return {
+    totalSchedules: messages.length,
+    statusBreakdown: {
+      pending,
+      sent,
+      delivered,
+      read,
+      failed,
+      cancelled
+    },
+    recentActivities
+  };
+}
+
 module.exports = {
   User,
   Contact,
@@ -866,4 +929,5 @@ module.exports = {
   updateUserPlanByAdmin,
   updateUserLockByAdmin,
   updateUserHeartbeat,
+  getUserActivityOverviewForAdmin,
 };
