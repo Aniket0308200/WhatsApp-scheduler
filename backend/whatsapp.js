@@ -1077,23 +1077,11 @@ async function _performInitWhatsApp(sessionId) {
       });
     }
 
-    console.log(`[WA] [${sessionId}] messaging-history.set: ${chats.length} chats, ${contacts.length} contacts, ${messages.length} messages`);
+    console.log(`[WA] [${sessionId}] messaging-history.set: ${chats.length} chats, ${contacts.length} contacts`);
     session.isSyncing = false; // Syncing finished!
     if (chats.length > 0) processIncomingChats(session, chats);
     if (contacts.length > 0) cacheContacts(session, contacts);
-    if (messages.length > 0) cacheMessages(session, messages);
     console.log(`[WA] [${sessionId}] Initial history sync completed. Total cached contacts: ${Object.keys(session.contactCache).length}`);
-  });
-
-  sock.ev.on('messages.upsert', ({ messages }) => {
-    let filteredMessages = messages || [];
-    if (!ENABLE_PERSONAL_CONTACT_SYNC) {
-      filteredMessages = filteredMessages.filter(m => {
-        const remoteJid = m?.key?.remoteJid;
-        return !remoteJid || !remoteJid.endsWith('@s.whatsapp.net');
-      });
-    }
-    cacheMessages(session, filteredMessages);
   });
 
   sock.ev.on('groups.upsert', (groups) => {

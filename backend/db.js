@@ -576,10 +576,41 @@ async function insertMessage(sessionId, phone, message, scheduledAt, recipientNa
 }
 
 async function getAllMessages(sessionId) {
-  const docs = await ScheduledMessage.find({ sessionId }).sort({ createdAt: -1 }).lean();
+  let sessionIds = [sessionId];
+
+  if (sessionId && sessionId.startsWith('user_acc_')) {
+    const accountId = sessionId.replace('user_acc_', '');
+    try {
+      const account = await AuthAccount.findById(accountId).lean();
+      if (account?.linkedWhatsAppPhone) {
+        const rawPhone = account.linkedWhatsAppPhone.replace(/\D/g, '');
+        const waUsers = await User.find({ phoneNumber: { $regex: rawPhone.slice(-10) + '$' } }).lean();
+        waUsers.forEach(w => sessionIds.push(w.sessionId));
+      }
+    } catch (_) {}
+  } else if (sessionId) {
+    try {
+      const waUser = await User.findOne({ sessionId }).lean();
+      if (waUser?.phoneNumber) {
+        const rawPhone = waUser.phoneNumber.replace(/\D/g, '');
+        const linkedAcc = await AuthAccount.findOne({
+          $or: [
+            { linkedWhatsAppPhone: rawPhone },
+            { linkedWhatsAppPhone: { $regex: rawPhone.slice(-10) + '$' } }
+          ]
+        }).lean();
+        if (linkedAcc) {
+          sessionIds.push(`user_acc_${linkedAcc._id.toString()}`);
+        }
+      }
+    } catch (_) {}
+  }
+
+  sessionIds = Array.from(new Set(sessionIds.filter(Boolean)));
+  const docs = await ScheduledMessage.find({ sessionId: { $in: sessionIds } }).sort({ createdAt: -1 }).lean();
   
   // Fetch contacts for the session to resolve names dynamically
-  const contacts = await Contact.find({ sessionId }).lean();
+  const contacts = await Contact.find({ sessionId: { $in: sessionIds } }).lean();
   const contactMap = {};
   for (const c of contacts) {
     const decName = decrypt(c.encryptedName);

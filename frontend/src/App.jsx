@@ -132,31 +132,44 @@ export default function App() {
     let statusTimer = null;
     const scheduleStatusPoll = () => {
       const interval = (waStatusRef.current === 'connected') ? POLL_INTERVAL_CONNECTED : POLL_INTERVAL_DISCONNECTED;
-      statusTimer = setTimeout(async () => {
-        await refreshStatus();
-        scheduleStatusPoll();
-      }, interval);
-    };
-    scheduleStatusPoll();
+    // If on /admin or static legal pages, do not run user-app background polling
+    const isAdminOrStatic = location.pathname.startsWith('/admin') ||
+      location.pathname.startsWith('/privacy-policy') ||
+      location.pathname.startsWith('/terms-of-service');
 
-    // Initial fetch of messages and quota on login or navigating to app
-    let msgTimer = null;
-    let t3 = null;
-    if (authUser || activeView !== 'landing') {
-      refreshMessages();
-      refreshQuota();
-      // Auto-poll messages every 6s so Pending -> Sent -> Delivered updates in real time
-      msgTimer = setInterval(refreshMessages, 6_000);
-      // Quota background update every 30s
-      t3 = setInterval(refreshQuota, 30_000);
+    if (isAdminOrStatic) {
+      return;
     }
 
-    return () => {
-      clearTimeout(statusTimer);
-      if (msgTimer) clearInterval(msgTimer);
-      if (t3) clearInterval(t3);
-    };
-  }, [refreshStatus, refreshMessages, refreshQuota, authUser, activeView]);
+    statusTimer = setTimeout(async () => {
+      await refreshStatus();
+      scheduleStatusPoll();
+    }, interval);
+  };
+  scheduleStatusPoll();
+
+  // Initial fetch of messages and quota on login or navigating to app
+  let msgTimer = null;
+  let t3 = null;
+  const isAdminOrStatic = location.pathname.startsWith('/admin') ||
+    location.pathname.startsWith('/privacy-policy') ||
+    location.pathname.startsWith('/terms-of-service');
+
+  if (!isAdminOrStatic && (authUser || activeView !== 'landing')) {
+    refreshMessages();
+    refreshQuota();
+    // Auto-poll messages every 6s so Pending -> Sent -> Delivered updates in real time
+    msgTimer = setInterval(refreshMessages, 6_000);
+    // Quota background update every 30s
+    t3 = setInterval(refreshQuota, 30_000);
+  }
+
+  return () => {
+    clearTimeout(statusTimer);
+    if (msgTimer) clearInterval(msgTimer);
+    if (t3) clearInterval(t3);
+  };
+}, [refreshStatus, refreshMessages, refreshQuota, authUser, activeView, location.pathname]);
 
   const isConnected = waStatus === 'connected';
   const isLinked = Boolean(profile?.phone);
