@@ -36,12 +36,34 @@ async function processAllDueMessages() {
         const sessionId = msg.sessionId;
         const activeSessions = whatsapp.getAllActiveSessions();
         const sessionInfo = activeSessions.find(s => s.sessionId === sessionId);
-        const isConnected = sessionInfo && sessionInfo.status === 'connected';
+        let isConnected = sessionInfo && sessionInfo.status === 'connected';
 
         console.log(`[Scheduler] [${sessionId}] Attempting #${msg.id} → +${msg.phone} (scheduled: ${msg.scheduled_at})`);
 
+        // If session is not currently active in memory, attempt auto-restore from DB on demand
         if (!isConnected) {
-          const errMsg = `WhatsApp not connected (status: ${sessionInfo ? sessionInfo.status : 'disconnected'})`;
+          const hasCreds = await whatsapp.hasSavedCredentials(sessionId);
+          if (hasCreds) {
+            console.log(`[Scheduler] [${sessionId}] Auto-restoring session on demand to deliver #${msg.id}...`);
+            try {
+              await whatsapp.initWhatsApp(sessionId);
+              // Wait for socket to connect (up to 8s)
+              for (let w = 0; w < 16; w++) {
+                await new Promise(r => setTimeout(r, 500));
+                if (whatsapp.getStatus(sessionId) === 'connected') {
+                  isConnected = true;
+                  break;
+                }
+              }
+            } catch (restoreErr) {
+              console.error(`[Scheduler] [${sessionId}] Auto-restore error:`, restoreErr.message);
+            }
+          }
+        }
+
+        if (!isConnected) {
+          const currentStatus = whatsapp.getStatus(sessionId) || (sessionInfo ? sessionInfo.status : 'disconnected');
+          const errMsg = `WhatsApp not connected (status: ${currentStatus})`;
           console.error(`[Scheduler] [${sessionId}] ✗ #${msg.id}: ${errMsg}`);
           await db.updateMessageStatus(sessionId, msg.id, 'failed', errMsg);
           return;

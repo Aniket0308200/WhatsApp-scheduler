@@ -4,7 +4,8 @@
   "description": "WhatsApp Message Scheduler with QR and Pairing Code support",
   "main": "backend/server.js",
   "scripts": {
-    "server": "node backend/server.js",
+    "start": "node --max-old-space-size=384 backend/server.js",
+    "server": "node --max-old-space-size=384 backend/server.js",
     "client": "npm run dev --prefix frontend",
     "dev": "concurrently \"npm run server\" \"npm run client\""
   },

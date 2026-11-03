@@ -655,7 +655,8 @@ async function _performInitWhatsApp(sessionId) {
       isSyncing: false,
       contactsBuffer: new Map(),
       bufferTimeout: null,
-      isExplicitClosing: false
+      isExplicitClosing: false,
+      lastActivityAt: Date.now()
     };
     sessions.set(sessionId, session);
   }
@@ -1138,35 +1139,52 @@ async function bootstrapSessions() {
     const isProd = process.env.NODE_ENV === 'production';
     const expectedPrefix = isProd ? 'prod_' : 'dev_';
     
-    // Find all session creds in the current environment
+    // Find sessions that actually have upcoming pending messages
+    const pendingMsgs = await db.ScheduledMessage.find({ status: 'pending' }).select('sessionId').lean();
+    const prioritySessionIds = new Set(pendingMsgs.map(m => m.sessionId));
+
+    // Also include recently active users (seen in last 2 hours)
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const recentUsers = await db.User.find({ lastSeenAt: { $gte: twoHoursAgo } }).select('sessionId').lean();
+    recentUsers.forEach(u => prioritySessionIds.add(u.sessionId));
+
+    // Find all stored session creds in the current environment
     const credDocs = await db.AuthSession.find({
       sessionId: { $regex: `^${expectedPrefix}` },
       key: 'creds'
     }).lean();
 
-    console.log(`[WA] Found ${credDocs.length} stored session creds to evaluate for bootstrap.`);
+    console.log(`[WA] Stored creds found: ${credDocs.length}. Urgent/priority sessions: ${prioritySessionIds.size}.`);
 
     let count = 0;
+    const MAX_BOOTSTRAP_SESSIONS = 3; // Keep RAM well below 512MB Render limit
+
     for (const doc of credDocs) {
+      if (count >= MAX_BOOTSTRAP_SESSIONS) break;
       try {
         if (!doc.value) continue;
         const creds = JSON.parse(doc.value, BufferJSON.reviver);
         // Only bootstrap sessions that were actually paired/registered
         if (creds && (creds.me?.id || creds.registered)) {
           const originalSessionId = doc.sessionId.substring(expectedPrefix.length);
-          console.log(`[WA] Bootstrapping saved authenticated session: ${originalSessionId}`);
-          count++;
-          // Stagger session inits by 500ms so they don't slam the network simultaneously
-          await new Promise((r) => setTimeout(r, 500));
-          initWhatsApp(originalSessionId).catch((err) => {
-            console.error(`[WA] Error bootstrapping session ${originalSessionId}:`, err.message);
-          });
+          
+          // Only pre-warm if this session is priority or if no priority sessions exist
+          const shouldWarm = prioritySessionIds.has(originalSessionId) || prioritySessionIds.size === 0;
+          if (shouldWarm) {
+            console.log(`[WA] Bootstrapping priority authenticated session: ${originalSessionId}`);
+            count++;
+            // Stagger session inits by 1000ms so they don't spike CPU or RAM simultaneously
+            await new Promise((r) => setTimeout(r, 1000));
+            initWhatsApp(originalSessionId).catch((err) => {
+              console.error(`[WA] Error bootstrapping session ${originalSessionId}:`, err.message);
+            });
+          }
         }
       } catch (parseErr) {
         console.warn(`[WA] Could not parse creds for session doc ${doc.sessionId}:`, parseErr.message);
       }
     }
-    console.log(`[WA] Successfully bootstrapped ${count} active authenticated sessions.`);
+    console.log(`[WA] Pre-warmed ${count} priority sessions (remaining sessions load on demand with zero RAM waste).`);
 
     // Purge orphaned/abandoned unauthenticated guest sessions older than 48 hours to keep MongoDB clean
     const cutoffDate = new Date(Date.now() - 48 * 60 * 60 * 1000);
@@ -1620,6 +1638,52 @@ function updateProfileName(sessionId, name) {
     session.connectedProfile.name = name;
   }
 }
+
+// ─── Periodic RAM Monitor & Idle Session Reaper (Render 512MB RAM Guard) ──────
+setInterval(async () => {
+  try {
+    const mem = process.memoryUsage();
+    const rssMB = Math.round(mem.rss / (1024 * 1024));
+    const heapMB = Math.round(mem.heapUsed / (1024 * 1024));
+    console.log(`[RAM Monitor] RSS: ${rssMB} MB, Heap: ${heapMB} MB, Active WA sockets: ${sessions.size}`);
+
+    // If memory is climbing high (>340MB), invoke GC if available
+    if (global.gc && rssMB > 340) {
+      console.log('[RAM Monitor] Memory above 340MB, invoking Garbage Collector...');
+      global.gc();
+    }
+
+    // Idle session reaper: if more than 2 active sessions and session was idle for > 45 minutes
+    if (sessions.size > 2) {
+      const now = Date.now();
+      for (const [sId, session] of sessions.entries()) {
+        const idleTime = now - (session.lastActivityAt || now);
+        if (idleTime > 45 * 60 * 1000) {
+          // Check if session has pending messages in next 30 min
+          const soonMessages = await db.ScheduledMessage.countDocuments({
+            sessionId: sId,
+            status: 'pending',
+            scheduledAt: { $lte: new Date(now + 30 * 60 * 1000) }
+          });
+
+          if (soonMessages === 0) {
+            console.log(`[WA] Idle session reaper: unloading inactive session ${sId} (idle for ${Math.round(idleTime / 60000)}m) to free RAM.`);
+            try {
+              session.isExplicitClosing = true;
+              if (session.sock) {
+                session.sock.ev.removeAllListeners();
+                session.sock.end(undefined);
+              }
+            } catch (_) {}
+            sessions.delete(sId);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[RAM Monitor] Error:', err.message);
+  }
+}, 10 * 60 * 1000);
 
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
