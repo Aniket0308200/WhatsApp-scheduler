@@ -50,7 +50,7 @@ export default function AdminPanel() {
   const [users, setUsers] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [autoRefresh, setAutoRefresh] = useState(false);
 
   // User Schedule Activity Overview Modal
   const [selectedUserForDetails, setSelectedUserForDetails] = useState(null);
@@ -148,12 +148,14 @@ export default function AdminPanel() {
     }
   }, [token, refreshData, handleLogout]);
 
-  // Real-time auto-refresh interval (every 15 seconds)
+  // Real-time auto-refresh interval (every 60 seconds when enabled)
   useEffect(() => {
     if (!token || !autoRefresh) return;
     const interval = setInterval(() => {
-      refreshData(true);
-    }, 15_000);
+      if (!document.hidden) {
+        refreshData(true);
+      }
+    }, 60_000);
     return () => clearInterval(interval);
   }, [token, autoRefresh, refreshData]);
 
@@ -416,7 +418,7 @@ export default function AdminPanel() {
                 ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/60 hover:bg-emerald-900/60'
                 : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
             }`}
-            title="Auto-refresh every 15 seconds"
+            title="Auto-refresh every 60 seconds (Click to toggle)"
           >
             <span className={`w-2 h-2 rounded-full ${autoRefresh ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
             Live Auto-Sync

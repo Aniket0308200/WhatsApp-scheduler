@@ -405,7 +405,14 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
 
   // Directory and Contacts list states
   const [showDirectory,   setShowDirectory]   = useState(false);
-  const [contactsList,    setContactsList]    = useState({ all: [], personal: [], groups: [] });
+  const [contactsList,    setContactsList]    = useState(() => {
+    try {
+      const cached = localStorage.getItem('wa_cached_contacts');
+      return cached ? JSON.parse(cached) : { all: [], personal: [], groups: [] };
+    } catch {
+      return { all: [], personal: [], groups: [] };
+    }
+  });
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [manualSyncing,   setManualSyncing]   = useState(false);
   const [directorySearch, setDirectorySearch] = useState('');
@@ -446,11 +453,28 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
     }
   }, [isConnected, showDirectory]);
 
-  const loadContactsList = useCallback(async () => {
+  const loadContactsList = useCallback(async (force = false) => {
+    // If not forced and contacts are already in memory or localStorage, avoid hitting Render
+    if (!force) {
+      try {
+        const cached = localStorage.getItem('wa_cached_contacts');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && Array.isArray(parsed.all) && parsed.all.length > 0) {
+            setContactsList(parsed);
+            return;
+          }
+        }
+      } catch {}
+    }
+
     setLoadingContacts(true);
     try {
       const data = await fetchAllContacts();
-      setContactsList(data || { all: [], personal: [], groups: [] });
+      if (data && Array.isArray(data.all)) {
+        setContactsList(data);
+        try { localStorage.setItem('wa_cached_contacts', JSON.stringify(data)); } catch {}
+      }
     } catch (err) {
       console.error('Failed to load contacts directory:', err);
     } finally {
@@ -479,7 +503,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       await deleteGoogleAccount(email);
       toast.success('Gmail account disconnected successfully!', { id: toastId });
       loadLinkedGoogleAccounts();
-      loadContactsList();
+      loadContactsList(true);
     } catch (err) {
       toast.error('Failed to disconnect account: ' + (err.response?.data?.error || err.message), { id: toastId });
     }
@@ -517,7 +541,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
     try {
       await syncGroups();
       toast.success('Group sync triggered successfully!', { id: toastId });
-      await loadContactsList();
+      await loadContactsList(true);
     } catch (err) {
       toast.error('Failed to sync groups: ' + (err.response?.data?.error || err.message), { id: toastId });
     } finally {
@@ -529,7 +553,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
     const handleMessage = (e) => {
       if (e.data?.type === 'GOOGLE_SYNC_SUCCESS') {
         toast.success(`Successfully synced ${e.data.count} contacts from ${e.data.email}!`);
-        loadContactsList();
+        loadContactsList(true);
         loadLinkedGoogleAccounts();
       } else if (e.data?.type === 'GOOGLE_SYNC_ERROR') {
         toast.error(`Google Sync Failed: ${e.data.error}`);
@@ -1877,7 +1901,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
           onImported={() => {
             // setSuggestions([]);
             setShowSuggestions(false);
-            loadContactsList();
+            loadContactsList(true);
           }}
         />
       )}

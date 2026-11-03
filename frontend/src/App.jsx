@@ -14,8 +14,8 @@ import AuthModal from './components/AuthModal';
 import PaymentModal from './components/PaymentModal';
 import AdminPanel from './components/AdminPanel';
 
-const POLL_INTERVAL_DISCONNECTED = 5_000;  // fast poll when waiting for QR/connection
-const POLL_INTERVAL_CONNECTED    = 15_000;  // slow poll when already connected (stable)
+const POLL_INTERVAL_DISCONNECTED = 6_000;  // fast poll when waiting for QR/connection
+const POLL_INTERVAL_CONNECTED    = 30_000; // slow poll when already connected (stable)
 
 export default function App() {
   const navigate = useNavigate();
@@ -26,7 +26,14 @@ export default function App() {
   const [pairingCode, setPairingCode] = useState(null);
   const [profile, setProfile] = useState({ name: null, phone: null });
   const [isSyncing, setIsSyncing] = useState(false);
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(() => {
+    try {
+      const cached = localStorage.getItem('wa_cached_messages');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [activeView, setActiveView] = useState(() => {
     try {
@@ -54,7 +61,14 @@ export default function App() {
       return null;
     }
   });
-  const [quota, setQuota] = useState(null);
+  const [quota, setQuota] = useState(() => {
+    try {
+      const cached = localStorage.getItem('wa_cached_quota');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
   const [loadingQuota, setLoadingQuota] = useState(false);
 
   const refreshStatus = useCallback(async () => {
@@ -74,22 +88,35 @@ export default function App() {
   }, []);
 
   const refreshQuota = useCallback(async () => {
+    if (document.hidden) return;
     setLoadingQuota(true);
     try {
       const q = await fetchUserQuota();
-      setQuota(q);
+      if (q) {
+        setQuota(q);
+        try { localStorage.setItem('wa_cached_quota', JSON.stringify(q)); } catch {}
+      }
     } catch (err) {
-      console.warn('Failed to load quota:', err);
+      console.warn('Failed to load quota (using cached):', err);
     } finally {
       setLoadingQuota(false);
     }
   }, []);
 
   const refreshMessages = useCallback(async () => {
+    if (document.hidden) return;
     setLoadingMsgs(true);
-    try { setMessages(await fetchMessages()); }
-    catch { /* stale ok */ }
-    finally { setLoadingMsgs(false); }
+    try {
+      const msgs = await fetchMessages();
+      if (Array.isArray(msgs)) {
+        setMessages(msgs);
+        try { localStorage.setItem('wa_cached_messages', JSON.stringify(msgs)); } catch {}
+      }
+    } catch {
+      /* stale cached ok */
+    } finally {
+      setLoadingMsgs(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -125,51 +152,90 @@ export default function App() {
     }
   }, []);
 
+  // Status Polling: Adaptive frequency (slow when connected, faster when awaiting pairing/QR)
   useEffect(() => {
-    refreshStatus();
-
-    // Adaptive polling: fast when waiting for connection, slow when stable.
-    let statusTimer = null;
-    const scheduleStatusPoll = () => {
-      const interval = (waStatusRef.current === 'connected') ? POLL_INTERVAL_CONNECTED : POLL_INTERVAL_DISCONNECTED;
-    // If on /admin or static legal pages, do not run user-app background polling
     const isAdminOrStatic = location.pathname.startsWith('/admin') ||
       location.pathname.startsWith('/privacy-policy') ||
       location.pathname.startsWith('/terms-of-service');
 
-    if (isAdminOrStatic) {
-      return;
-    }
+    if (isAdminOrStatic) return;
 
-    statusTimer = setTimeout(async () => {
-      await refreshStatus();
-      scheduleStatusPoll();
-    }, interval);
-  };
-  scheduleStatusPoll();
+    refreshStatus();
+
+    let statusTimer = null;
+    let isCancelled = false;
+
+    const scheduleStatusPoll = () => {
+      const interval = (waStatusRef.current === 'connected') ? POLL_INTERVAL_CONNECTED : POLL_INTERVAL_DISCONNECTED;
+
+      statusTimer = setTimeout(async () => {
+        if (isCancelled) return;
+        if (!document.hidden) {
+          await refreshStatus();
+        }
+        if (!isCancelled) scheduleStatusPoll();
+      }, interval);
+    };
+
+    scheduleStatusPoll();
+
+    return () => {
+      isCancelled = true;
+      if (statusTimer) clearTimeout(statusTimer);
+    };
+  }, [refreshStatus, location.pathname]);
 
   // Initial fetch of messages and quota on login or navigating to app
-  let msgTimer = null;
-  let t3 = null;
-  const isAdminOrStatic = location.pathname.startsWith('/admin') ||
-    location.pathname.startsWith('/privacy-policy') ||
-    location.pathname.startsWith('/terms-of-service');
+  useEffect(() => {
+    const isAdminOrStatic = location.pathname.startsWith('/admin') ||
+      location.pathname.startsWith('/privacy-policy') ||
+      location.pathname.startsWith('/terms-of-service');
 
-  if (!isAdminOrStatic && (authUser || activeView !== 'landing')) {
-    refreshMessages();
-    refreshQuota();
-    // Auto-poll messages every 6s so Pending -> Sent -> Delivered updates in real time
-    msgTimer = setInterval(refreshMessages, 6_000);
-    // Quota background update every 30s
-    t3 = setInterval(refreshQuota, 30_000);
-  }
+    if (!isAdminOrStatic && (authUser || activeView !== 'landing')) {
+      refreshMessages();
+      refreshQuota();
+    }
+  }, [authUser, activeView, location.pathname, refreshMessages, refreshQuota]);
 
-  return () => {
-    clearTimeout(statusTimer);
-    if (msgTimer) clearInterval(msgTimer);
-    if (t3) clearInterval(t3);
-  };
-}, [refreshStatus, refreshMessages, refreshQuota, authUser, activeView, location.pathname]);
+  // Adaptive background polling ONLY if there are pending messages
+  useEffect(() => {
+    const isAdminOrStatic = location.pathname.startsWith('/admin') ||
+      location.pathname.startsWith('/privacy-policy') ||
+      location.pathname.startsWith('/terms-of-service');
+
+    if (isAdminOrStatic || !authUser) return;
+
+    const hasPending = messages.some(m => m.status === 'pending');
+    if (!hasPending) return;
+
+    // Only check every 25s if there is actually a pending message waiting to be sent
+    const pendingTimer = setInterval(() => {
+      if (!document.hidden) {
+        refreshMessages();
+      }
+    }, 25_000);
+
+    return () => clearInterval(pendingTimer);
+  }, [messages, authUser, location.pathname, refreshMessages]);
+
+  // Tab visibility change: silently refresh once when user switches back to this tab
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refreshStatus();
+        const isAdminOrStatic = location.pathname.startsWith('/admin') ||
+          location.pathname.startsWith('/privacy-policy') ||
+          location.pathname.startsWith('/terms-of-service');
+        if (!isAdminOrStatic && authUser) {
+          refreshMessages();
+          refreshQuota();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [refreshStatus, refreshMessages, refreshQuota, authUser, location.pathname]);
 
   const isConnected = waStatus === 'connected';
   const isLinked = Boolean(profile?.phone);
@@ -215,12 +281,18 @@ export default function App() {
     setShowPaymentModal(true);
   };
 
-  // Live user presence heartbeat
+  // Live user presence heartbeat (only when authenticated and tab is active)
   useEffect(() => {
-    sendUserHeartbeat(localStorage.getItem('wa_auth_token'));
+    if (!authUser) return;
+    const token = localStorage.getItem('wa_auth_token');
+    if (token) sendUserHeartbeat(token);
+
     const hb = setInterval(() => {
-      sendUserHeartbeat(localStorage.getItem('wa_auth_token'));
-    }, 45_000);
+      if (!document.hidden) {
+        const curToken = localStorage.getItem('wa_auth_token');
+        if (curToken) sendUserHeartbeat(curToken);
+      }
+    }, 60_000);
     return () => clearInterval(hb);
   }, [authUser]);
 
@@ -228,7 +300,12 @@ export default function App() {
     localStorage.removeItem('wa_auth_user');
     localStorage.removeItem('wa_auth_token');
     localStorage.removeItem('wa_pending_upgrade_plan');
+    localStorage.removeItem('wa_cached_messages');
+    localStorage.removeItem('wa_cached_quota');
+    localStorage.removeItem('wa_cached_contacts');
     setAuthUser(null);
+    setMessages([]);
+    setQuota(null);
     setActiveView('landing');
     toast.success('Signed out of account.');
   };
