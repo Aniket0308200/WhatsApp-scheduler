@@ -372,7 +372,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
     }
     setRecipients(prev => [...prev, { phone: chipPhone, name: chipName || null, isGroup: chipIsGroup }]);
     return true;
-  }, [recipients, personalCount, groupCount]);
+  }, [recipients, personalCount, groupCount, MAX_GROUPS, MAX_PERSONAL]);
 
   const removeRecipientChip = (phone) => {
     setRecipients(prev => prev.filter(r => r.phone !== phone));
@@ -1183,7 +1183,14 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
               Recipients
             </label>
             <p className="text-[11px] text-gray-400 dark:text-wa-dmuted mt-0.5">
-              Up to <strong>5 personal contacts</strong> + <strong>2 groups</strong> at once. Search or type a number, then press <kbd className="px-1 py-0.5 rounded bg-slate-100 dark:bg-wa-dsurf text-[10px] font-mono border border-slate-200 dark:border-wa-dbdr">Enter</kbd> or select from suggestions.
+              {userPlanKey === 'pro' ? (
+                <><strong>Unlimited personal contacts</strong> + <strong>unlimited groups</strong> at once.</>
+              ) : userPlanKey === 'starter' ? (
+                <>Up to <strong>20 personal contacts</strong> + <strong>10 groups</strong> at once.</>
+              ) : (
+                <>Up to <strong>5 personal contacts</strong> + <strong>2 groups</strong> at once.</>
+              )}{' '}
+              Search or type a number, then press <kbd className="px-1 py-0.5 rounded bg-slate-100 dark:bg-wa-dsurf text-[10px] font-mono border border-slate-200 dark:border-wa-dbdr">Enter</kbd> or select from suggestions.
             </p>
           </div>
 
