@@ -26,7 +26,13 @@ const { parseContactsFile } = require('./contacts-import');
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-ID', 'Accept', 'Origin']
+}));
+app.options('*', cors());
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
@@ -870,15 +876,9 @@ async function bootstrap() {
     }
   });
 
-  // Only restore sessions if no current sessions exist to avoid conflicts
-  const existingSessions = whatsapp.getAllActiveSessions() || [];
-  if (existingSessions.length === 0) {
-    whatsapp.bootstrapSessions().catch((err) => {
-      console.error('[Boot] WhatsApp bootstrap sessions error:', err.message);
-    });
-  } else {
-    console.log('[Boot] Skipping session bootstrap - active sessions detected');
-  }
+  // Sessions are loaded on demand (when user accesses site or when scheduler dispatches messages)
+  // to keep server RAM strictly below 150MB and prevent Render 512MB memory limit restarts.
+  console.log('[Boot] Sockets configured for on-demand initialization (zero startup RAM spike).');
 
   startScheduler();
 

@@ -689,7 +689,8 @@ async function _performInitWhatsApp(sessionId) {
 
   // Load contacts from MongoDB and decrypt them into in-memory cache
   try {
-    const dbContactsList = await Contact.find({ sessionId }).lean();
+    // Pre-load up to 250 recent contacts into memory cache (remaining load dynamically on lookup)
+    const dbContactsList = await Contact.find({ sessionId }).sort({ updatedAt: -1 }).limit(250).lean();
     for (const c of dbContactsList) {
       if (c.jid) {
         session.contactCache[c.jid] = db.decrypt(c.encryptedName) || '';

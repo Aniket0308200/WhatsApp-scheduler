@@ -13,9 +13,8 @@ const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/whatsapp_
 const secretKey = process.env.ENCRYPTION_KEY || 'local-development-secret-key-123';
 
 mongoose.connect(mongoUri)
-  .then(async () => {
+  .then(() => {
     console.log('[MongoDB] Connected successfully.');
-    await cleanInvalidContactsFromDb();
   })
   .catch(err => console.error('[MongoDB] Connection error:', err.message));
 
