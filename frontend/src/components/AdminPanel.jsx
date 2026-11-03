@@ -35,10 +35,10 @@ export default function AdminPanel() {
     }
   });
 
-  // Login form state
+  // Login form state (Empty by default, no pre-filled credentials)
   const [loginForm, setLoginForm] = useState({
-    name: 'Aniket Chouhan',
-    email: 'aniketchouhan314@gmail.com',
+    name: '',
+    email: '',
     password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -51,6 +51,11 @@ export default function AdminPanel() {
   const [subscriptions, setSubscriptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
+
+  // User Schedule Activity Overview Modal
+  const [selectedUserForDetails, setSelectedUserForDetails] = useState(null);
+  const [userActivity, setUserActivity] = useState(null);
+  const [loadingActivity, setLoadingActivity] = useState(false);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -173,22 +178,6 @@ export default function AdminPanel() {
   };
 
   // ── Handle Lock / Unlock Account ──────────────────────────────────────────
-  const openUserDetails = async (u) => {
-    setSelectedUserForDetails(u);
-    setUserActivity(null);
-    setLoadingActivity(true);
-    try {
-      const res = await adminGetUserActivity(token, u.id);
-      if (res?.activity) {
-        setUserActivity(res.activity);
-      }
-    } catch (err) {
-      toast.error('Could not load user activity.');
-    } finally {
-      setLoadingActivity(false);
-    }
-  };
-
   const handleToggleLock = async (userId, currentLocked, userName) => {
     const actionWord = currentLocked ? 'unlock and restore access for' : 'lock and suspend';
     if (!window.confirm(`Are you sure you want to ${actionWord} ${userName || 'this account'}?`)) {
@@ -206,6 +195,23 @@ export default function AdminPanel() {
       toast.error(err.response?.data?.error || 'Failed to update lock status.');
     } finally {
       setActionLoadingId(null);
+    }
+  };
+
+  // ── Handle Open User Activity Overview ────────────────────────────────────
+  const openUserDetails = async (u) => {
+    setSelectedUserForDetails(u);
+    setUserActivity(null);
+    setLoadingActivity(true);
+    try {
+      const res = await adminGetUserActivity(token, u.id);
+      if (res?.activity) {
+        setUserActivity(res.activity);
+      }
+    } catch (err) {
+      toast.error('Could not load user schedule activity.');
+    } finally {
+      setLoadingActivity(false);
     }
   };
 
