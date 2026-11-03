@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Routes, Route, useNavigate, Link, useLocation } from 'react-router-dom';
-import { fetchStatus, fetchMessages, fetchUserQuota } from './api';
+import { fetchStatus, fetchMessages, fetchUserQuota, sendUserHeartbeat } from './api';
 import ConnectionPanel from './components/ConnectionPanel';
 import SchedulerForm from './components/SchedulerForm';
 import MessageTable from './components/MessageTable';
@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import LandingPage from './components/LandingPage';
 import AuthModal from './components/AuthModal';
 import PaymentModal from './components/PaymentModal';
+import AdminPanel from './components/AdminPanel';
 
 const POLL_INTERVAL_DISCONNECTED = 5_000;  // fast poll when waiting for QR/connection
 const POLL_INTERVAL_CONNECTED    = 15_000;  // slow poll when already connected (stable)
@@ -201,6 +202,15 @@ export default function App() {
     setShowPaymentModal(true);
   };
 
+  // Live user presence heartbeat
+  useEffect(() => {
+    sendUserHeartbeat(localStorage.getItem('wa_auth_token'));
+    const hb = setInterval(() => {
+      sendUserHeartbeat(localStorage.getItem('wa_auth_token'));
+    }, 45_000);
+    return () => clearInterval(hb);
+  }, [authUser]);
+
   const handleAuthLogout = () => {
     localStorage.removeItem('wa_auth_user');
     localStorage.removeItem('wa_auth_token');
@@ -211,6 +221,16 @@ export default function App() {
   };
 
   const isPolicyOrTerms = location.pathname === '/privacy-policy' || location.pathname === '/terms-of-service';
+  const isAdminPath = location.pathname.startsWith('/admin');
+
+  if (isAdminPath) {
+    return (
+      <Routes>
+        <Route path="/admin" element={<AdminPanel />} />
+        <Route path="/admin/*" element={<AdminPanel />} />
+      </Routes>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#f1f1f1] dark:bg-[#0b141a] transition-colors duration-200 font-sans">

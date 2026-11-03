@@ -86,8 +86,8 @@ app.use((req, res, next) => {
     if (
       req.path === '/api/status' ||
       req.path === '/api/health' ||
-      req.path.startsWith('/api/auth/google') ||
-      req.path.startsWith('/api/auth/google-login') ||
+      req.path.startsWith('/api/auth') ||
+      req.path.startsWith('/api/admin') ||
       req.path.startsWith('/api/subscription')
     ) {
       return next();
@@ -97,6 +97,10 @@ app.use((req, res, next) => {
   req.sessionId = sessionId; 
   next();
 });
+
+// ─── Super Admin Routes (/api/admin) ─────────────────────────────────────────
+const adminRouter = require('./routes/admin');
+app.use('/api/admin', adminRouter);
 
 // ─── Subscription & Payment Verification Routes ───────────────────────────────
 const subscriptionRouter = require('./routes/subscription');
@@ -162,6 +166,14 @@ app.post('/api/auth/login', async (req, res) => {
     if (!isValid) {
       return res.status(400).json({ error: 'Incorrect password. Please try again.' });
     }
+    if (account.isLocked) {
+      return res.status(403).json({ error: 'Your account has been locked by Administrator. Please contact support.' });
+    }
+    // Update login timestamp & presence
+    await db.AuthAccount.updateOne(
+      { _id: account._id },
+      { $set: { lastLoginAt: new Date(), lastSeenAt: new Date() } }
+    );
     const user = {
       id: account._id.toString(),
       name: account.name,
@@ -273,6 +285,12 @@ app.get('/api/auth/me', async (req, res) => {
     if (!account) {
       return res.status(401).json({ error: 'Account not found' });
     }
+    if (account.isLocked) {
+      return res.status(403).json({ error: 'Your account has been locked by Administrator.' });
+    }
+    // Update live presence
+    await db.AuthAccount.updateOne({ _id: account._id }, { $set: { lastSeenAt: new Date() } });
+
     return res.json({
       user: {
         id: account._id.toString(),
@@ -284,6 +302,30 @@ app.get('/api/auth/me', async (req, res) => {
     });
   } catch (err) {
     return res.status(401).json({ error: 'Session expired or invalid.' });
+  }
+});
+
+// ─── Live Presence Heartbeat ─────────────────────────────────────────────────
+app.post('/api/auth/heartbeat', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decryptedStr = db.decrypt(token);
+      const decrypted = JSON.parse(decryptedStr);
+      if (decrypted && decrypted.email) {
+        await db.updateUserHeartbeat(decrypted.email);
+        return res.json({ success: true, timestamp: Date.now() });
+      }
+    }
+    // If WhatsApp session presence
+    const sessionId = req.headers['x-session-id'] || req.sessionId;
+    if (sessionId) {
+      await db.User.updateOne({ sessionId }, { $set: { lastSeenAt: new Date() } });
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    return res.json({ success: false });
   }
 });
 
@@ -621,6 +663,25 @@ app.post('/api/messages', async (req, res) => {
   const isLinked = Boolean(profile?.phone);
   if (status !== 'connected' && !(status === 'connecting' && isLinked)) {
     return res.status(400).json({ error: 'WhatsApp is not connected for this session. Please connect your WhatsApp first.' });
+  }
+
+  // Check if session or user account is locked by Administrator
+  const userDoc = await db.User.findOne({ sessionId: req.sessionId }).lean();
+  if (userDoc?.isLocked) {
+    return res.status(403).json({ error: 'Your account has been locked by Administrator. Message scheduling is disabled.' });
+  }
+
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const decrypted = JSON.parse(db.decrypt(authHeader.split(' ')[1]));
+      if (decrypted?.email) {
+        const acc = await db.findAuthAccountByEmail(decrypted.email);
+        if (acc?.isLocked) {
+          return res.status(403).json({ error: 'Your account has been locked by Administrator. Message scheduling is disabled.' });
+        }
+      }
+    } catch (e) {}
   }
 
   const isGroup = phone && phone.endsWith('@g.us');

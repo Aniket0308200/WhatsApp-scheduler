@@ -119,3 +119,38 @@ export const submitSubscriptionPayment = (payload) =>
 export const fetchSubscriptionStatus = (email) =>
   api.get(`/subscription/status${email ? `?email=${encodeURIComponent(email)}` : ''}`).then(r => r.data);
 
+// ─── Live Presence Heartbeat ─────────────────────────────────────────────────
+export const sendUserHeartbeat = (token) => {
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  return api.post('/auth/heartbeat', {}, { headers }).then(r => r.data).catch(() => {});
+};
+
+// ─── Super Admin APIs ────────────────────────────────────────────────────────
+export const adminLogin = (data) =>
+  api.post('/admin/login', data).then(r => r.data);
+
+export const adminGetMe = (token) =>
+  api.get('/admin/me', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+
+export const adminGetStats = (token) =>
+  api.get('/admin/stats', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+
+export const adminGetUsers = (token) =>
+  api.get('/admin/users', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+
+export const adminUpdateUserPlan = (token, userId, plan) =>
+  api.post(`/admin/users/${userId}/plan`, { plan }, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+
+export const adminUpdateUserLock = (token, userId, isLocked) =>
+  api.post(`/admin/users/${userId}/lock`, { isLocked }, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+
+export const adminGetSubscriptions = (token, status) =>
+  api.get(`/admin/subscriptions${status ? `?status=${status}` : ''}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+
+export const adminApproveSubscription = (token, id, adminNotes) =>
+  api.post(`/admin/subscriptions/${id}/approve`, { adminNotes }, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+
+export const adminRejectSubscription = (token, id, adminNotes) =>
+  api.post(`/admin/subscriptions/${id}/reject`, { adminNotes }, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+
+

@@ -85,6 +85,9 @@ const UserSchema = new mongoose.Schema({
   sessionId: { type: String, required: true },
   phoneNumber: { type: String, required: true },
   name: { type: String, default: '' },
+  lastLoginAt: { type: Date, default: Date.now },
+  lastSeenAt: { type: Date, default: Date.now },
+  isLocked: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
 UserSchema.index({ sessionId: 1 }, { unique: true });
@@ -112,6 +115,9 @@ const AuthAccountSchema = new mongoose.Schema({
   plan: { type: String, enum: ['free', 'starter', 'pro'], default: 'free' },
   planStatus: { type: String, enum: ['free', 'pending', 'starter', 'pro', 'active'], default: 'free' },
   customMonthlyLimit: { type: Number, default: null },
+  isLocked: { type: Boolean, default: false },
+  lastLoginAt: { type: Date, default: Date.now },
+  lastSeenAt: { type: Date, default: Date.now },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -688,6 +694,137 @@ async function purgeSessionData(sessionId) {
   }
 }
 
+async function getAllUsersForAdmin() {
+  const accounts = await AuthAccount.find().sort({ createdAt: -1 }).lean();
+  const waUsers = await User.find().sort({ createdAt: -1 }).lean();
+
+  const linkedPhones = new Set();
+  const result = accounts.map(acc => {
+    if (acc.linkedWhatsAppPhone) {
+      linkedPhones.add(acc.linkedWhatsAppPhone.replace(/\D/g, ''));
+    }
+    const lastSeen = acc.lastSeenAt || acc.lastLoginAt || acc.createdAt;
+    const isOnline = Boolean(lastSeen && (Date.now() - new Date(lastSeen).getTime()) < 120_000);
+
+    return {
+      id: acc._id.toString(),
+      name: acc.name || 'User',
+      email: acc.email,
+      phone: acc.linkedWhatsAppPhone || '',
+      plan: acc.plan || 'free',
+      planStatus: acc.planStatus || 'free',
+      isLocked: Boolean(acc.isLocked),
+      lastLoginAt: acc.lastLoginAt || acc.createdAt,
+      lastSeenAt: acc.lastSeenAt || acc.createdAt,
+      isOnline,
+      createdAt: acc.createdAt,
+      accountType: 'registered'
+    };
+  });
+
+  // Include QR-connected users that haven't registered an email account yet
+  for (const wu of waUsers) {
+    const rawDigits = (wu.phoneNumber || '').replace(/\D/g, '');
+    if (rawDigits && !linkedPhones.has(rawDigits)) {
+      const lastSeen = wu.lastSeenAt || wu.createdAt;
+      const isOnline = Boolean(lastSeen && (Date.now() - new Date(lastSeen).getTime()) < 120_000);
+
+      result.push({
+        id: 'wa_' + wu._id.toString(),
+        name: wu.name || 'WhatsApp User',
+        email: 'Direct QR (No email registered)',
+        phone: wu.phoneNumber,
+        plan: 'free',
+        planStatus: 'active',
+        isLocked: Boolean(wu.isLocked),
+        lastLoginAt: wu.lastLoginAt || wu.createdAt,
+        lastSeenAt: wu.lastSeenAt || wu.createdAt,
+        isOnline,
+        createdAt: wu.createdAt,
+        accountType: 'whatsapp_direct'
+      });
+    }
+  }
+
+  return result;
+}
+
+async function updateUserPlanByAdmin(userId, plan) {
+  const validPlans = ['free', 'starter', 'pro'];
+  if (!validPlans.includes(plan)) {
+    throw new Error('Invalid plan. Allowed: free, starter, pro');
+  }
+
+  if (userId.startsWith('wa_')) {
+    return { success: true, plan };
+  }
+
+  const updated = await AuthAccount.findByIdAndUpdate(
+    userId,
+    {
+      $set: {
+        plan,
+        planStatus: 'active',
+        customMonthlyLimit: PLAN_LIMITS[plan] || null
+      }
+    },
+    { new: true }
+  ).lean();
+
+  if (!updated) {
+    throw new Error('User not found.');
+  }
+
+  return {
+    id: updated._id.toString(),
+    name: updated.name,
+    email: updated.email,
+    plan: updated.plan,
+    planStatus: updated.planStatus
+  };
+}
+
+async function updateUserLockByAdmin(userId, isLocked) {
+  if (userId.startsWith('wa_')) {
+    const actualId = userId.replace('wa_', '');
+    const updatedWu = await User.findByIdAndUpdate(
+      actualId,
+      { $set: { isLocked: Boolean(isLocked) } },
+      { new: true }
+    ).lean();
+    return { id: userId, isLocked: Boolean(updatedWu?.isLocked) };
+  }
+
+  const updated = await AuthAccount.findByIdAndUpdate(
+    userId,
+    { $set: { isLocked: Boolean(isLocked) } },
+    { new: true }
+  ).lean();
+
+  if (!updated) {
+    throw new Error('User not found.');
+  }
+
+  return {
+    id: updated._id.toString(),
+    name: updated.name,
+    email: updated.email,
+    isLocked: Boolean(updated.isLocked)
+  };
+}
+
+async function updateUserHeartbeat(emailOrId) {
+  if (!emailOrId) return;
+  const now = new Date();
+  try {
+    if (typeof emailOrId === 'string' && emailOrId.includes('@')) {
+      await AuthAccount.updateOne({ email: emailOrId.toLowerCase().trim() }, { $set: { lastSeenAt: now } });
+    } else {
+      await AuthAccount.updateOne({ _id: emailOrId }, { $set: { lastSeenAt: now } });
+    }
+  } catch (e) {}
+}
+
 module.exports = {
   User,
   Contact,
@@ -725,4 +862,8 @@ module.exports = {
   getAllSubscriptionRequests,
   approveSubscriptionRequest,
   rejectSubscriptionRequest,
+  getAllUsersForAdmin,
+  updateUserPlanByAdmin,
+  updateUserLockByAdmin,
+  updateUserHeartbeat,
 };
