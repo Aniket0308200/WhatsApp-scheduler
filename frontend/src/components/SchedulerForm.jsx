@@ -987,7 +987,8 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       return;
     }
 
-    if (quota && quota.remaining <= 0) {
+    const isProOrUnlimited = Boolean(quota && (quota.isUnlimited || quota.plan === 'pro'));
+    if (!isProOrUnlimited && quota && typeof quota.remaining === 'number' && quota.remaining <= 0) {
       toast.error(`Monthly quota limit reached (${quota.monthlyLimit}/${quota.monthlyLimit} used). Please upgrade your plan or wait for reset on ${quota.resetsOnFormatted}.`);
       return;
     }
@@ -1019,7 +1020,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
     }
 
     // Check quota against total recipients being scheduled
-    if (quota && quota.remaining < finalRecipients.length) {
+    if (!isProOrUnlimited && quota && typeof quota.remaining === 'number' && quota.remaining < finalRecipients.length) {
       toast.error(`Not enough quota. You have ${quota.remaining} message(s) remaining but are trying to send to ${finalRecipients.length} recipients.`);
       return;
     }
@@ -1121,7 +1122,9 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                 onClick={onViewQuota}
                 title={`${quota.planName || 'Monthly'} Quota: ${quota.remaining} of ${quota.monthlyLimit} messages left. Click to view plan details & usage.`}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all hover:scale-[1.02] ${
-                  quota.remaining <= 0
+                  (quota.isUnlimited || quota.plan === 'pro')
+                    ? 'bg-purple-500/10 dark:bg-purple-500/20 border-purple-500/30 text-purple-700 dark:text-purple-300'
+                    : quota.remaining <= 0
                     ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-400'
                     : quota.remaining <= 10
                     ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40 text-amber-700 dark:text-amber-400'
@@ -1132,7 +1135,9 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
                 </svg>
                 <span>
-                  {quota.remaining <= 0
+                  {(quota.isUnlimited || quota.plan === 'pro')
+                    ? '👑 Pro Plan: Unlimited Messages'
+                    : quota.remaining <= 0
                     ? `Monthly Quota: Full (0/${quota.monthlyLimit})`
                     : `Monthly Quota: ${quota.remaining}/${quota.monthlyLimit} Left`}
                 </span>
@@ -1164,7 +1169,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
         </div>
 
         {/* Quota exhausted banner */}
-        {quota && quota.remaining <= 0 && (
+        {quota && !quota.isUnlimited && quota.plan !== 'pro' && typeof quota.remaining === 'number' && quota.remaining <= 0 && (
           <div className="mt-3 flex items-center justify-between gap-3 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/25 border border-rose-200 dark:border-rose-900/40 text-xs">
             <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400">
               <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1761,7 +1766,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
         </div>
 
         {/* ── Quota Exhausted Warning ───────────────────────────────────── */}
-        {quota && quota.remaining <= 0 && (
+        {quota && !quota.isUnlimited && quota.plan !== 'pro' && typeof quota.remaining === 'number' && quota.remaining <= 0 && (
           <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 flex items-center gap-2.5 text-xs text-rose-800 dark:text-rose-300">
             <span className="text-base shrink-0">🚫</span>
             <div className="flex-1">
@@ -1777,7 +1782,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
           const hasValidRecipient = recipients.length > 0 || Boolean(phone.trim());
           const hasValidContent = Boolean(message.trim() || attachedMediaList.length > 0);
           const canConnect = isConnected || isReconnecting;
-          const isQuotaExhausted = Boolean(quota && quota.remaining <= 0);
+          const isQuotaExhausted = Boolean(quota && !quota.isUnlimited && quota.plan !== 'pro' && typeof quota.remaining === 'number' && quota.remaining <= 0);
 
           const isSubmitDisabled = loading ||
             !canConnect ||

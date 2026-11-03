@@ -889,30 +889,36 @@ async function _performInitWhatsApp(sessionId) {
         const currentPhone = session.connectedProfile.phone;
         console.log(`[WA] [${sessionId}] Connected as: ${session.connectedProfile.name || session.connectedProfile.phone} (+${currentPhone})`);
 
-        // Enforce 1 WhatsApp Phone per User Account Lock
+        // Enforce 1 WhatsApp Phone per User Account Link
         if (sessionId.startsWith('user_acc_') && currentPhone) {
           const accountId = sessionId.replace('user_acc_', '');
           try {
             const account = await db.AuthAccount.findById(accountId);
             if (account) {
               const cleanPhone = String(currentPhone).replace(/\D/g, '');
-              if (!account.linkedWhatsAppPhone) {
+              const existingPhone = String(account.linkedWhatsAppPhone || '').replace(/\D/g, '');
+              const isSamePhone = !existingPhone ||
+                existingPhone === cleanPhone ||
+                existingPhone.endsWith(cleanPhone) ||
+                cleanPhone.endsWith(existingPhone) ||
+                (existingPhone.length >= 10 && cleanPhone.length >= 10 && existingPhone.slice(-10) === cleanPhone.slice(-10));
+
+              if (isSamePhone) {
+                if (!account.linkedWhatsAppPhone || account.linkedWhatsAppPhone !== cleanPhone) {
+                  account.linkedWhatsAppPhone = cleanPhone;
+                  account.linkedWhatsAppJid = session.connectedProfile.jid || `${cleanPhone}@s.whatsapp.net`;
+                  await account.save();
+                  console.log(`[WA] [Account Link] Account ${accountId} locked to WhatsApp phone +${cleanPhone}`);
+                }
+              } else {
+                console.log(`[WA] [Account Link Update] Account ${accountId} re-linked to new WhatsApp phone +${cleanPhone} (previously +${existingPhone})`);
                 account.linkedWhatsAppPhone = cleanPhone;
                 account.linkedWhatsAppJid = session.connectedProfile.jid || `${cleanPhone}@s.whatsapp.net`;
                 await account.save();
-                console.log(`[WA] [Account Lock] Account ${accountId} successfully locked to WhatsApp phone +${cleanPhone}`);
-              } else if (account.linkedWhatsAppPhone !== cleanPhone) {
-                console.error(`[WA] [Account Lock Mismatch] Account ${accountId} locked to +${account.linkedWhatsAppPhone}, but attempted connection from +${cleanPhone}. Rejecting!`);
-                session.status = 'disconnected';
-                session.connectedProfile = { name: null, phone: null, jid: null };
-                try {
-                  await sock.logout();
-                } catch (e) {}
-                return;
               }
             }
           } catch (accErr) {
-            console.error(`[WA] Error validating account phone lock for ${accountId}:`, accErr.message);
+            console.error(`[WA] Error validating account phone link for ${accountId}:`, accErr.message);
           }
         }
       } catch (err) {
@@ -929,7 +935,7 @@ async function _performInitWhatsApp(sessionId) {
       const code = lastDisconnect?.error?.output?.statusCode;
       console.log(`[WA] [${sessionId}] Connection closed. Code: ${code}`);
 
-      const { loggedOut, restartRequired } = DisconnectReason;
+      const { loggedOut, restartRequired, connectionReplaced } = DisconnectReason;
 
       if (code === loggedOut) {
         // User explicitly logged out / unlinked from mobile device
@@ -940,6 +946,14 @@ async function _performInitWhatsApp(sessionId) {
         session.reconnectAttempts = 0;
         session.sock = null;
         clearSession(sessionId).catch((err) => console.error(`[WA] [${sessionId}] Error clearing loggedOut session:`, err.message));
+        return;
+      }
+
+      if (code === connectionReplaced || code === 440) {
+        console.log(`[WA] [${sessionId}] Connection replaced by another session/client (code 440). Halting auto-reconnect to prevent collision loop.`);
+        session.status = 'disconnected';
+        session.isSyncing = false;
+        if (session.reconnectTimer) clearTimeout(session.reconnectTimer);
         return;
       }
 

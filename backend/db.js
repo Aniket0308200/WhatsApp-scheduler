@@ -85,6 +85,9 @@ const UserSchema = new mongoose.Schema({
   sessionId: { type: String, required: true },
   phoneNumber: { type: String, required: true },
   name: { type: String, default: '' },
+  plan: { type: String, enum: ['free', 'starter', 'pro'], default: 'free' },
+  planStatus: { type: String, enum: ['free', 'pending', 'starter', 'pro', 'active'], default: 'free' },
+  customMonthlyLimit: { type: Number, default: null },
   lastLoginAt: { type: Date, default: Date.now },
   lastSeenAt: { type: Date, default: Date.now },
   isLocked: { type: Boolean, default: false },
@@ -427,6 +430,36 @@ async function getUserMonthlyQuota(sessionId) {
     } catch (e) {
       console.error('[DB] Error fetching account for quota:', e.message);
     }
+  } else if (sessionId) {
+    // Check direct WhatsApp User document
+    try {
+      const waUser = await User.findOne({ sessionId }).lean();
+      if (waUser) {
+        if (waUser.plan && waUser.plan !== 'free') {
+          plan = waUser.plan;
+          limit = waUser.customMonthlyLimit || PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+        }
+
+        // Also check if user's WhatsApp phone is linked to a registered AuthAccount with a higher plan
+        if (waUser.phoneNumber) {
+          const rawDigits = String(waUser.phoneNumber).replace(/\D/g, '');
+          const linkedAcc = await AuthAccount.findOne({
+            $or: [
+              { linkedWhatsAppPhone: rawDigits },
+              { linkedWhatsAppPhone: { $regex: rawDigits.slice(-10) + '$' } }
+            ]
+          }).lean();
+
+          if (linkedAcc && linkedAcc.plan && linkedAcc.plan !== 'free') {
+            userAccount = linkedAcc;
+            plan = linkedAcc.plan;
+            limit = linkedAcc.customMonthlyLimit || PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[DB] Error fetching WA user for quota:', e.message);
+    }
   }
 
   const now = new Date();
@@ -435,6 +468,7 @@ async function getUserMonthlyQuota(sessionId) {
   const endOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999));
   const nextMonthReset = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
 
+  // Count scheduled messages for this session
   const monthMessages = await ScheduledMessage.find({
     sessionId,
     createdAt: { $gte: startOfMonth, $lte: endOfMonth }
@@ -467,7 +501,7 @@ async function getUserMonthlyQuota(sessionId) {
   const monthName = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
   const resetsOnFormatted = nextMonthReset.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 
-  const planStatus = userAccount?.planStatus || (plan === 'free' ? 'free' : plan);
+  const planStatus = userAccount?.planStatus || (plan === 'free' ? 'free' : 'active');
   let pendingSubscription = null;
   if (userAccount?.email) {
     pendingSubscription = await SubscriptionRequest.findOne({ email: userAccount.email, status: 'pending' }).lean();
@@ -490,10 +524,6 @@ async function getUserMonthlyQuota(sessionId) {
       status: pendingSubscription.status
     } : null,
     planName: plan === 'starter' ? 'Starter Plan' : (plan === 'pro' ? 'Pro Plan' : 'Free Plan'),
-    monthlyLimit: limit,
-    used,
-    remaining,
-    percentUsed,
     resetsAt: nextMonthReset.toISOString(),
     resetsOnFormatted,
     monthName,
@@ -740,8 +770,8 @@ async function getAllUsersForAdmin() {
         name: wu.name || 'WhatsApp User',
         email: 'Direct QR (No email registered)',
         phone: wu.phoneNumber,
-        plan: 'free',
-        planStatus: 'active',
+        plan: wu.plan || 'free',
+        planStatus: wu.planStatus || (wu.plan && wu.plan !== 'free' ? 'active' : 'free'),
         isLocked: Boolean(wu.isLocked),
         lastLoginAt: wu.lastLoginAt || wu.createdAt,
         lastSeenAt: wu.lastSeenAt || wu.createdAt,
@@ -762,7 +792,30 @@ async function updateUserPlanByAdmin(userId, plan) {
   }
 
   if (userId.startsWith('wa_')) {
-    return { success: true, plan };
+    const actualId = userId.replace('wa_', '');
+    const updatedWu = await User.findByIdAndUpdate(
+      actualId,
+      {
+        $set: {
+          plan,
+          planStatus: 'active',
+          customMonthlyLimit: PLAN_LIMITS[plan] || null
+        }
+      },
+      { new: true }
+    ).lean();
+
+    if (!updatedWu) {
+      throw new Error('User not found.');
+    }
+
+    return {
+      id: userId,
+      name: updatedWu.name || 'WhatsApp User',
+      email: 'Direct QR (No email registered)',
+      plan: updatedWu.plan,
+      planStatus: 'active'
+    };
   }
 
   const updated = await AuthAccount.findByIdAndUpdate(

@@ -692,7 +692,8 @@ app.post('/api/messages', async (req, res) => {
     targetPhone = 'status@broadcast';
     // WhatsApp Status / Story is an exclusive feature for Pro users
     const userQuota = await db.getUserMonthlyQuota(req.sessionId);
-    if ((userQuota?.plan || 'free').toLowerCase() !== 'pro') {
+    const isProUser = userQuota && (userQuota.plan === 'pro' || userQuota.isUnlimited);
+    if (!isProUser) {
       return res.status(403).json({
         error: 'WhatsApp Status scheduling is an exclusive Pro Plan feature. Upgrade to Pro to post automated Stories.',
         planUpgradeRequired: true
