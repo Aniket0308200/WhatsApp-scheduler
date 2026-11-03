@@ -4,6 +4,7 @@ import { format, addMinutes, addSeconds } from 'date-fns';
 import { scheduleMessage, fetchContactName, resolveContactLive, importContacts, fetchAllContacts, fetchGoogleAuthUrl, fetchLinkedGoogleAccounts, syncGroups, deleteGoogleAccount } from '../api';
 import DateTimePicker from './DateTimePicker';
 import GifStickerPickerModal, { WhatsAppStickerIcon, WhatsAppGifIcon, convertImageFileToWebpSticker } from './GifStickerPickerModal';
+import MediaGalleryModal from './MediaGalleryModal';
 
 // ─── Complete country-code list ───────────────────────────────────────────────
 // ─── Complete country-code list ───────────────────────────────────────────────
@@ -553,88 +554,226 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
   const attachmentInputRef = useRef(null);
   const stickerInputRef = useRef(null);
   const gifInputRef = useRef(null);
-  const [attachedMedia, setAttachedMedia] = useState(null); // { type, data, name, size, preview }
+  const [attachedMediaList, setAttachedMediaList] = useState([]); // array of { id, type, data, name, size, preview }
+  const [activeGalleryFolder, setActiveGalleryFolder] = useState(null); // 'image' | 'video' | 'audio' | 'sticker_gif' | null
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [mediaPickerTab, setMediaPickerTab] = useState('sticker');
 
+  // Categorized lists
+  const imagesList = attachedMediaList.filter(m => m.type === 'image');
+  const videosList = attachedMediaList.filter(m => m.type === 'video');
+  const audiosList = attachedMediaList.filter(m => m.type === 'audio');
+  const stickersGifsList = attachedMediaList.filter(m => m.type === 'sticker' || m.type === 'gif');
+  // First item shortcut for legacy references
+  const attachedMedia = attachedMediaList[0] || null;
+
+  // Maximum allowed per category (no limit text displayed in UI; enforced via toast popups)
+  const MAX_LIMITS = {
+    image: 50,
+    video: 10,
+    audio: 20,
+    sticker_gif: 50
+  };
+
   const handleAttachmentFileInput = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 12 * 1024 * 1024) {
-      toast.error('Attachment file size must be less than 12MB.');
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    let currentImages = attachedMediaList.filter(m => m.type === 'image').length;
+    let currentVideos = attachedMediaList.filter(m => m.type === 'video').length;
+    let currentAudios = attachedMediaList.filter(m => m.type === 'audio').length;
+    let currentStickersGifs = attachedMediaList.filter(m => m.type === 'sticker' || m.type === 'gif').length;
+
+    const filesToRead = [];
+
+    for (const file of files) {
+      if (file.size > 25 * 1024 * 1024) {
+        toast.error(`"${file.name}" exceeds 25MB limit.`);
+        continue;
+      }
+
+      let mType = 'image';
+      if (file.type.startsWith('video/')) mType = 'video';
+      else if (file.type.startsWith('audio/')) mType = 'audio';
+      else if (file.type === 'image/gif') mType = 'gif';
+      else if (file.type === 'image/webp') mType = 'sticker';
+      else mType = 'image';
+
+      if (mType === 'image') {
+        if (currentImages >= MAX_LIMITS.image) {
+          toast.error('Maximum limit reached: You can attach up to 50 images at a time.');
+          continue;
+        }
+        currentImages++;
+      } else if (mType === 'video') {
+        if (currentVideos >= MAX_LIMITS.video) {
+          toast.error('Maximum limit reached: You can attach up to 10 videos at a time.');
+          continue;
+        }
+        currentVideos++;
+      } else if (mType === 'audio') {
+        if (currentAudios >= MAX_LIMITS.audio) {
+          toast.error('Maximum limit reached: You can attach up to 20 audio files at a time.');
+          continue;
+        }
+        currentAudios++;
+      } else if (mType === 'sticker' || mType === 'gif') {
+        if (currentStickersGifs >= MAX_LIMITS.sticker_gif) {
+          toast.error('Maximum limit reached: You can attach up to 50 stickers & GIFs at a time.');
+          continue;
+        }
+        currentStickersGifs++;
+      }
+
+      filesToRead.push({ file, mType });
+    }
+
+    if (!filesToRead.length) {
+      if (attachmentInputRef.current) attachmentInputRef.current.value = '';
       return;
     }
-    let mediaType = 'image';
-    if (file.type.startsWith('video/')) mediaType = 'video';
-    else if (file.type.startsWith('audio/')) mediaType = 'audio';
-    else if (file.type === 'image/gif') mediaType = 'gif';
-    else if (file.type === 'image/webp') mediaType = 'sticker';
-    else mediaType = 'image';
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setAttachedMedia({
-        type: mediaType,
-        data: reader.result,
-        name: file.name,
-        size: file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(file.size / 1024)} KB`,
-        preview: file.type.startsWith('image/') ? reader.result : null
-      });
-      setShowMediaPicker(false);
-    };
-    reader.readAsDataURL(file);
+    let loadedCount = 0;
+    const newItems = [];
+
+    filesToRead.forEach(({ file, mType }) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const id = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        newItems.push({
+          id,
+          type: mType,
+          data: reader.result,
+          name: file.name,
+          size: file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(file.size / 1024)} KB`,
+          preview: (mType === 'image' || mType === 'gif') ? reader.result : null
+        });
+
+        loadedCount++;
+        if (loadedCount === filesToRead.length) {
+          setAttachedMediaList(prev => [...prev, ...newItems]);
+          toast.success(`Attached ${newItems.length} file(s)`);
+          if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+        }
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
   const handleStickerFileInput = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 8 * 1024 * 1024) {
-      toast.error('Sticker file size must be less than 8MB.');
-      return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    let currentCount = attachedMediaList.filter(m => m.type === 'sticker' || m.type === 'gif').length;
+    const newItems = [];
+
+    for (const file of files) {
+      if (currentCount >= MAX_LIMITS.sticker_gif) {
+        toast.error('Maximum limit reached: You can attach up to 50 stickers & GIFs at a time.');
+        break;
+      }
+      try {
+        const webpData = await convertImageFileToWebpSticker(file);
+        const id = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        newItems.push({
+          id,
+          type: 'sticker',
+          data: webpData,
+          name: file.name.replace(/\.[^/.]+$/, '') + '.webp',
+          size: 'Sticker (WebP)',
+          preview: webpData
+        });
+        currentCount++;
+      } catch (err) {
+        console.error('Sticker conversion error:', err);
+      }
     }
-    try {
-      const webpData = await convertImageFileToWebpSticker(file);
-      setAttachedMedia({
-        type: 'sticker',
-        data: webpData,
-        name: file.name.replace(/\.[^/.]+$/, '') + '.webp',
-        size: 'Sticker (WebP)',
-        preview: webpData
-      });
-      setShowMediaPicker(false);
-    } catch (err) {
-      console.error('Custom sticker error:', err);
-      toast.error('Failed to convert image to WebP sticker.');
+
+    if (newItems.length) {
+      setAttachedMediaList(prev => [...prev, ...newItems]);
+      toast.success(`Attached ${newItems.length} sticker(s)`);
     }
+    if (stickerInputRef.current) stickerInputRef.current.value = '';
   };
 
   const handleGifFileInput = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 12 * 1024 * 1024) {
-      toast.error('GIF file size must be less than 12MB.');
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    let currentCount = attachedMediaList.filter(m => m.type === 'sticker' || m.type === 'gif').length;
+    const newItems = [];
+    let loaded = 0;
+
+    const validFiles = files.filter(f => {
+      if (currentCount >= MAX_LIMITS.sticker_gif) {
+        toast.error('Maximum limit reached: You can attach up to 50 stickers & GIFs at a time.');
+        return false;
+      }
+      currentCount++;
+      return true;
+    });
+
+    if (!validFiles.length) {
+      if (gifInputRef.current) gifInputRef.current.value = '';
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setAttachedMedia({
-        type: 'gif',
-        data: reader.result,
-        name: file.name,
-        size: file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(file.size / 1024)} KB`,
-        preview: reader.result
-      });
-      setShowMediaPicker(false);
-    };
-    reader.readAsDataURL(file);
+
+    validFiles.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const id = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        newItems.push({
+          id,
+          type: 'gif',
+          data: reader.result,
+          name: file.name,
+          size: file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(file.size / 1024)} KB`,
+          preview: reader.result
+        });
+        loaded++;
+        if (loaded === validFiles.length) {
+          setAttachedMediaList(prev => [...prev, ...newItems]);
+          toast.success(`Attached ${newItems.length} GIF(s)`);
+          if (gifInputRef.current) gifInputRef.current.value = '';
+        }
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
-  const handleRemoveMedia = () => {
-    setAttachedMedia(null);
+  const handleAddSingleMedia = (media) => {
+    const currentCount = attachedMediaList.filter(m => m.type === 'sticker' || m.type === 'gif').length;
+    if (currentCount >= MAX_LIMITS.sticker_gif) {
+      toast.error('Maximum limit reached: You can attach up to 50 stickers & GIFs at a time.');
+      return;
+    }
+    const id = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    setAttachedMediaList(prev => [...prev, { ...media, id }]);
+    toast.success(`Attached ${media.type === 'gif' ? 'GIF' : 'Sticker'}!`);
+  };
+
+  const handleRemoveMediaItem = (id) => {
+    setAttachedMediaList(prev => prev.filter(m => m.id !== id));
+  };
+
+  const handleClearCategory = (category) => {
+    if (category === 'sticker_gif') {
+      setAttachedMediaList(prev => prev.filter(m => m.type !== 'sticker' && m.type !== 'gif'));
+    } else {
+      setAttachedMediaList(prev => prev.filter(m => m.type !== category));
+    }
+    setActiveGalleryFolder(null);
+    toast.success('Cleared category files');
+  };
+
+  const handleRemoveAllMedia = () => {
+    setAttachedMediaList([]);
     if (attachmentInputRef.current) attachmentInputRef.current.value = '';
     if (stickerInputRef.current) stickerInputRef.current.value = '';
     if (gifInputRef.current) gifInputRef.current.value = '';
   };
+
+  const handleRemoveMedia = handleRemoveAllMedia;
 
   const handleInsertEmoji = (emoji) => {
     const textarea = textareaRef.current;
@@ -867,8 +1006,8 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       toast.error('Add at least one recipient.');
       return;
     }
-    if (!message.trim() && !attachedMedia) {
-      toast.error('Please enter a message or attach an image, video or sticker.');
+    if (!message.trim() && attachedMediaList.length === 0) {
+      toast.error('Please enter a message or attach images, videos, audio, or stickers.');
       return;
     }
 
@@ -892,9 +1031,10 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
             message: message.trim(),
             scheduledAt: utcISO,
             recipientName: recipient.name,
-            mediaType: attachedMedia?.type || null,
-            mediaData: attachedMedia?.data || null,
-            mediaName: attachedMedia?.name || null
+            mediaType: attachedMediaList.length === 1 ? attachedMediaList[0].type : attachedMediaList.length > 1 ? 'multiple' : null,
+            mediaData: attachedMediaList.length === 1 ? attachedMediaList[0].data : null,
+            mediaName: attachedMediaList.length === 1 ? attachedMediaList[0].name : attachedMediaList.length > 1 ? `${attachedMediaList.length} items` : null,
+            mediaList: attachedMediaList
           });
           successCount++;
         } catch (err) {
@@ -915,7 +1055,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       // Reset form
       setPhone('');
       setMessage('');
-      handleRemoveMedia();
+      handleRemoveAllMedia();
       setScheduledAt(getDefaultTime());
       setTimeConfirmed(false);
       setContactName(null);
@@ -1214,46 +1354,46 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
               ref={textareaRef}
               value={message}
               onChange={e => setMessage(e.target.value)}
-              placeholder={attachedMedia ? "Add an optional caption for your media..." : "Type your message here… (e.g: Happy birthday 🎉)"}
+              placeholder={attachedMediaList.length > 0 ? "Add an optional caption for your media..." : "Type your message here… (e.g: Happy birthday 🎉)"}
               rows={4}
-              required={!attachedMedia}
+              required={attachedMediaList.length === 0}
               className="w-full px-4 py-2.5 text-sm bg-transparent text-gray-900 dark:text-wa-dtext focus:outline-none resize-y min-h-[80px] custom-scroll"
             />
 
-            {/* Attached media preview card */}
-            {attachedMedia && (
-              <div className="mx-3 mb-2.5 p-2 rounded-xl bg-emerald-50/90 dark:bg-wa-dpanel border border-emerald-200/90 dark:border-wa-dbdr flex items-center justify-between gap-3 shadow-xs">
+            {/* ── Single Item Direct Preview Card ── */}
+            {attachedMediaList.length === 1 && (
+              <div className="mx-3 mb-2.5 p-2 rounded-xl bg-emerald-50/90 dark:bg-wa-dpanel border border-emerald-200/90 dark:border-wa-dbdr flex items-center justify-between gap-3 shadow-xs animate-fade-in">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  {attachedMedia.preview ? (
+                  {attachedMediaList[0].preview ? (
                     <img
-                      src={attachedMedia.preview}
-                      alt={attachedMedia.name}
+                      src={attachedMediaList[0].preview}
+                      alt={attachedMediaList[0].name}
                       className="w-12 h-12 rounded-lg object-cover border border-emerald-200/80 dark:border-wa-dbdr shadow-xs shrink-0 bg-white dark:bg-black/20"
                     />
                   ) : (
                     <div className="w-12 h-12 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-center text-xl shrink-0">
-                      {attachedMedia.type === 'video' ? '🎥' : attachedMedia.type === 'audio' ? '🎵' : '📎'}
+                      {attachedMediaList[0].type === 'video' ? '🎥' : attachedMediaList[0].type === 'audio' ? '🎵' : '📎'}
                     </div>
                   )}
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-200/80 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300">
-                        {attachedMedia.type === 'image' ? '📷 Image' : attachedMedia.type === 'video' ? '🎥 Video' : attachedMedia.type === 'audio' ? '🎵 Audio' : attachedMedia.type === 'gif' ? '🎞️ GIF' : '🏷️ Sticker'}
+                        {attachedMediaList[0].type === 'image' ? '📷 Image' : attachedMediaList[0].type === 'video' ? '🎥 Video' : attachedMediaList[0].type === 'audio' ? '🎵 Audio' : attachedMediaList[0].type === 'gif' ? '🎞️ GIF' : '🏷️ Sticker'}
                       </span>
-                      {attachedMedia.size && (
+                      {attachedMediaList[0].size && (
                         <span className="text-[10px] text-gray-500 dark:text-wa-dmuted font-medium">
-                          {attachedMedia.size}
+                          {attachedMediaList[0].size}
                         </span>
                       )}
                     </div>
-                    <p className="text-xs font-semibold text-gray-800 dark:text-wa-dtext truncate mt-0.5 max-w-[200px] sm:max-w-[320px]" title={attachedMedia.name}>
-                      {attachedMedia.name}
+                    <p className="text-xs font-semibold text-gray-800 dark:text-wa-dtext truncate mt-0.5 max-w-[200px] sm:max-w-[320px]" title={attachedMediaList[0].name}>
+                      {attachedMediaList[0].name}
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={handleRemoveMedia}
+                  onClick={() => handleRemoveMediaItem(attachedMediaList[0].id)}
                   className="p-1.5 text-gray-400 hover:text-red-500 dark:text-wa-dmuted dark:hover:text-red-400 rounded-lg hover:bg-white dark:hover:bg-wa-dsurf transition-colors shrink-0"
                   title="Remove attachment"
                 >
@@ -1261,6 +1401,122 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
+              </div>
+            )}
+
+            {/* ── Multiple Items: Folders UI ── */}
+            {attachedMediaList.length > 1 && (
+              <div className="mx-3 mb-2.5 p-3 rounded-2xl bg-gradient-to-r from-emerald-50/90 via-teal-50/60 to-slate-50/90 dark:from-wa-dpanel dark:via-wa-dpanel dark:to-wa-dsurf/40 border border-emerald-200/90 dark:border-wa-dbdr shadow-xs animate-fade-in">
+                <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-emerald-100 dark:border-wa-dbdr/50">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-sm">📁</span>
+                    <span className="text-xs font-bold text-slate-800 dark:text-wa-dtext truncate">
+                      Attached Media ({attachedMediaList.length} files total)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRemoveAllMedia}
+                    className="text-[11px] font-semibold text-rose-600 hover:text-rose-700 dark:text-rose-400 hover:underline shrink-0"
+                  >
+                    Clear All
+                  </button>
+                </div>
+
+                {/* Folder Category Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {/* Images Folder */}
+                  {imagesList.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveGalleryFolder('image')}
+                      className="p-2.5 rounded-xl bg-white dark:bg-wa-dsurf border border-slate-200/90 dark:border-wa-dbdr/60 hover:border-wa-teal dark:hover:border-wa-green transition-all text-left group shadow-2xs hover:shadow-xs flex items-center justify-between"
+                      title="Open Images Gallery"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-base">📷</span>
+                          <span className="text-xs font-bold text-slate-900 dark:text-white truncate">Images</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-wa-dmuted mt-0.5 font-medium">
+                          {imagesList.length} {imagesList.length === 1 ? 'photo' : 'photos'}
+                        </p>
+                      </div>
+                      <span className="text-[11px] text-emerald-600 dark:text-emerald-400 group-hover:translate-x-0.5 transition-transform font-bold">
+                        ↗
+                      </span>
+                    </button>
+                  )}
+
+                  {/* Videos Folder */}
+                  {videosList.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveGalleryFolder('video')}
+                      className="p-2.5 rounded-xl bg-white dark:bg-wa-dsurf border border-slate-200/90 dark:border-wa-dbdr/60 hover:border-wa-teal dark:hover:border-wa-green transition-all text-left group shadow-2xs hover:shadow-xs flex items-center justify-between"
+                      title="Open Videos Gallery"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-base">🎥</span>
+                          <span className="text-xs font-bold text-slate-900 dark:text-white truncate">Videos</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-wa-dmuted mt-0.5 font-medium">
+                          {videosList.length} {videosList.length === 1 ? 'video' : 'videos'}
+                        </p>
+                      </div>
+                      <span className="text-[11px] text-emerald-600 dark:text-emerald-400 group-hover:translate-x-0.5 transition-transform font-bold">
+                        ↗
+                      </span>
+                    </button>
+                  )}
+
+                  {/* Audio Folder */}
+                  {audiosList.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveGalleryFolder('audio')}
+                      className="p-2.5 rounded-xl bg-white dark:bg-wa-dsurf border border-slate-200/90 dark:border-wa-dbdr/60 hover:border-wa-teal dark:hover:border-wa-green transition-all text-left group shadow-2xs hover:shadow-xs flex items-center justify-between"
+                      title="Open Audio Files"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-base">🎵</span>
+                          <span className="text-xs font-bold text-slate-900 dark:text-white truncate">Audio</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-wa-dmuted mt-0.5 font-medium">
+                          {audiosList.length} {audiosList.length === 1 ? 'track' : 'tracks'}
+                        </p>
+                      </div>
+                      <span className="text-[11px] text-emerald-600 dark:text-emerald-400 group-hover:translate-x-0.5 transition-transform font-bold">
+                        ↗
+                      </span>
+                    </button>
+                  )}
+
+                  {/* Stickers & GIFs Folder */}
+                  {stickersGifsList.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveGalleryFolder('sticker_gif')}
+                      className="p-2.5 rounded-xl bg-white dark:bg-wa-dsurf border border-slate-200/90 dark:border-wa-dbdr/60 hover:border-wa-teal dark:hover:border-wa-green transition-all text-left group shadow-2xs hover:shadow-xs flex items-center justify-between"
+                      title="Open Stickers & GIFs Gallery"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-base">🏷️</span>
+                          <span className="text-xs font-bold text-slate-900 dark:text-white truncate">Stickers & GIFs</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-wa-dmuted mt-0.5 font-medium">
+                          {stickersGifsList.length} items
+                        </p>
+                      </div>
+                      <span className="text-[11px] text-emerald-600 dark:text-emerald-400 group-hover:translate-x-0.5 transition-transform font-bold">
+                        ↗
+                      </span>
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -1325,11 +1581,11 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                       type="button"
                       onClick={() => attachmentInputRef.current?.click()}
                       className={`p-1.5 rounded-lg transition-colors ${
-                        attachedMedia && attachedMedia.type !== 'sticker' && attachedMedia.type !== 'gif'
+                        imagesList.length > 0 || videosList.length > 0 || audiosList.length > 0
                           ? 'text-wa-teal dark:text-wa-green bg-emerald-100/70 dark:bg-emerald-950/60 ring-1 ring-emerald-400/40'
                           : 'text-gray-400 hover:text-wa-teal dark:text-wa-dmuted dark:hover:text-wa-green hover:bg-gray-200 dark:hover:bg-wa-dsurf'
                       }`}
-                      title="Attach Image, Video, or Audio"
+                      title="Attach Images, Videos, or Audio"
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.37l-9.878 9.878a1.5 1.5 0 01-2.122-2.122l8.82-8.82" />
@@ -1344,7 +1600,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                         setShowMediaPicker(true);
                       }}
                       className={`p-1.5 rounded-lg transition-colors ${
-                        attachedMedia?.type === 'gif'
+                        attachedMediaList.some(m => m.type === 'gif')
                           ? 'text-violet-600 dark:text-violet-400 bg-violet-100/70 dark:bg-violet-950/60 ring-1 ring-violet-400/40'
                           : 'text-gray-400 hover:text-violet-500 dark:text-wa-dmuted dark:hover:text-violet-400 hover:bg-gray-200 dark:hover:bg-wa-dsurf'
                       }`}
@@ -1361,7 +1617,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                         setShowMediaPicker(true);
                       }}
                       className={`p-1.5 rounded-lg transition-colors ${
-                        attachedMedia?.type === 'sticker'
+                        attachedMediaList.some(m => m.type === 'sticker')
                           ? 'text-pink-600 dark:text-pink-400 bg-pink-100/70 dark:bg-pink-950/60 ring-1 ring-pink-400/40'
                           : 'text-gray-400 hover:text-pink-500 dark:text-wa-dmuted dark:hover:text-pink-400 hover:bg-gray-200 dark:hover:bg-wa-dsurf'
                       }`}
@@ -1370,10 +1626,11 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                       <WhatsAppStickerIcon className="w-5 h-5" />
                     </button>
 
-                    {/* Hidden file inputs */}
+                    {/* Hidden file inputs with MULTIPLE file support */}
                     <input
                       ref={attachmentInputRef}
                       type="file"
+                      multiple
                       accept="image/*,video/mp4,video/3gpp,video/quicktime,video/webm,audio/*"
                       className="hidden"
                       onChange={handleAttachmentFileInput}
@@ -1381,6 +1638,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                     <input
                       ref={stickerInputRef}
                       type="file"
+                      multiple
                       accept="image/webp,image/png,image/jpeg,image/svg+xml"
                       className="hidden"
                       onChange={handleStickerFileInput}
@@ -1388,6 +1646,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                     <input
                       ref={gifInputRef}
                       type="file"
+                      multiple
                       accept="image/gif,video/mp4"
                       className="hidden"
                       onChange={handleGifFileInput}
@@ -1429,7 +1688,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
           const scheduledDateObj = scheduledAt ? new Date(scheduledAt.replace(' ', 'T')) : null;
           const isScheduledInFuture = Boolean(scheduledDateObj && !isNaN(scheduledDateObj.getTime()) && scheduledDateObj.getTime() > Date.now());
           const hasValidRecipient = recipients.length > 0 || Boolean(phone.trim());
-          const hasValidContent = Boolean(message.trim() || attachedMedia);
+          const hasValidContent = Boolean(message.trim() || attachedMediaList.length > 0);
           const canConnect = isConnected || isReconnecting;
           const isQuotaExhausted = Boolean(quota && quota.remaining <= 0);
 
@@ -1480,10 +1739,44 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
           initialTab={mediaPickerTab}
           onClose={() => setShowMediaPicker(false)}
           onSelectMedia={(media) => {
-            setAttachedMedia(media);
+            handleAddSingleMedia(media);
           }}
           customStickerInputRef={stickerInputRef}
           customGifInputRef={gifInputRef}
+        />
+
+        {/* In-Page Phone Gallery Modal for Folders */}
+        <MediaGalleryModal
+          isOpen={activeGalleryFolder !== null}
+          onClose={() => setActiveGalleryFolder(null)}
+          title={
+            activeGalleryFolder === 'image'
+              ? '📷 Photos & Images Gallery'
+              : activeGalleryFolder === 'video'
+              ? '🎥 Videos Gallery'
+              : activeGalleryFolder === 'audio'
+              ? '🎵 Audio Files'
+              : '🏷️ Stickers & GIFs'
+          }
+          category={activeGalleryFolder || 'all'}
+          items={
+            activeGalleryFolder === 'image'
+              ? imagesList
+              : activeGalleryFolder === 'video'
+              ? videosList
+              : activeGalleryFolder === 'audio'
+              ? audiosList
+              : stickersGifsList
+          }
+          onRemoveItem={handleRemoveMediaItem}
+          onClearCategory={() => handleClearCategory(activeGalleryFolder)}
+          onAddMore={() => {
+            if (activeGalleryFolder === 'image' || activeGalleryFolder === 'video' || activeGalleryFolder === 'audio') {
+              attachmentInputRef.current?.click();
+            } else {
+              setShowMediaPicker(true);
+            }
+          }}
         />
       </form>
       {showImportModal && (

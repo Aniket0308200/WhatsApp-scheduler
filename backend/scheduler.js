@@ -48,21 +48,52 @@ async function processAllDueMessages() {
         }
 
         try {
-          // 30-second timeout per message send so socket deadlocks cannot freeze the scheduler
-          const sendPromise = whatsapp.sendMessage(
-            sessionId,
-            msg.phone,
-            msg.message,
-            msg.mediaType,
-            msg.mediaData,
-            msg.mediaName
-          );
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('WhatsApp message delivery timed out after 30s')), 30_000)
-          );
+          let lastResult = null;
 
-          const result = await Promise.race([sendPromise, timeoutPromise]);
-          const waId = result?.id || result?.key?.id || null;
+          if (msg.mediaList && Array.isArray(msg.mediaList) && msg.mediaList.length > 0) {
+            console.log(`[Scheduler] [${sessionId}] Sending batch of ${msg.mediaList.length} media items to +${msg.phone}`);
+            for (let i = 0; i < msg.mediaList.length; i++) {
+              const item = msg.mediaList[i];
+              // First item carries the text caption; subsequent items send clean media
+              const caption = i === 0 ? (msg.message || '') : '';
+
+              const sendPromise = whatsapp.sendMessage(
+                sessionId,
+                msg.phone,
+                caption,
+                item.type,
+                item.data,
+                item.name
+              );
+              const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error(`Media item #${i + 1} (${item.type}) timed out after 30s`)), 30_000)
+              );
+
+              lastResult = await Promise.race([sendPromise, timeoutPromise]);
+
+              // Small delay between items to ensure order & avoid socket congestion
+              if (i < msg.mediaList.length - 1) {
+                await new Promise(r => setTimeout(r, 800));
+              }
+            }
+          } else {
+            // Single media or pure text message
+            const sendPromise = whatsapp.sendMessage(
+              sessionId,
+              msg.phone,
+              msg.message,
+              msg.mediaType,
+              msg.mediaData,
+              msg.mediaName
+            );
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('WhatsApp message delivery timed out after 30s')), 30_000)
+            );
+
+            lastResult = await Promise.race([sendPromise, timeoutPromise]);
+          }
+
+          const waId = lastResult?.id || lastResult?.key?.id || null;
           // Atomically mark as sent and store WhatsApp message id
           await db.ScheduledMessage.updateOne(
             { _id: msg.id },
@@ -88,6 +119,15 @@ function startScheduler() {
   setInterval(async () => {
     await processAllDueMessages();
   }, 5_000);
+
+  // 2-Day Data Cleanup Cron: Runs on startup and every 1 hour
+  // Purges heavy raw media payloads older than 48 hours for sent messages
+  if (typeof db.purgeOldMediaData === 'function') {
+    db.purgeOldMediaData();
+    setInterval(() => {
+      db.purgeOldMediaData();
+    }, 60 * 60 * 1000); // every 1 hour
+  }
 
   // Also run immediately on startup
   processAllDueMessages();

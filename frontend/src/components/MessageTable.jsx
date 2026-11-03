@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { format, parseISO, isValid } from 'date-fns';
 import { cancelMessage, deleteMessage } from '../api';
+import MediaGalleryModal from './MediaGalleryModal';
 
 const STATUS_BADGE = {
   pending:   { label: '⏳ Pending',     cls: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-900/40' },
@@ -44,6 +45,7 @@ export default function MessageTable({ messages, loading, onRefresh }) {
   const [actionId, setActionId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [galleryData, setGalleryData] = useState(null);
 
   // Reset page to 1 if messages count increases (indicating a new message was scheduled)
   const prevCountRef = useRef(messages.length);
@@ -210,40 +212,105 @@ export default function MessageTable({ messages, loading, onRefresh }) {
 
                     {/* Message + media + error */}
                     <td className="px-5 py-3.5 max-w-[240px]">
-                      {msg.mediaType && (
+                      {(msg.mediaType === 'multiple' || (msg.mediaList && msg.mediaList.length > 0)) ? (
+                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => setGalleryData({
+                              title: `${msg.recipient_name || '+' + msg.phone} — Media Files`,
+                              items: msg.mediaList || [],
+                              purged: Boolean(msg.mediaPurged)
+                            })}
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors shadow-2xs cursor-pointer"
+                            title="Click to view all in gallery"
+                          >
+                            📁 {msg.mediaList?.length || 0} Files ↗
+                          </button>
+                          {msg.mediaPurged && (
+                            <span className="text-[10px] text-gray-400 dark:text-wa-dmuted bg-gray-100 dark:bg-wa-dsurf px-1.5 py-0.5 rounded border border-gray-200 dark:border-wa-dbdr" title="Media cleaned after 2 days to save server storage">
+                              Cleaned (2d)
+                            </span>
+                          )}
+                        </div>
+                      ) : msg.mediaType ? (
                         <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                           {msg.mediaType === 'image' && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                              📷 Photo
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => (msg.mediaData || msg.mediaName) && setGalleryData({
+                                title: msg.mediaName || 'Photo',
+                                items: [{ id: '1', type: 'image', name: msg.mediaName, data: msg.mediaData }],
+                                purged: Boolean(msg.mediaPurged)
+                              })}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 cursor-pointer"
+                            >
+                              📷 Photo ↗
+                            </button>
                           )}
                           {msg.mediaType === 'video' && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                              🎥 Video
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => (msg.mediaData || msg.mediaName) && setGalleryData({
+                                title: msg.mediaName || 'Video',
+                                items: [{ id: '1', type: 'video', name: msg.mediaName, data: msg.mediaData }],
+                                purged: Boolean(msg.mediaPurged)
+                              })}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/40 cursor-pointer"
+                            >
+                              🎥 Video ↗
+                            </button>
                           )}
                           {msg.mediaType === 'audio' && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                              🎵 Audio
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => (msg.mediaData || msg.mediaName) && setGalleryData({
+                                title: msg.mediaName || 'Audio',
+                                items: [{ id: '1', type: 'audio', name: msg.mediaName, data: msg.mediaData }],
+                                purged: Boolean(msg.mediaPurged)
+                              })}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/40 cursor-pointer"
+                            >
+                              🎵 Audio ↗
+                            </button>
                           )}
                           {msg.mediaType === 'sticker' && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-pink-50 dark:bg-pink-950/50 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800">
-                              🏷️ Sticker
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => (msg.mediaData || msg.mediaName) && setGalleryData({
+                                title: msg.mediaName || 'Sticker',
+                                items: [{ id: '1', type: 'sticker', name: msg.mediaName, data: msg.mediaData }],
+                                purged: Boolean(msg.mediaPurged)
+                              })}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-pink-50 dark:bg-pink-950/50 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800 hover:bg-pink-100 dark:hover:bg-pink-900/40 cursor-pointer"
+                            >
+                              🏷️ Sticker ↗
+                            </button>
                           )}
                           {msg.mediaType === 'gif' && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800">
-                              🎞️ GIF
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => (msg.mediaData || msg.mediaName) && setGalleryData({
+                                title: msg.mediaName || 'GIF',
+                                items: [{ id: '1', type: 'gif', name: msg.mediaName, data: msg.mediaData }],
+                                purged: Boolean(msg.mediaPurged)
+                              })}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 hover:bg-violet-100 dark:hover:bg-violet-900/40 cursor-pointer"
+                            >
+                              🎞️ GIF ↗
+                            </button>
                           )}
                           {msg.mediaName && (
                             <span className="text-[11px] text-gray-500 dark:text-wa-dmuted truncate max-w-[120px]" title={msg.mediaName}>
                               {msg.mediaName}
                             </span>
                           )}
+                          {msg.mediaPurged && (
+                            <span className="text-[10px] text-gray-400 dark:text-wa-dmuted bg-gray-100 dark:bg-wa-dsurf px-1.5 py-0.5 rounded border border-gray-200 dark:border-wa-dbdr" title="Media cleaned after 2 days to save server storage">
+                              Cleaned (2d)
+                            </span>
+                          )}
                         </div>
-                      )}
+                      ) : null}
                       <p className="truncate text-gray-700 dark:text-wa-dtext" title={msg.message}>
                         {msg.message || (msg.mediaType ? <span className="italic text-gray-400 dark:text-wa-dmuted text-xs font-normal">(Media only)</span> : '')}
                       </p>
@@ -372,6 +439,19 @@ export default function MessageTable({ messages, loading, onRefresh }) {
             </button>
           </div>
         </div>
+      )}
+
+      {/* ── Media Gallery Modal (ReadOnly mode for history) ─────────────── */}
+      {galleryData && (
+        <MediaGalleryModal
+          isOpen={Boolean(galleryData)}
+          onClose={() => setGalleryData(null)}
+          title={galleryData.title}
+          category="all"
+          items={galleryData.items}
+          readOnly={true}
+          mediaPurged={galleryData.purged}
+        />
       )}
     </div>
   );

@@ -1261,29 +1261,52 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
     let messagePayload;
 
     if (mediaType && mediaData) {
-      // Decode base64 data URI: data:[<mediatype>];base64,<data>
       let buffer;
-      if (mediaData.startsWith('data:')) {
-        const base64Part = mediaData.split(',')[1] || mediaData;
-        buffer = Buffer.from(base64Part, 'base64');
-      } else {
+      let detectedMime = null;
+
+      if (typeof mediaData === 'string' && (mediaData.startsWith('http://') || mediaData.startsWith('https://'))) {
+        const axios = require('axios');
+        const res = await axios.get(mediaData, { responseType: 'arraybuffer', timeout: 20000 });
+        buffer = Buffer.from(res.data);
+        detectedMime = res.headers['content-type'] || null;
+      } else if (typeof mediaData === 'string' && mediaData.startsWith('data:')) {
+        const match = mediaData.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          detectedMime = match[1];
+          buffer = Buffer.from(match[2], 'base64');
+        } else {
+          const parts = mediaData.split(',');
+          buffer = Buffer.from(parts[1] || parts[0], 'base64');
+        }
+      } else if (Buffer.isBuffer(mediaData)) {
+        buffer = mediaData;
+      } else if (typeof mediaData === 'string') {
         buffer = Buffer.from(mediaData, 'base64');
       }
 
       if (mediaType === 'image') {
         messagePayload = {
           image: buffer,
-          caption: text || ''
+          caption: text || '',
+          mimetype: detectedMime || 'image/jpeg'
         };
       } else if (mediaType === 'video') {
         messagePayload = {
           video: buffer,
-          caption: text || ''
+          caption: text || '',
+          mimetype: detectedMime || 'video/mp4'
         };
       } else if (mediaType === 'audio') {
+        let audioMime = detectedMime || 'audio/mpeg';
+        if (mediaName && mediaName.toLowerCase().endsWith('.mp3')) audioMime = 'audio/mpeg';
+        else if (mediaName && mediaName.toLowerCase().endsWith('.ogg')) audioMime = 'audio/ogg; codecs=opus';
+        else if (mediaName && (mediaName.toLowerCase().endsWith('.m4a') || mediaName.toLowerCase().endsWith('.mp4'))) audioMime = 'audio/mp4';
+        else if (mediaName && mediaName.toLowerCase().endsWith('.wav')) audioMime = 'audio/wav';
+
         messagePayload = {
           audio: buffer,
-          mimetype: 'audio/mp4'
+          mimetype: audioMime,
+          ptt: false
         };
       } else if (mediaType === 'sticker') {
         const stickerBuffer = await formatStickerBuffer(buffer);
@@ -1296,7 +1319,8 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
         messagePayload = {
           video: gifBuffer,
           gifPlayback: true,
-          caption: text || ''
+          caption: text || '',
+          mimetype: 'video/mp4'
         };
       } else {
         messagePayload = { text: text || '' };

@@ -344,9 +344,20 @@ const ScheduledMessageSchema = new mongoose.Schema({
   encryptedNumber: { type: String, required: true }, // Encrypted recipient
   encryptedRecipientName: { type: String, default: '' }, // Encrypted display name
   encryptedMessageText: { type: String, default: '' }, // Encrypted message body / caption
-  mediaType: { type: String, enum: ['image', 'video', 'audio', 'sticker', 'gif', null], default: null },
+  mediaType: { type: String, enum: ['image', 'video', 'audio', 'sticker', 'gif', 'multiple', null], default: null },
   mediaData: { type: String, default: null }, // Base64 data URI (encrypted or raw)
   mediaName: { type: String, default: null }, // Original filename
+  mediaList: {
+    type: [{
+      type: { type: String, default: 'image' },
+      data: { type: String, default: null },
+      name: { type: String, default: null },
+      size: { type: String, default: null },
+      preview: { type: String, default: null }
+    }],
+    default: []
+  },
+  mediaPurged: { type: Boolean, default: false }, // true once 2-day cleanup removes raw payload
   scheduledAt: { type: Date, required: true },
   status: { type: String, default: 'pending' }, // 'pending' | 'submitted' | 'sent' | 'failed' | 'cancelled'
   error: { type: String, default: null },
@@ -504,7 +515,7 @@ function toSqliteUtc(dateInput) {
 
 // ─── Message Query Functions ──────────────────────────────────────────────────
 
-async function insertMessage(sessionId, phone, message, scheduledAt, recipientName = null, mediaType = null, mediaData = null, mediaName = null) {
+async function insertMessage(sessionId, phone, message, scheduledAt, recipientName = null, mediaType = null, mediaData = null, mediaName = null, mediaList = []) {
   const schedDate = new Date(scheduledAt);
   const msg = new ScheduledMessage({
     sessionId,
@@ -514,6 +525,7 @@ async function insertMessage(sessionId, phone, message, scheduledAt, recipientNa
     mediaType: mediaType || null,
     mediaData: mediaData || null,
     mediaName: mediaName || null,
+    mediaList: Array.isArray(mediaList) ? mediaList : [],
     scheduledAt: schedDate,
     status: 'pending'
   });
@@ -550,6 +562,8 @@ async function getAllMessages(sessionId) {
       mediaType: m.mediaType || null,
       mediaData: m.mediaData || null,
       mediaName: m.mediaName || null,
+      mediaList: m.mediaList || [],
+      mediaPurged: Boolean(m.mediaPurged),
       scheduled_at: toSqliteUtc(m.scheduledAt),
       status: m.status,
       error: m.error,
@@ -575,12 +589,50 @@ async function getPendingDueMessages() {
     mediaType: m.mediaType || null,
     mediaData: m.mediaData || null,
     mediaName: m.mediaName || null,
+    mediaList: m.mediaList || [],
     scheduled_at: toSqliteUtc(m.scheduledAt),
     status: m.status,
     error: m.error,
     wa_message_id: m.waMessageId,
     created_at: toSqliteUtc(m.createdAt)
   }));
+}
+
+/**
+ * 2-Day Data Purge Helper:
+ * Deletes heavy base64 data (mediaData and mediaList item data) from MongoDB
+ * for messages sent, delivered, or read more than 2 days (48 hours) ago.
+ * Retains complete history (names, numbers, timestamps, status, filenames)
+ * so Scheduled Messages history stays intact and viewable forever without filling DB.
+ */
+async function purgeOldMediaData() {
+  try {
+    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const result = await ScheduledMessage.updateMany(
+      {
+        status: { $in: ['sent', 'delivered', 'read'] },
+        createdAt: { $lt: twoDaysAgo },
+        mediaPurged: { $ne: true },
+        $or: [
+          { mediaData: { $ne: null } },
+          { 'mediaList.0': { $exists: true } }
+        ]
+      },
+      {
+        $set: {
+          mediaData: null,
+          'mediaList.$[].data': null,
+          'mediaList.$[].preview': null,
+          mediaPurged: true
+        }
+      }
+    );
+    if (result.modifiedCount > 0) {
+      console.log(`[Storage Cleanup] Purged heavy media payload for ${result.modifiedCount} messages older than 2 days.`);
+    }
+  } catch (err) {
+    console.error('[Storage Cleanup] Error purging old media data:', err.message);
+  }
 }
 
 async function updateMessageStatus(sessionId, id, status, error = null) {
@@ -659,6 +711,7 @@ module.exports = {
   toSqliteUtc,
   Feedback,
   purgeSessionData,
+  purgeOldMediaData,
   isValidPersonalContactName,
   getCleanContactName,
   cleanInvalidContactsFromDb,

@@ -27,8 +27,8 @@ const app  = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
-app.use(express.json({ limit: '15mb' }));
-app.use(express.urlencoded({ extended: true, limit: '15mb' }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
 function toVerifiedContact(document) {
   const jid = document.jid;
@@ -614,7 +614,7 @@ app.get('/api/messages', async (req, res) => {
  * Body: { phone, message, scheduledAt, recipientName? }
  */
 app.post('/api/messages', async (req, res) => {
-  const { phone, message, scheduledAt, recipientName, mediaType, mediaData, mediaName } = req.body;
+  const { phone, message, scheduledAt, recipientName, mediaType, mediaData, mediaName, mediaList } = req.body;
 
   const status = whatsapp.getStatus(req.sessionId);
   const profile = whatsapp.getConnectedProfile(req.sessionId);
@@ -635,7 +635,9 @@ app.post('/api/messages', async (req, res) => {
   }
 
   // If there's no media, message cannot be empty. If media is attached, caption (message) is optional.
-  const hasMedia = Boolean(mediaType && mediaData);
+  const hasMultipleMedia = Array.isArray(mediaList) && mediaList.length > 0;
+  const hasSingleMedia = Boolean(mediaType && mediaData);
+  const hasMedia = hasMultipleMedia || hasSingleMedia;
   if (!hasMedia && (!message || !message.trim())) {
     return res.status(400).json({ error: 'Message cannot be empty.' });
   }
@@ -686,15 +688,41 @@ app.post('/api/messages', async (req, res) => {
       }
     }
 
+    // Prepare standardized mediaList and primary media metadata
+    let finalMediaList = [];
+    let finalMediaType = mediaType || null;
+    let finalMediaData = mediaData || null;
+    let finalMediaName = mediaName || null;
+
+    if (hasMultipleMedia) {
+      finalMediaList = mediaList;
+      if (mediaList.length === 1) {
+        finalMediaType = mediaList[0].type;
+        finalMediaData = mediaList[0].data;
+        finalMediaName = mediaList[0].name;
+      } else {
+        finalMediaType = 'multiple';
+        finalMediaData = null;
+        finalMediaName = `${mediaList.length} items`;
+      }
+    } else if (hasSingleMedia) {
+      finalMediaList = [{
+        type: mediaType,
+        data: mediaData,
+        name: mediaName || `${mediaType}_file`
+      }];
+    }
+
     const id = await db.insertMessage(
       req.sessionId,
       cleanPhone,
       message ? message.trim() : '',
       schedDate,
       cleanName,
-      mediaType || null,
-      mediaData || null,
-      mediaName || null
+      finalMediaType,
+      finalMediaData,
+      finalMediaName,
+      finalMediaList
     );
 
     res.status(201).json({
@@ -702,8 +730,9 @@ app.post('/api/messages', async (req, res) => {
       phone:          cleanPhone,
       recipient_name: cleanName,
       message:        message ? message.trim() : '',
-      mediaType:      mediaType || null,
-      mediaName:      mediaName || null,
+      mediaType:      finalMediaType,
+      mediaName:      finalMediaName,
+      mediaList:      finalMediaList,
       scheduled_at:   db.toSqliteUtc(schedDate),
       status:         'pending',
     });
