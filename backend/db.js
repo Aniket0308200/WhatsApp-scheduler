@@ -378,9 +378,14 @@ const ScheduledMessageSchema = new mongoose.Schema({
   encryptedNumber: { type: String, required: true }, // Encrypted recipient
   encryptedRecipientName: { type: String, default: '' }, // Encrypted display name
   encryptedMessageText: { type: String, default: '' }, // Encrypted message body / caption
-  mediaType: { type: String, enum: ['image', 'video', 'audio', 'sticker', 'gif', 'document', 'pdf', 'multiple', null], default: null },
+  mediaType: { type: String, enum: ['image', 'video', 'audio', 'sticker', 'gif', 'document', 'pdf', 'poll', 'multiple', null], default: null },
   mediaData: { type: String, default: null }, // Base64 data URI (encrypted or raw)
   mediaName: { type: String, default: null }, // Original filename
+  pollData: {
+    question: { type: String, default: null },
+    options: { type: [String], default: [] },
+    allowMultiple: { type: Boolean, default: false }
+  },
   mediaList: {
     type: [{
       type: { type: String, default: 'image' },
@@ -582,7 +587,7 @@ function toSqliteUtc(dateInput) {
 
 // ─── Message Query Functions ──────────────────────────────────────────────────
 
-async function insertMessage(sessionId, phone, message, scheduledAt, recipientName = null, mediaType = null, mediaData = null, mediaName = null, mediaList = []) {
+async function insertMessage(sessionId, phone, message, scheduledAt, recipientName = null, mediaType = null, mediaData = null, mediaName = null, mediaList = [], pollData = null) {
   const schedDate = new Date(scheduledAt);
   const msg = new ScheduledMessage({
     sessionId,
@@ -593,6 +598,11 @@ async function insertMessage(sessionId, phone, message, scheduledAt, recipientNa
     mediaData: mediaData || null,
     mediaName: mediaName || null,
     mediaList: Array.isArray(mediaList) ? mediaList : [],
+    pollData: pollData && pollData.question ? {
+      question: String(pollData.question).trim(),
+      options: Array.isArray(pollData.options) ? pollData.options.map(o => String(o).trim()).filter(Boolean) : [],
+      allowMultiple: Boolean(pollData.allowMultiple)
+    } : null,
     scheduledAt: schedDate,
     status: 'pending'
   });
@@ -662,6 +672,7 @@ async function getAllMessages(sessionId) {
       mediaName: m.mediaName || null,
       mediaList: m.mediaList || [],
       mediaPurged: Boolean(m.mediaPurged),
+      pollData: m.pollData || null,
       scheduled_at: toSqliteUtc(m.scheduledAt),
       status: m.status,
       error: m.error,

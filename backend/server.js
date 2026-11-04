@@ -667,7 +667,7 @@ app.get('/api/messages', async (req, res) => {
  * Body: { phone, message, scheduledAt, recipientName? }
  */
 app.post('/api/messages', async (req, res) => {
-  const { phone, message, scheduledAt, recipientName, mediaType, mediaData, mediaName, mediaList } = req.body;
+  const { phone, message, scheduledAt, recipientName, mediaType, mediaData, mediaName, mediaList, pollData } = req.body;
 
   const status = whatsapp.getStatus(req.sessionId);
   const profile = whatsapp.getConnectedProfile(req.sessionId);
@@ -720,12 +720,13 @@ app.post('/api/messages', async (req, res) => {
     }
   }
 
-  // If there's no media, message cannot be empty. If media is attached, caption (message) is optional.
+  // If there's no media and no poll, message cannot be empty. If media or poll is attached, caption (message) is optional.
   const hasMultipleMedia = Array.isArray(mediaList) && mediaList.length > 0;
   const hasSingleMedia = Boolean(mediaType && mediaData);
   const hasMedia = hasMultipleMedia || hasSingleMedia;
-  if (!hasMedia && (!message || !message.trim())) {
-    return res.status(400).json({ error: 'Message cannot be empty.' });
+  const hasPoll = Boolean(pollData && pollData.question && Array.isArray(pollData.options) && pollData.options.filter(Boolean).length >= 2);
+  if (!hasMedia && !hasPoll && (!message || !message.trim())) {
+    return res.status(400).json({ error: 'Message or Poll cannot be empty.' });
   }
 
   if (!scheduledAt || isNaN(Date.parse(scheduledAt))) {
@@ -798,6 +799,8 @@ app.post('/api/messages', async (req, res) => {
         data: mediaData,
         name: mediaName || `${mediaType}_file`
       }];
+    } else if (hasPoll) {
+      finalMediaType = 'poll';
     }
 
     const id = await db.insertMessage(
@@ -809,7 +812,8 @@ app.post('/api/messages', async (req, res) => {
       finalMediaType,
       finalMediaData,
       finalMediaName,
-      finalMediaList
+      finalMediaList,
+      hasPoll ? pollData : null
     );
 
     res.status(201).json({
@@ -820,6 +824,7 @@ app.post('/api/messages', async (req, res) => {
       mediaType:      finalMediaType,
       mediaName:      finalMediaName,
       mediaList:      finalMediaList,
+      pollData:       hasPoll ? pollData : null,
       scheduled_at:   db.toSqliteUtc(schedDate),
       status:         'pending',
     });

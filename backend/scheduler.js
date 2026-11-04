@@ -105,14 +105,15 @@ async function processAllDueMessages() {
               }
             }
           } else {
-            // Single media or pure text message
+            // Single media, poll, or pure text message
             const sendPromise = whatsapp.sendMessage(
               sessionId,
               msg.phone,
               personalizedText,
               msg.mediaType,
               msg.mediaData,
-              msg.mediaName
+              msg.mediaName,
+              msg.pollData
             );
             const timeoutPromise = new Promise((_, reject) =>
               setTimeout(() => reject(new Error('WhatsApp message delivery timed out after 30s')), 30_000)

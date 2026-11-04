@@ -324,6 +324,11 @@ export default function MessageTable({ messages, loading, onRefresh }) {
                               📄 PDF / Doc ↗
                             </button>
                           )}
+                          {(msg.mediaType === 'poll' || msg.pollData) && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                              📊 Poll ({msg.pollData?.options?.length || 2} options)
+                            </span>
+                          )}
                           {msg.mediaName && (
                             <span className="text-[11px] text-gray-500 dark:text-wa-dmuted truncate max-w-[120px]" title={msg.mediaName}>
                               {msg.mediaName}
@@ -336,8 +341,8 @@ export default function MessageTable({ messages, loading, onRefresh }) {
                           )}
                         </div>
                       ) : null}
-                      <p className="truncate text-gray-700 dark:text-wa-dtext" title={msg.message}>
-                        {msg.message || (msg.mediaType ? <span className="italic text-gray-400 dark:text-wa-dmuted text-xs font-normal">(Media only)</span> : '')}
+                      <p className="truncate text-gray-700 dark:text-wa-dtext" title={msg.message || msg.pollData?.question}>
+                        {msg.message || (msg.pollData ? <span className="font-semibold text-slate-800 dark:text-slate-200">📊 {msg.pollData.question}</span> : msg.mediaType ? <span className="italic text-gray-400 dark:text-wa-dmuted text-xs font-normal">(Media only)</span> : '')}
                       </p>
                       {msg.error && (
                         <p className="text-[11px] text-red-500 truncate mt-0.5" title={msg.error}>

@@ -5,6 +5,7 @@ import { scheduleMessage, fetchContactName, resolveContactLive, importContacts, 
 import DateTimePicker from './DateTimePicker';
 import GifStickerPickerModal, { WhatsAppStickerIcon, WhatsAppGifIcon, convertImageFileToWebpSticker } from './GifStickerPickerModal';
 import MediaGalleryModal from './MediaGalleryModal';
+import PollModal from './PollModal';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
 import { useTheme } from '../ThemeContext';
 
@@ -562,6 +563,10 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [mediaPickerTab, setMediaPickerTab] = useState('sticker');
 
+  // ── Poll State & Modal ──
+  const [pollData, setPollData] = useState(null); // { question, options, allowMultiple }
+  const [showPollModal, setShowPollModal] = useState(false);
+
   // Categorized lists
   const imagesList = attachedMediaList.filter(m => m.type === 'image');
   const videosList = attachedMediaList.filter(m => m.type === 'video');
@@ -1056,8 +1061,8 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       toast.error('Add at least one recipient.');
       return;
     }
-    if (!message.trim() && attachedMediaList.length === 0) {
-      toast.error('Please enter a message or attach images, videos, audio, or stickers.');
+    if (!message.trim() && attachedMediaList.length === 0 && !pollData) {
+      toast.error('Please enter a message, attach media, or create a poll.');
       return;
     }
 
@@ -1081,10 +1086,11 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
             message: message.trim(),
             scheduledAt: utcISO,
             recipientName: recipient.name,
-            mediaType: attachedMediaList.length === 1 ? attachedMediaList[0].type : attachedMediaList.length > 1 ? 'multiple' : null,
+            mediaType: attachedMediaList.length === 1 ? attachedMediaList[0].type : attachedMediaList.length > 1 ? 'multiple' : (pollData ? 'poll' : null),
             mediaData: attachedMediaList.length === 1 ? attachedMediaList[0].data : null,
             mediaName: attachedMediaList.length === 1 ? attachedMediaList[0].name : attachedMediaList.length > 1 ? `${attachedMediaList.length} items` : null,
-            mediaList: attachedMediaList
+            mediaList: attachedMediaList,
+            pollData: pollData || null
           });
           successCount++;
         } catch (err) {
@@ -1105,6 +1111,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       // Reset form
       setPhone('');
       setMessage('');
+      setPollData(null);
       handleRemoveAllMedia();
       setScheduledAt(getDefaultTime());
       setTimeConfirmed(false);
@@ -1462,9 +1469,15 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
               ref={textareaRef}
               value={message}
               onChange={e => setMessage(e.target.value)}
-              placeholder={attachedMediaList.length > 0 ? "Add an optional caption for your media..." : "Type your message here… (e.g: Happy birthday 🎉)"}
+              placeholder={
+                pollData
+                  ? "Add an optional message or note for your poll..."
+                  : attachedMediaList.length > 0
+                  ? "Add an optional caption for your media..."
+                  : "Type your message here… (e.g: Happy birthday 🎉)"
+              }
               rows={4}
-              required={attachedMediaList.length === 0}
+              required={attachedMediaList.length === 0 && !pollData}
               className="w-full px-4 py-2.5 text-sm bg-transparent text-gray-900 dark:text-wa-dtext focus:outline-none resize-y min-h-[80px] custom-scroll"
             />
 
@@ -1651,9 +1664,66 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
               </div>
             )}
 
+            {/* ── WhatsApp Poll Preview Card ── */}
+            {pollData && (
+              <div className="mx-3 mb-2.5 p-3 rounded-2xl bg-emerald-50/90 dark:bg-[#1f2c34] border border-emerald-300/80 dark:border-emerald-600/40 shadow-xs animate-fade-in group">
+                <div className="flex items-start justify-between gap-2.5">
+                  <div
+                    onClick={() => setShowPollModal(true)}
+                    className="flex items-start gap-3 flex-1 cursor-pointer min-w-0"
+                    title="Click to edit poll"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-200/80 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300">
+                          📊 Poll
+                        </span>
+                        <span className="text-[11px] text-slate-500 dark:text-wa-dmuted font-medium">
+                          {pollData.allowMultiple ? 'Multiple answers' : 'Single answer'}
+                        </span>
+                      </div>
+                      <p className="text-sm font-bold text-slate-900 dark:text-slate-100 mt-1 line-clamp-2">
+                        {pollData.question}
+                      </p>
+                      <div className="mt-2 space-y-1.5">
+                        {pollData.options.map((opt, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+                            <span className={`w-3.5 h-3.5 border border-slate-400 dark:border-slate-500 shrink-0 ${pollData.allowMultiple ? 'rounded-xs' : 'rounded-full'}`} />
+                            <span className="truncate">{opt}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold group-hover:underline flex items-center gap-1">
+                        <span>✏️</span> Tap here to edit question or options
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPollData(null);
+                      toast.success('Poll removed');
+                    }}
+                    className="p-1.5 text-slate-400 hover:text-red-500 dark:text-wa-dmuted dark:hover:text-red-400 rounded-lg hover:bg-white dark:hover:bg-wa-dsurf transition-colors shrink-0"
+                    title="Remove Poll"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Toolbar under textarea */}
-            <div className="flex items-center justify-between px-3 py-1.5 border-t border-slate-200/60 dark:border-wa-dbdr/50 bg-slate-50/50 dark:bg-wa-dpanel/50 transition-colors">
-              <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center justify-between gap-1.5 px-2.5 sm:px-3 py-2 border-t border-slate-200/60 dark:border-wa-dbdr/50 bg-slate-50/50 dark:bg-wa-dpanel/50 transition-colors">
+              <div className="flex items-center flex-wrap gap-1 sm:gap-1.5 min-w-0">
                 {/* Emoji button */}
                 <div className="relative">
                   <button
@@ -1671,7 +1741,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                   {showEmojiPicker && (
                     <div
                       ref={emojiPickerRef}
-                      className="absolute left-0 bottom-full mb-2 z-[90] shadow-2xl rounded-2xl overflow-hidden border border-slate-200 dark:border-wa-dbdr animate-fade-in"
+                      className="absolute left-0 mb-2 z-[90] shadow-2xl rounded-2xl overflow-hidden border border-slate-200 dark:border-wa-dbdr animate-fade-in"
                     >
                       <EmojiPicker
                         onEmojiClick={(emojiData) => {
@@ -1716,7 +1786,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
 
                       {/* WhatsApp Web-Style Attachment Popup Menu */}
                       {showAttachmentMenu && (
-                        <div className="absolute left-0 bottom-full mb-3 z-[95] w-60 bg-white dark:bg-[#1f2c34] border border-slate-200/90 dark:border-wa-dbdr rounded-2xl shadow-2xl p-1.5 overflow-hidden animate-fade-in backdrop-blur-md">
+                        <div className="absolute left-0 bottom-full mb-3 z-[95] w-60 max-w-[calc(100vw-2.5rem)] bg-white dark:bg-[#1f2c34] border border-slate-200/90 dark:border-wa-dbdr rounded-2xl shadow-2xl p-1.5 overflow-hidden animate-fade-in backdrop-blur-md">
                           {/* 1. Document (Original Uncompressed Quality) */}
                           <button
                             type="button"
@@ -1814,7 +1884,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                         setMediaPickerTab('gif');
                         setShowMediaPicker(true);
                       }}
-                      className={`p-1.5 rounded-lg transition-colors ${
+                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                         attachedMediaList.some(m => m.type === 'gif')
                           ? 'text-violet-600 dark:text-violet-400 bg-violet-100/70 dark:bg-violet-950/60 ring-1 ring-violet-400/40'
                           : 'text-gray-400 hover:text-violet-500 dark:text-wa-dmuted dark:hover:text-violet-400 hover:bg-gray-200 dark:hover:bg-wa-dsurf'
@@ -1831,7 +1901,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                         setMediaPickerTab('sticker');
                         setShowMediaPicker(true);
                       }}
-                      className={`p-1.5 rounded-lg transition-colors ${
+                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                         attachedMediaList.some(m => m.type === 'sticker')
                           ? 'text-pink-600 dark:text-pink-400 bg-pink-100/70 dark:bg-pink-950/60 ring-1 ring-pink-400/40'
                           : 'text-gray-400 hover:text-pink-500 dark:text-wa-dmuted dark:hover:text-pink-400 hover:bg-gray-200 dark:hover:bg-wa-dsurf'
@@ -1841,15 +1911,31 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                       <WhatsAppStickerIcon className="w-5 h-5" />
                     </button>
 
+                    {/* WhatsApp Poll button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowPollModal(true)}
+                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                        pollData
+                          ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-100/70 dark:bg-emerald-950/60 ring-1 ring-emerald-400/40'
+                          : 'text-gray-400 hover:text-emerald-500 dark:text-wa-dmuted dark:hover:text-emerald-400 hover:bg-gray-200 dark:hover:bg-wa-dsurf'
+                      }`}
+                      title={pollData ? "Edit WhatsApp Poll" : "Create WhatsApp Poll"}
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </button>
+
                     {/* Smart Name Variable Pills (Starter & Pro) */}
-                    <div className="flex items-center gap-1.5 ml-1.5 border-l border-slate-200 dark:border-wa-dbdr pl-2">
+                    <div className="flex items-center gap-1 sm:gap-1.5 ml-0.5 sm:ml-1 border-l border-slate-200 dark:border-wa-dbdr pl-1.5 sm:pl-2 shrink-0">
                       <button
                         type="button"
                         onClick={() => {
                           setMessage(prev => prev + (prev && !prev.endsWith(' ') ? ' ' : '') + '{Name}');
                           toast.success('Added {Name} variable!');
                         }}
-                        className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+                        className="px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                         title="Auto-replaces with each recipient's actual name"
                       >
                         + {'{Name}'}
@@ -1860,7 +1946,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                           setMessage(prev => prev + (prev && !prev.endsWith(' ') ? ' ' : '') + '{FirstName}');
                           toast.success('Added {FirstName} variable!');
                         }}
-                        className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/60 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors"
+                        className="px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/60 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                         title="Auto-replaces with recipient's first name"
                       >
                         + {'{FirstName}'}
@@ -1927,7 +2013,9 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                   </>
                 )}
               </div>
-              <p className="text-[10px] text-gray-400 dark:text-wa-dmuted">{message.length} chars</p>
+              <p className="text-[10px] sm:text-[11px] text-gray-400 dark:text-wa-dmuted shrink-0 font-medium">
+                {message.length} chars
+              </p>
             </div>
           </div>
         </div>
@@ -1961,7 +2049,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
           const scheduledDateObj = scheduledAt ? new Date(scheduledAt.replace(' ', 'T')) : null;
           const isScheduledInFuture = Boolean(scheduledDateObj && !isNaN(scheduledDateObj.getTime()) && scheduledDateObj.getTime() > Date.now());
           const hasValidRecipient = recipients.length > 0 || Boolean(phone.trim());
-          const hasValidContent = Boolean(message.trim() || attachedMediaList.length > 0);
+          const hasValidContent = Boolean(message.trim() || attachedMediaList.length > 0 || pollData);
           const canConnect = isConnected || isReconnecting;
           const isQuotaExhausted = Boolean(quota && !quota.isUnlimited && quota.plan !== 'pro' && typeof quota.remaining === 'number' && quota.remaining <= 0);
 
@@ -1995,7 +2083,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
               ) : !hasValidRecipient ? (
                 '📱 Add Recipient Phone Number'
               ) : !hasValidContent ? (
-                '✍️ Enter Message or Attach Media'
+                '✍️ Enter Message, Poll, or Attach Media'
               ) : (!timeConfirmed && !isScheduledInFuture) ? (
                 '⏰ Pick a Future Date & Time'
               ) : recipients.length > 1 ? (
@@ -2057,6 +2145,17 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
             } else {
               setShowMediaPicker(true);
             }
+          }}
+        />
+
+        {/* WhatsApp Poll Creator Modal */}
+        <PollModal
+          isOpen={showPollModal}
+          onClose={() => setShowPollModal(false)}
+          initialData={pollData}
+          onSave={(newPoll) => {
+            setPollData(newPoll);
+            toast.success(pollData ? 'Poll updated!' : 'WhatsApp Poll attached!');
           }}
         />
       </form>

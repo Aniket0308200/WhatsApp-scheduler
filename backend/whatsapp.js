@@ -1269,7 +1269,7 @@ function getAllContacts(sessionId) {
 
 // ─── Send message ─────────────────────────────────────────────────────────────
 
-async function sendMessage(sessionId, phone, text, mediaType = null, mediaData = null, mediaName = null) {
+async function sendMessage(sessionId, phone, text, mediaType = null, mediaData = null, mediaName = null, pollData = null) {
   const session = sessions.get(sessionId);
   if (!session || session.status !== 'connected' || !session.sock) {
     throw new Error('WhatsApp is not connected for this session.');
@@ -1286,7 +1286,22 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
   try {
     let messagePayload;
 
-    if (mediaType && mediaData) {
+    if (mediaType === 'poll' || (pollData && pollData.question)) {
+      const poll = pollData || (typeof mediaData === 'object' ? mediaData : null);
+      if (poll && poll.question) {
+        const rawOptions = Array.isArray(poll.options) ? poll.options : [];
+        const validOptions = rawOptions.map(o => String(o).trim()).filter(Boolean);
+        messagePayload = {
+          poll: {
+            name: String(poll.question).trim(),
+            values: validOptions.length >= 2 ? validOptions : ['Yes', 'No'],
+            selectableCount: poll.allowMultiple ? 0 : 1
+          }
+        };
+      } else {
+        messagePayload = { text: text || '' };
+      }
+    } else if (mediaType && mediaData) {
       let buffer;
       let detectedMime = null;
 
@@ -1381,6 +1396,14 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
         }
       } catch (e) {
         console.warn(`[WA Status] [${sessionId}] Note: sending status without explicit contact filter:`, e.message);
+      }
+    }
+
+    if (text && text.trim() && (mediaType === 'poll' || (pollData && pollData.question))) {
+      try {
+        await session.sock.sendMessage(jid, { text: text.trim() }, sendOptions);
+      } catch (e) {
+        console.warn(`[WA] [${sessionId}] Could not send preamble text before poll:`, e.message);
       }
     }
 
