@@ -237,7 +237,7 @@ ${message}
       <p style="margin: 5px 0; font-size: 13px;"><strong>Payment Method / UPI App:</strong> <span style="color: #1d4ed8; font-weight: bold;">${paymentDetails.paymentMethod || '—'}</span></p>
       <p style="margin: 5px 0; font-size: 13px;"><strong>Payer Name:</strong> ${paymentDetails.payerName || '—'}</p>
       <p style="margin: 5px 0; font-size: 13px;"><strong>Payer Email:</strong> ${paymentDetails.payerEmail || '—'}</p>
-      <p style="margin: 5px 0; font-size: 13px;"><strong>UPI Ref / UTR No:</strong> ${paymentDetails.payerRef || '—'}</p>
+      <p style="margin: 5px 0; font-size: 13px;"><strong>UPI Ref / UTR No / Contact:</strong> ${paymentDetails.payerRef || '—'}</p>
     </div>
     ` : ''}
 

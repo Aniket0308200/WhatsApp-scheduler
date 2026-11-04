@@ -548,11 +548,17 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
   const emojiPickerRef = useRef(null);
 
   // ── Media Attachment, GIF & Sticker states & refs (Exclusive to Starter & Pro) ──
+  const documentInputRef = useRef(null);
+  const photosVideosInputRef = useRef(null);
+  const audioInputRef = useRef(null);
+  const allMediaInputRef = useRef(null);
   const attachmentInputRef = useRef(null);
+  const attachmentMenuRef = useRef(null);
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const stickerInputRef = useRef(null);
   const gifInputRef = useRef(null);
   const [attachedMediaList, setAttachedMediaList] = useState([]); // array of { id, type, data, name, size, preview }
-  const [activeGalleryFolder, setActiveGalleryFolder] = useState(null); // 'image' | 'video' | 'audio' | 'sticker_gif' | null
+  const [activeGalleryFolder, setActiveGalleryFolder] = useState(null); // 'image' | 'video' | 'audio' | 'document' | 'sticker_gif' | null
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [mediaPickerTab, setMediaPickerTab] = useState('sticker');
 
@@ -560,6 +566,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
   const imagesList = attachedMediaList.filter(m => m.type === 'image');
   const videosList = attachedMediaList.filter(m => m.type === 'video');
   const audiosList = attachedMediaList.filter(m => m.type === 'audio');
+  const documentsList = attachedMediaList.filter(m => m.type === 'document' || m.type === 'pdf');
   const stickersGifsList = attachedMediaList.filter(m => m.type === 'sticker' || m.type === 'gif');
   // First item shortcut for legacy references
   const attachedMedia = attachedMediaList[0] || null;
@@ -569,16 +576,24 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
     image: 50,
     video: 10,
     audio: 20,
+    document: 20,
     sticker_gif: 50
   };
 
-  const handleAttachmentFileInput = (e) => {
+  const handleAttachmentFileInput = (e, forcedType = null) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
+
+    if (forcedType === 'document' && userPlanKey !== 'pro') {
+      toast.error('Document sharing in original MB quality is exclusive to the Pro Plan. Upgrade to Pro!');
+      if (e.target) e.target.value = '';
+      return;
+    }
 
     let currentImages = attachedMediaList.filter(m => m.type === 'image').length;
     let currentVideos = attachedMediaList.filter(m => m.type === 'video').length;
     let currentAudios = attachedMediaList.filter(m => m.type === 'audio').length;
+    let currentDocs = attachedMediaList.filter(m => m.type === 'document' || m.type === 'pdf').length;
     let currentStickersGifs = attachedMediaList.filter(m => m.type === 'sticker' || m.type === 'gif').length;
 
     const filesToRead = [];
@@ -590,18 +605,39 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       }
 
       let mType = 'image';
-      if (file.type.startsWith('video/')) mType = 'video';
-      else if (file.type.startsWith('audio/')) mType = 'audio';
-      else if (file.type === 'image/gif') mType = 'gif';
-      else if (file.type === 'image/webp') mType = 'sticker';
-      else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf') || file.name.toLowerCase().endsWith('.doc') || file.name.toLowerCase().endsWith('.docx') || file.name.toLowerCase().endsWith('.txt')) {
-        if (userPlanKey !== 'pro') {
-          toast.error('Document and PDF attachments are exclusive to the Pro Plan. Upgrade to Pro!');
-          continue;
-        }
+      if (forcedType === 'document') {
         mType = 'document';
+      } else if (forcedType === 'photo_video') {
+        mType = file.type.startsWith('video/') ? 'video' : 'image';
+      } else if (forcedType === 'audio') {
+        mType = 'audio';
+      } else if (forcedType === 'all') {
+        if (file.type.startsWith('video/')) mType = 'video';
+        else if (file.type.startsWith('audio/')) mType = 'audio';
+        else mType = 'image';
+      } else {
+        if (file.type.startsWith('video/')) mType = 'video';
+        else if (file.type.startsWith('audio/')) mType = 'audio';
+        else if (file.type === 'image/gif') mType = 'gif';
+        else if (file.type === 'image/webp') mType = 'sticker';
+        else if (
+          file.type === 'application/pdf' ||
+          file.name.toLowerCase().endsWith('.pdf') ||
+          file.name.toLowerCase().endsWith('.doc') ||
+          file.name.toLowerCase().endsWith('.docx') ||
+          file.name.toLowerCase().endsWith('.txt') ||
+          file.name.toLowerCase().endsWith('.zip') ||
+          file.name.toLowerCase().endsWith('.xlsx')
+        ) {
+          if (userPlanKey !== 'pro') {
+            toast.error('Document attachments are exclusive to the Pro Plan. Upgrade to Pro!');
+            continue;
+          }
+          mType = 'document';
+        } else {
+          mType = 'image';
+        }
       }
-      else mType = 'image';
 
       if (mType === 'image') {
         if (currentImages >= MAX_LIMITS.image) {
@@ -621,6 +657,12 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
           continue;
         }
         currentAudios++;
+      } else if (mType === 'document') {
+        if (currentDocs >= MAX_LIMITS.document) {
+          toast.error('Maximum limit reached: You can attach up to 20 documents at a time.');
+          continue;
+        }
+        currentDocs++;
       } else if (mType === 'sticker' || mType === 'gif') {
         if (currentStickersGifs >= MAX_LIMITS.sticker_gif) {
           toast.error('Maximum limit reached: You can attach up to 50 stickers & GIFs at a time.');
@@ -633,7 +675,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
     }
 
     if (!filesToRead.length) {
-      if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+      if (e.target) e.target.value = '';
       return;
     }
 
@@ -657,7 +699,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
         if (loadedCount === filesToRead.length) {
           setAttachedMediaList(prev => [...prev, ...newItems]);
           toast.success(`Attached ${newItems.length} file(s)`);
-          if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+          if (e.target) e.target.value = '';
         }
       };
       reader.readAsDataURL(file);
@@ -802,6 +844,9 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
     const handleClickOutside = (e) => {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) {
         setShowEmojiPicker(false);
+      }
+      if (attachmentMenuRef.current && !attachmentMenuRef.current.contains(e.target)) {
+        setShowAttachmentMenu(false);
       }
       if (stickerPickerRef.current && !stickerPickerRef.current.contains(e.target)) {
         setShowStickerPicker(false);
@@ -1557,6 +1602,29 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                     </button>
                   )}
 
+                  {/* Documents Folder (Original MB) */}
+                  {documentsList.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveGalleryFolder('document')}
+                      className="p-2.5 rounded-xl bg-white dark:bg-wa-dsurf border border-slate-200/90 dark:border-wa-dbdr/60 hover:border-violet-500 dark:hover:border-violet-400 transition-all text-left group shadow-2xs hover:shadow-xs flex items-center justify-between"
+                      title="Open Documents (Original Quality)"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-base text-violet-500">📄</span>
+                          <span className="text-xs font-bold text-slate-900 dark:text-white truncate">Documents</span>
+                        </div>
+                        <p className="text-[10px] text-violet-600 dark:text-violet-400 mt-0.5 font-medium">
+                          {documentsList.length} {documentsList.length === 1 ? 'doc' : 'docs'} (Real MB)
+                        </p>
+                      </div>
+                      <span className="text-[11px] text-violet-600 dark:text-violet-400 group-hover:translate-x-0.5 transition-transform font-bold">
+                        ↗
+                      </span>
+                    </button>
+                  )}
+
                   {/* Stickers & GIFs Folder */}
                   {stickersGifsList.length > 0 && (
                     <button
@@ -1629,21 +1697,115 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                 {/* ── Attachment Pin, GIF & Sticker buttons (Visible ONLY for Starter & Pro plans) ── */}
                 {!isFreePlan && (
                   <>
-                    {/* Attachment Pin button (Image, Video, Audio) */}
-                    <button
-                      type="button"
-                      onClick={() => attachmentInputRef.current?.click()}
-                      className={`p-1.5 rounded-lg transition-colors ${
-                        imagesList.length > 0 || videosList.length > 0 || audiosList.length > 0
-                          ? 'text-wa-teal dark:text-wa-green bg-emerald-100/70 dark:bg-emerald-950/60 ring-1 ring-emerald-400/40'
-                          : 'text-gray-400 hover:text-wa-teal dark:text-wa-dmuted dark:hover:text-wa-green hover:bg-gray-200 dark:hover:bg-wa-dsurf'
-                      }`}
-                      title="Attach Images, Videos, or Audio"
-                    >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.37l-9.878 9.878a1.5 1.5 0 01-2.122-2.122l8.82-8.82" />
-                      </svg>
-                    </button>
+                    {/* Attachment Pin button with WhatsApp Web-Style Popup Menu */}
+                    <div className="relative" ref={attachmentMenuRef}>
+                      <button
+                        type="button"
+                        onClick={() => setShowAttachmentMenu(prev => !prev)}
+                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                          attachedMediaList.length > 0
+                            ? 'text-wa-teal dark:text-wa-green bg-emerald-100/70 dark:bg-emerald-950/60 ring-1 ring-emerald-400/40'
+                            : 'text-gray-400 hover:text-wa-teal dark:text-wa-dmuted dark:hover:text-wa-green hover:bg-gray-200 dark:hover:bg-wa-dsurf'
+                        }`}
+                        title="Attach Media or Document"
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.37l-9.878 9.878a1.5 1.5 0 01-2.122-2.122l8.82-8.82" />
+                        </svg>
+                      </button>
+
+                      {/* WhatsApp Web-Style Attachment Popup Menu */}
+                      {showAttachmentMenu && (
+                        <div className="absolute left-0 bottom-full mb-3 z-[95] w-60 bg-white dark:bg-[#1f2c34] border border-slate-200/90 dark:border-wa-dbdr rounded-2xl shadow-2xl p-1.5 overflow-hidden animate-fade-in backdrop-blur-md">
+                          {/* 1. Document (Original Uncompressed Quality) */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAttachmentMenu(false);
+                              documentInputRef.current?.click();
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-[#111b21] transition-colors text-left group cursor-pointer"
+                            title="Share original uncompressed files in real MB/GB"
+                          >
+                            <span className="w-8 h-8 rounded-full bg-violet-100 dark:bg-violet-950/60 flex items-center justify-center text-violet-600 dark:text-violet-400 shrink-0">
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 7V3.5L18.5 8H15zM7 14h10v2H7v-2zm0 4h7v2H7v-2z" />
+                              </svg>
+                            </span>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Document</p>
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300">PRO</span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 dark:text-wa-dmuted truncate">Real MB / Original Quality</p>
+                            </div>
+                          </button>
+
+                          {/* 2. Photos & videos */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAttachmentMenu(false);
+                              photosVideosInputRef.current?.click();
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-[#111b21] transition-colors text-left group cursor-pointer"
+                            title="Share photos and video clips"
+                          >
+                            <span className="w-8 h-8 rounded-full bg-sky-100 dark:bg-sky-950/60 flex items-center justify-center text-sky-600 dark:text-sky-400 shrink-0">
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M4 4h3l2-2h6l2 2h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm8 3a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6z" />
+                              </svg>
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Photos & videos</p>
+                              <p className="text-[10px] text-slate-400 dark:text-wa-dmuted truncate">Images & Video clips</p>
+                            </div>
+                          </button>
+
+                          {/* 3. Audio */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAttachmentMenu(false);
+                              audioInputRef.current?.click();
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-[#111b21] transition-colors text-left group cursor-pointer"
+                            title="Share audio files & songs"
+                          >
+                            <span className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-950/60 flex items-center justify-center text-orange-600 dark:text-orange-400 shrink-0">
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 3a9 9 0 0 0-9 9v7a3 3 0 0 0 3 3h1a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H5v-1a7 7 0 1 1 14 0v1h-2a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h1a3 3 0 0 0 3-3v-7a9 9 0 0 0-9-9z" />
+                              </svg>
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Audio</p>
+                              <p className="text-[10px] text-slate-400 dark:text-wa-dmuted truncate">Voice & Music</p>
+                            </div>
+                          </button>
+
+                          {/* 4. All Media (Photos, Videos & Audio together) */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAttachmentMenu(false);
+                              allMediaInputRef.current?.click();
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-[#111b21] transition-colors text-left group cursor-pointer border-t border-slate-100 dark:border-wa-dbdr/40"
+                            title="Select any photos, videos or audio together"
+                          >
+                            <span className="w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-950/60 flex items-center justify-center text-pink-600 dark:text-pink-400 shrink-0">
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z" />
+                              </svg>
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-slate-800 dark:text-slate-100">All Media</p>
+                              <p className="text-[10px] text-slate-400 dark:text-wa-dmuted truncate">Photos, Videos & Audio</p>
+                            </div>
+                          </button>
+                        </div>
+                      )}
+                    </div>
 
                     {/* GIF button */}
                     <button
@@ -1705,14 +1867,46 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                       </button>
                     </div>
 
-                    {/* Hidden file inputs with MULTIPLE file support */}
+                    {/* Dedicated hidden file inputs */}
+                    <input
+                      ref={documentInputRef}
+                      type="file"
+                      multiple
+                      accept="*/*"
+                      className="hidden"
+                      onChange={(e) => handleAttachmentFileInput(e, 'document')}
+                    />
+                    <input
+                      ref={photosVideosInputRef}
+                      type="file"
+                      multiple
+                      accept="image/*,video/mp4,video/3gpp,video/quicktime,video/webm"
+                      className="hidden"
+                      onChange={(e) => handleAttachmentFileInput(e, 'photo_video')}
+                    />
+                    <input
+                      ref={audioInputRef}
+                      type="file"
+                      multiple
+                      accept="audio/*"
+                      className="hidden"
+                      onChange={(e) => handleAttachmentFileInput(e, 'audio')}
+                    />
+                    <input
+                      ref={allMediaInputRef}
+                      type="file"
+                      multiple
+                      accept="image/*,video/mp4,video/3gpp,video/quicktime,video/webm,audio/*"
+                      className="hidden"
+                      onChange={(e) => handleAttachmentFileInput(e, 'all')}
+                    />
                     <input
                       ref={attachmentInputRef}
                       type="file"
                       multiple
                       accept="image/*,video/mp4,video/3gpp,video/quicktime,video/webm,audio/*,.pdf,.doc,.docx,.txt"
                       className="hidden"
-                      onChange={handleAttachmentFileInput}
+                      onChange={(e) => handleAttachmentFileInput(e, 'all')}
                     />
                     <input
                       ref={stickerInputRef}
@@ -1835,6 +2029,8 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
               ? '🎥 Videos Gallery'
               : activeGalleryFolder === 'audio'
               ? '🎵 Audio Files'
+              : activeGalleryFolder === 'document'
+              ? '📄 Documents (Original Uncompressed Quality)'
               : '🏷️ Stickers & GIFs'
           }
           category={activeGalleryFolder || 'all'}
@@ -1845,13 +2041,19 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
               ? videosList
               : activeGalleryFolder === 'audio'
               ? audiosList
+              : activeGalleryFolder === 'document'
+              ? documentsList
               : stickersGifsList
           }
           onRemoveItem={handleRemoveMediaItem}
           onClearCategory={() => handleClearCategory(activeGalleryFolder)}
           onAddMore={() => {
-            if (activeGalleryFolder === 'image' || activeGalleryFolder === 'video' || activeGalleryFolder === 'audio') {
-              attachmentInputRef.current?.click();
+            if (activeGalleryFolder === 'document') {
+              documentInputRef.current?.click();
+            } else if (activeGalleryFolder === 'image' || activeGalleryFolder === 'video') {
+              photosVideosInputRef.current?.click();
+            } else if (activeGalleryFolder === 'audio') {
+              audioInputRef.current?.click();
             } else {
               setShowMediaPicker(true);
             }

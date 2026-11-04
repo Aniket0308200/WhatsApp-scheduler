@@ -25,6 +25,7 @@ export default function MediaGalleryModal({
     image: '📷',
     video: '🎥',
     audio: '🎵',
+    document: '📄',
     sticker: '🏷️',
     gif: '🎞️',
     all: '📁'
@@ -103,6 +104,7 @@ export default function MediaGalleryModal({
                 const isImage = item.type === 'image';
                 const isVideo = item.type === 'video';
                 const isAudio = item.type === 'audio';
+                const isDocument = item.type === 'document' || item.type === 'pdf';
                 const isSticker = item.type === 'sticker';
                 const isGif = item.type === 'gif';
 
@@ -156,9 +158,22 @@ export default function MediaGalleryModal({
                         </div>
                       )}
 
+                      {/* Document preview */}
+                      {isDocument && (
+                        <div className="p-3 text-center flex flex-col items-center justify-center">
+                          <span className="text-3xl mb-1 text-violet-600 dark:text-violet-400">📄</span>
+                          <span className="text-[10px] font-bold text-slate-700 dark:text-wa-dtext truncate max-w-[120px]" title={item.name}>
+                            {item.name || 'Document'}
+                          </span>
+                          <span className="text-[9px] text-violet-600 dark:text-violet-400 font-semibold mt-0.5">
+                            {item.size || 'Original MB'}
+                          </span>
+                        </div>
+                      )}
+
                       {/* Type Badge on thumbnail */}
                       <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-black/60 text-white backdrop-blur-xs">
-                        {isImage ? '📷' : isVideo ? '🎥' : isAudio ? '🎵' : isGif ? '🎞️' : '🏷️'}
+                        {isImage ? '📷' : isVideo ? '🎥' : isAudio ? '🎵' : isDocument ? '📄' : isGif ? '🎞️' : '🏷️'}
                       </span>
 
                       {/* Per-item Delete Button (in edit mode) */}
