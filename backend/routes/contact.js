@@ -258,7 +258,7 @@ ${message}
   const resendApiKey = process.env.RESEND_API_KEY || process.env.RESEND_KEY;
   if (resendApiKey) {
     try {
-      console.log(`[Contact Mailer] Sending via Resend HTTPS API...`);
+      console.log(`[Contact Mailer] Sending via Resend HTTPS API to ${TARGET_ADMIN_EMAIL}...`);
       await sendResendEmail({
         apiKey: resendApiKey.trim(),
         to: TARGET_ADMIN_EMAIL,
@@ -268,9 +268,30 @@ ${message}
         text: textContent
       });
       console.log(`[Contact Mailer] ✅ Successfully delivered via Resend API to ${TARGET_ADMIN_EMAIL}`);
-      return { success: true, method: 'resend' };
+      return { success: true, method: 'resend', deliveredTo: TARGET_ADMIN_EMAIL };
     } catch (resendErr) {
-      console.warn('[Contact Mailer] ⚠️ Resend API failed:', resendErr.message);
+      console.warn('[Contact Mailer] ⚠️ Resend API primary attempt failed:', resendErr.message);
+
+      // If Resend free tier restricts to the account owner's email (e.g. aniketchouhan314@gmail.com)
+      const matchAllowedEmail = resendErr.message.match(/your own email address \(([^)]+)\)/i);
+      if (matchAllowedEmail && matchAllowedEmail[1]) {
+        const allowedEmail = matchAllowedEmail[1].trim();
+        console.log(`[Contact Mailer] Resend test tier redirecting to account owner: ${allowedEmail}`);
+        try {
+          await sendResendEmail({
+            apiKey: resendApiKey.trim(),
+            to: allowedEmail,
+            replyTo: contactEmail,
+            subject: mailSubject,
+            html: htmlContent,
+            text: textContent
+          });
+          console.log(`[Contact Mailer] ✅ Successfully delivered via Resend API to ${allowedEmail}`);
+          return { success: true, method: 'resend_owner', deliveredTo: allowedEmail };
+        } catch (retryErr) {
+          console.error('[Contact Mailer] ❌ Resend owner retry failed:', retryErr.message);
+        }
+      }
     }
   }
 
@@ -418,8 +439,8 @@ router.get('/diagnostic', async (req, res) => {
   let resendTestError = null;
 
   if (req.query.test && (process.env.RESEND_API_KEY || process.env.RESEND_KEY)) {
+    const apiKey = (process.env.RESEND_API_KEY || process.env.RESEND_KEY).trim();
     try {
-      const apiKey = (process.env.RESEND_API_KEY || process.env.RESEND_KEY).trim();
       const testRes = await sendResendEmail({
         apiKey,
         to: TARGET_ADMIN_EMAIL,
@@ -428,9 +449,26 @@ router.get('/diagnostic', async (req, res) => {
         html: '<p>This is a live diagnostic test from WA Scheduler backend.</p>',
         text: 'This is a live diagnostic test from WA Scheduler backend.'
       });
-      resendTestResult = testRes;
+      resendTestResult = { success: true, target: TARGET_ADMIN_EMAIL, response: testRes };
     } catch (err) {
       resendTestError = err.message || String(err);
+      const matchAllowedEmail = err.message.match(/your own email address \(([^)]+)\)/i);
+      if (matchAllowedEmail && matchAllowedEmail[1]) {
+        const allowedEmail = matchAllowedEmail[1].trim();
+        try {
+          const retryRes = await sendResendEmail({
+            apiKey,
+            to: allowedEmail,
+            replyTo: allowedEmail,
+            subject: '[WA Scheduler] Diagnostic Test Email',
+            html: '<p>This is a live diagnostic test from WA Scheduler backend to Resend account owner.</p>',
+            text: 'This is a live diagnostic test from WA Scheduler backend to Resend account owner.'
+          });
+          resendTestResult = { success: true, target: allowedEmail, response: retryRes };
+        } catch (retryErr) {
+          resendTestError = retryErr.message || String(retryErr);
+        }
+      }
     }
   }
 
