@@ -7,7 +7,7 @@ let nodemailer = null;
 try {
   nodemailer = require('nodemailer');
 } catch (e) {
-  console.warn('[Contact] Nodemailer not available, will use direct HTTP dispatcher.');
+  console.warn('[Contact] Nodemailer not available.');
 }
 
 const TARGET_ADMIN_EMAIL = 'aniketchouhan243@gmail.com';
@@ -49,7 +49,57 @@ function requireAdminAuth(req, res, next) {
 }
 
 /**
- * Direct HTTPS Dispatcher to FormSubmit (Zero config, direct to target email)
+ * Helper: Send via Resend HTTPS API (Free 3,000 emails/month)
+ */
+function sendResendEmail({ apiKey, to, replyTo, subject, html, text }) {
+  return new Promise((resolve, reject) => {
+    const postData = JSON.stringify({
+      from: 'WA Scheduler <onboarding@resend.dev>',
+      to: [to],
+      reply_to: replyTo,
+      subject: subject,
+      html: html,
+      text: text
+    });
+
+    const options = {
+      hostname: 'api.resend.com',
+      port: 443,
+      path: '/emails',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
+      },
+      timeout: 10000
+    };
+
+    const req = https.request(options, (res) => {
+      let body = '';
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve(body);
+        } else {
+          reject(new Error(`Resend API HTTP ${res.statusCode}: ${body}`));
+        }
+      });
+    });
+
+    req.on('error', err => reject(err));
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Resend API timed out'));
+    });
+
+    req.write(postData);
+    req.end();
+  });
+}
+
+/**
+ * Direct HTTPS Dispatcher to FormSubmit (Fallback)
  */
 function sendFormSubmitHttp(payload) {
   return new Promise((resolve, reject) => {
@@ -64,7 +114,7 @@ function sendFormSubmitHttp(payload) {
         'Accept': 'application/json',
         'Content-Length': Buffer.byteLength(postData)
       },
-      timeout: 8000
+      timeout: 10000
     };
 
     const req = https.request(options, (res) => {
@@ -87,7 +137,7 @@ function sendFormSubmitHttp(payload) {
 }
 
 /**
- * Dispatch email via SMTP or direct HTTP
+ * Dispatch email via SMTP, Resend, or FormSubmit
  */
 async function dispatchDirectEmail({ loginName, loginEmail, whatsappNumber, contactEmail, paymentDetails, subject, message }) {
   const mailSubject = `[WA Scheduler] ${subject} - ${loginName || contactEmail}`;
@@ -167,7 +217,26 @@ ${message}
     }
   }
 
-  // 2. Direct HTTPS Delivery to FormSubmit (Zero config)
+  // 2. Try Resend API if RESEND_API_KEY is configured
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (resendApiKey) {
+    try {
+      await sendResendEmail({
+        apiKey: resendApiKey,
+        to: TARGET_ADMIN_EMAIL,
+        replyTo: contactEmail,
+        subject: mailSubject,
+        html: htmlContent,
+        text: textContent
+      });
+      console.log(`[Contact Mailer] Sent via Resend API to ${TARGET_ADMIN_EMAIL}`);
+      return true;
+    } catch (resendErr) {
+      console.warn('[Contact Mailer] Resend API failed:', resendErr.message);
+    }
+  }
+
+  // 3. Fallback: FormSubmit
   try {
     await sendFormSubmitHttp({
       _subject: mailSubject,
@@ -183,10 +252,10 @@ ${message}
       payerRef: paymentDetails.payerRef || 'None',
       message: message
     });
-    console.log(`[Contact Mailer] Dispatched directly via HTTPS to ${TARGET_ADMIN_EMAIL}`);
+    console.log(`[Contact Mailer] Dispatched via FormSubmit to ${TARGET_ADMIN_EMAIL}`);
     return true;
   } catch (httpErr) {
-    console.warn('[Contact Mailer] Direct HTTPS delivery failed:', httpErr.message);
+    console.warn('[Contact Mailer] FormSubmit fallback failed:', httpErr.message);
   }
 
   return false;

@@ -338,12 +338,21 @@ Sent via WA Scheduler Contact Form`;
                 >
                   Send Another Message
                 </button>
+                <a
+                  href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(TARGET_SUPPORT_EMAIL)}&su=${encodeURIComponent(`[WA Scheduler Support] ${formData.subject}`)}&body=${encodeURIComponent(generateEmailBody())}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/25 border border-emerald-500/30 transition-all flex items-center gap-1.5"
+                >
+                  <span>✉️</span>
+                  <span>Open Gmail (Send Backup Copy) ↗</span>
+                </a>
                 <button
                   type="button"
                   onClick={handleCopyFormattedBody}
                   className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
                 >
-                  📋 Copy My Details
+                  📋 Copy Details
                 </button>
               </div>
             </div>
