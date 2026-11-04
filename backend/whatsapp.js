@@ -721,6 +721,20 @@ async function _performInitWhatsApp(sessionId) {
       // 2. Database store lookup
       const doc = await db.ScheduledMessage.findOne({ waMessageId: key.id }).lean();
       if (doc) {
+        if (doc.pollData && doc.pollData.question) {
+          const validOptions = (doc.pollData.options || []).map(o => String(o).trim()).filter(Boolean);
+          const pollCreation = {
+            name: String(doc.pollData.question).trim(),
+            selectableOptionsCount: doc.pollData.allowMultiple ? 0 : 1,
+            options: validOptions.map(optionName => ({ optionName }))
+          };
+          const msgObj = doc.pollData.allowMultiple
+            ? { pollCreationMessage: pollCreation }
+            : { pollCreationMessageV3: pollCreation };
+          session.messageCache.set(key.id, msgObj);
+          return msgObj;
+        }
+
         const text = db.decrypt(doc.encryptedMessageText);
         if (text) {
           const msgObj = { conversation: text };
