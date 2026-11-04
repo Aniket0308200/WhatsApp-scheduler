@@ -239,3 +239,4 @@ export default function PollModal({ isOpen, onClose, onSave, initialData }) {
     </div>
   );
 }
+

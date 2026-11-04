@@ -699,6 +699,7 @@ async function getPendingDueMessages() {
     mediaData: m.mediaData || null,
     mediaName: m.mediaName || null,
     mediaList: m.mediaList || [],
+    pollData: m.pollData || null,
     scheduled_at: toSqliteUtc(m.scheduledAt),
     status: m.status,
     error: m.error,

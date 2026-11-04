@@ -1291,6 +1291,7 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
       if (poll && poll.question) {
         const rawOptions = Array.isArray(poll.options) ? poll.options : [];
         const validOptions = rawOptions.map(o => String(o).trim()).filter(Boolean);
+        console.log(`[WA] [${sessionId}] Delivering WhatsApp Poll to ${jid}: "${poll.question}" (${validOptions.length} options, allowMultiple: ${Boolean(poll.allowMultiple)})`);
         messagePayload = {
           poll: {
             name: String(poll.question).trim(),
@@ -1299,6 +1300,7 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
           }
         };
       } else {
+        console.warn(`[WA] [${sessionId}] Warning: mediaType is poll but poll question is missing:`, poll);
         messagePayload = { text: text || '' };
       }
     } else if (mediaType && mediaData) {
