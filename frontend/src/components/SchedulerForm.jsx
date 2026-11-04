@@ -5,6 +5,8 @@ import { scheduleMessage, fetchContactName, resolveContactLive, importContacts, 
 import DateTimePicker from './DateTimePicker';
 import GifStickerPickerModal, { WhatsAppStickerIcon, WhatsAppGifIcon, convertImageFileToWebpSticker } from './GifStickerPickerModal';
 import MediaGalleryModal from './MediaGalleryModal';
+import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
+import { useTheme } from '../ThemeContext';
 
 // ─── Complete country-code list ───────────────────────────────────────────────
 // ─── Complete country-code list ───────────────────────────────────────────────
@@ -181,35 +183,6 @@ function CountryPicker({ value, onChange, disabled }) {
   );
 }
 
-const EMOJI_LIST = {
-  smileys: [
-    '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '🥺', '😢', '😭', '😤', '😠', '😡', '🤯', '😳', '🥵', '🥶', '😱', '🤫', '🫠', '🙄', '😴', '🤤'
-  ],
-  gestures: [
-    '👍', '👎', '👊', '✊', '🤛', '🤜', '🤞', '✌️', '🤟', '🤘', '👌', '🤌', '🤏', '👈', '👉', '👆', '👇', '☝️', '✋', '🤚', '🖐️', '🖖', '👋', '🤙', '👏', '🙏', '✍️', '🤝', '💪', '🤳'
-  ],
-  hearts: [
-    '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝'
-  ],
-  symbols: [
-    '🎉', '🔥', '✨', '💡', '🚀', '🎈', '🎁', '🎂', '🌟', '🍀', '✈️', '🚗', '💻', '📱', '📞', '📧', '📅', '💯', '⚠️', '✅', '❌', '🍕', '☕', '🍻'
-  ]
-};
-
-// WhatsApp-style core categories. Keeping these strings compact makes the picker
-// fast to render while covering the standard everyday emoji set.
-const WHATSAPP_EMOJI_CATEGORIES = {
-  people: { label: 'Smileys & People', icon: '😀', emojis: '😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🤩 🥳 😏 😒 😞 😔 😟 😕 🙁 ☹️ 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤬 🤯 😳 🥵 🥶 😱 😨 😰 😥 😓 🤗 🤔 🫡 🤭 🤫 🤥 😶 😐 😑 😬 🙄 😯 😦 😧 😮 😲 🥱 😴 🤤 😪 😵 🤐 🥴 🤢 🤮 🤧 😷 🤒 🤕 🤑 🤠 😈 👿 👹 👺 🤡 💩 👻 💀 ☠️ 👋 🤚 🖐️ ✋ 🖖 👌 🤌 🤏 ✌️ 🤞 🫰 🤟 🤘 🤙 👈 👉 👆 🖕 👇 ☝️ 👍 👎 ✊ 👊 🤛 🤜 👏 🙌 👐 🤲 🙏 ✍️ 💅 🤝 💪 🦾 🧠 👀 👁️ 👅 👄'.split(' ') },
-  nature: { label: 'Animals & Nature', icon: '🐶', emojis: '🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🙈 🙉 🙊 🐒 🦍 🦧 🐔 🐧 🐦 🐤 🦆 🦅 🦉 🦇 🐺 🐗 🐴 🦄 🐝 🪱 🐛 🦋 🐌 🐞 🐜 🪰 🪲 🪳 🦟 🦗 🕷️ 🦂 🐢 🐍 🦎 🦖 🦕 🐙 🦑 🦐 🦞 🦀 🐡 🐠 🐟 🐬 🐳 🐋 🦈 🐊 🐅 🐆 🦓 🦍 🦣 🐘 🦛 🦏 🐪 🐫 🦒 🦘 🦬 🐃 🐂 🐄 🐎 🐖 🐏 🐑 🦙 🐐 🦌 🐕 🐩 🐈 🐓 🦃 🕊️ 🐇 🦝 🦨 🦡 🦦 🦥 🐁 🐀 🐿️ 🦔 🌵 🎄 🌲 🌳 🌴 🪴 🌱 🌿 ☘️ 🍀 🍁 🍂 🍃 🌷 🌹 🥀 🌺 🌸 💐 🌼 🌻 🌞 🌝 🌛 🌜 🌚 🌕 🌖 🌗 🌘 🌑 🌒 🌓 🌔 🌙 ⭐ 🌟 ✨ ⚡ 🔥 🌈 ☀️ 🌤️ ⛅ 🌧️ ⛈️ 🌩️ ❄️ ☃️ 🌬️ 💨 🌪️ 🌫️ 🌊'.split(' ') },
-  food: { label: 'Food & Drink', icon: '🍔', emojis: '🍏 🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🫐 🍈 🍒 🍑 🥭 🍍 🥥 🥝 🍅 🍆 🥑 🥦 🥬 🥒 🌶️ 🫑 🌽 🥕 🫒 🧄 🧅 🥔 🍠 🫘 🥐 🥯 🍞 🥖 🥨 🧀 🥚 🍳 🧈 🥞 🧇 🥓 🥩 🍗 🍖 🦴 🌭 🍔 🍟 🍕 🫓 🥪 🥙 🧆 🌮 🌯 🫔 🥗 🥘 🫕 🥫 🍝 🍜 🍲 🍛 🍣 🍱 🥟 🦪 🍤 🍙 🍚 🍘 🍥 🥠 🥮 🍢 🍡 🍧 🍨 🍦 🥧 🧁 🍰 🎂 🍮 🍭 🍬 🍫 🍿 🍩 🍪 🌰 🥜 🍯 🥛 🍼 ☕ 🫖 🍵 🧃 🥤 🧋 🍶 🍺 🍻 🥂 🍷 🫗 🥃 🍸 🍹 🧉 🍾 🧊 🥢 🍽️ 🍴 🥄 🔪 🫙'.split(' ') },
-  activities: { label: 'Activities', icon: '⚽', emojis: '⚽ 🏀 🏈 ⚾ 🥎 🎾 🏐 🏉 🥏 🎱 🪀 🏓 🏸 🏒 🏑 🥍 🏏 ⛳ 🪁 🏹 🎣 🤿 🥊 🥋 🎽 🛹 🛼 🛷 ⛸️ 🥌 🎿 ⛷️ 🏂 🪂 🏋️ 🤼 🤸 ⛹️ 🤺 🤾 🏌️ 🏇 🧘 🏄 🏊 🤽 🚣 🧗 🚵 🚴 🏆 🥇 🥈 🥉 🏅 🎖️ 🏵️ 🎗️ 🎫 🎟️ 🎪 🤹 🎭 🎨 🎬 🎤 🎧 🎼 🎹 🥁 🪘 🎷 🎺 🎸 🪕 🎻 🎲 ♟️ 🎯 🎳 🎮 🎰 🧩'.split(' ') },
-  travel: { label: 'Travel & Places', icon: '🚗', emojis: '🚗 🚕 🚙 🚌 🚎 🏎️ 🚓 🚑 🚒 🚐 🛻 🚚 🚛 🚜 🛵 🏍️ 🛺 🚲 🛴 🚏 🛣️ 🛤️ ⛽ 🚨 🚥 🚦 🛑 🚧 ⚓ ⛵ 🛶 🚤 🛳️ ⛴️ 🛥️ 🚢 ✈️ 🛩️ 🛫 🛬 🪂 💺 🚁 🚟 🚠 🚡 🛰️ 🚀 🛸 🛎️ 🧳 ⌛ ⏳ ⌚ ⏰ ⏱️ ⏲️ 🕰️ 🕛 🌍 🌎 🌏 🗺️ 🗾 🧭 🏔️ ⛰️ 🌋 🗻 🏕️ 🏖️ 🏜️ 🏝️ 🏞️ 🏟️ 🏛️ 🏗️ 🧱 🪨 🛖 🏘️ 🏠 🏡 🏢 🏣 🏤 🏥 🏦 🏨 🏩 🏪 🏫 🏬 🏭 🏯 🏰 💒 🗼 🗽 ⛪ 🕌 🛕 🕍 ⛩️ 🕋 ⛲ ⛺ 🌁 🌃 🌄 🌅 🌆 🌇 🌉 🎠 🎡 🎢 💈 🎪'.split(' ') },
-  objects: { label: 'Objects', icon: '💡', emojis: '⌚ 📱 📲 💻 ⌨️ 🖥️ 🖨️ 🖱️ 🖲️ 🕹️ 🗜️ 💽 💾 💿 📀 📼 📷 📸 📹 🎥 📽️ 🎞️ 📞 ☎️ 📟 📠 📺 📻 🎙️ ⏱️ ⏲️ ⌚ ⏰ 🕰️ ⌛ ⏳ 📡 🔋 🪫 🔌 💡 🔦 🕯️ 🪔 🧯 🛢️ 💸 💵 💴 💶 💷 🪙 💰 💳 🧾 💎 ⚖️ 🪜 🧰 🪛 🔧 🔨 ⚒️ 🛠️ ⛏️ 🪚 🔩 ⚙️ ⛓️ 🧲 🔫 💣 🧨 🪓 🔪 🗡️ ⚔️ 🛡️ 🚬 ⚰️ 🪦 ⚱️ 🏺 🔮 📿 🧿 💈 ⚗️ 🔭 🔬 🕳️ 🩹 🩺 💊 💉 🩸 🧬 🦠 🧫 🧪 🌡️ 🧹 🧺 🧻 🚽 🚰 🚿 🛁 🪥 🪒 🧴 🧷 🧸 🖼️ 🛍️ 🛒 🎁 🎈 🎏 🎀 🪄 🪅 🪩 🪆 🧵 🧶 🪢 🧥 🥼 🦺 👔 👕 👖 🧣 🧤 🧦 👗 👘 🥻 🩱 🩲 🩳 👙 👚 👜 👝 🎒'.split(' ') },
-  symbols: { label: 'Symbols', icon: '❤️', emojis: '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 ☮️ ✝️ ☪️ 🕉️ ☸️ ✡️ 🔯 🕎 ☯️ ☦️ 🛐 ⛎ ♈ ♉ ♊ ♋ ♌ ♍ ♎ ♏ ♐ ♑ ♒ ♓ 🆔 ⚛️ 🉑 ☢️ ☣️ 📴 📳 🈶 🈚 🈸 🈺 🈷️ ✴️ 🆚 💮 🉐 ㊙️ ㊗️ 🈴 🈵 🈹 🈲 🅰️ 🅱️ 🆎 🆑 🅾️ 🆘 ❌ ⭕ 🛑 ⛔ 📛 🚫 💯 💢 ♨️ 🚷 🚯 🚳 🚱 🔞 📵 🚭 ❗ ❕ ❓ ❔ ‼️ ⁉️ 🔅 🔆 ⚠️ 🚸 🔱 ⚜️ 🔰 ♻️ ✅ 🈯 💹 ❇️ ✳️ ❎ 🌐 💠 Ⓜ️ 🌀 💤 🏧 🚾 ♿ 🅿️ 🈳 🈂️ 🛂 🛃 🛄 🛅 🚹 🚺 🚼 🚻 🚮 🎦 📶 🈁 🔣 ℹ️ 🔤 🔡 🔠 🔢 #️⃣ *️⃣ 0️⃣ 1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣ 7️⃣ 8️⃣ 9️⃣ 🔟 ▶️ ⏸️ ⏹️ ⏺️ ⏭️ ⏮️ 🔼 🔽 ⏫ ⏬ ◀️ 🔄 🔃 🔀 🔁 🔂'.split(' ') },
-  flags: { label: 'Flags', icon: '🏳️', emojis: '🏁 🚩 🎌 🏴 🏳️ 🏳️‍🌈 🏳️‍⚧️ 🇮🇳 🇺🇸 🇬🇧 🇨🇦 🇦🇺 🇳🇿 🇿🇦 🇦🇪 🇸🇦 🇸🇬 🇲🇾 🇮🇩 🇹🇭 🇯🇵 🇰🇷 🇨🇳 🇭🇰 🇹🇼 🇫🇷 🇩🇪 🇮🇹 🇪🇸 🇵🇹 🇳🇱 🇧🇪 🇨🇭 🇦🇹 🇸🇪 🇳🇴 🇩🇰 🇫🇮 🇵🇱 🇷🇴 🇺🇦 🇷🇺 🇹🇷 🇬🇷 🇮🇱 🇪🇬 🇳🇬 🇰🇪 🇧🇷 🇦🇷 🇲🇽 🇨🇱 🇨🇴 🇵🇪 🇵🇭 🇵🇰 🇧🇩 🇳🇵 🇱🇰 🇻🇳 🇮🇷 🇮🇶 🇶🇦 🇰🇼 🏴‍☠️'.split(' ') },
-};
-
-
 // ─── SchedulerForm ────────────────────────────────────────────────────────────
 function ContactsImportModal({ onClose, onImported }) {
   const [file, setFile] = useState(null);
@@ -275,6 +248,7 @@ function ContactsImportModal({ onClose, onImported }) {
 }
 
 export default function SchedulerForm({ isConnected, isReconnecting = false, onScheduled, isSyncing, quota, onViewQuota }) {
+  const { dark } = useTheme();
   const getFullPhone = (cc, ph) => {
     if (ph && ph.endsWith('@g.us')) {
       return ph;
@@ -570,7 +544,6 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
 
   // Emoji picker states & refs
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [emojiCategory, setEmojiCategory] = useState('people');
   const textareaRef = useRef(null);
   const emojiPickerRef = useRef(null);
 
@@ -1630,35 +1603,25 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                   {showEmojiPicker && (
                     <div
                       ref={emojiPickerRef}
-                      className="absolute left-0 mb-2 w-[288px] min-[360px]:w-[320px] sm:w-[22rem] max-w-[92vw] bg-white dark:bg-[#202c33] border-[3px] border-gray-800 dark:border-wa-dbdr rounded-xl shadow-2xl z-[80] p-3 overflow-hidden transition-all"
+                      className="absolute left-0 bottom-full mb-2 z-[90] shadow-2xl rounded-2xl overflow-hidden border border-slate-200 dark:border-wa-dbdr animate-fade-in"
                     >
-                      <div className="flex overflow-x-auto custom-scroll border-b border-gray-100 dark:border-wa-dbdr/50 pb-2 mb-2 gap-1 justify-start text-lg">
-                        {Object.entries(WHATSAPP_EMOJI_CATEGORIES).map(([cat, config]) => (
-                          <button
-                            key={cat}
-                            type="button"
-                            onClick={() => setEmojiCategory(cat)}
-                            title={config.label}
-                            aria-label={config.label}
-                            className={`w-8 h-8 shrink-0 rounded-lg transition-colors ${emojiCategory === cat ? 'bg-emerald-500/15 ring-1 ring-emerald-500/30' : 'hover:bg-gray-100 dark:hover:bg-white/10'}`}
-                          >
-                            {config.icon}
-                          </button>
-                        ))}
-                      </div>
-                      <p className="mb-2 text-[11px] font-semibold text-gray-500 dark:text-gray-300">{WHATSAPP_EMOJI_CATEGORIES[emojiCategory].label}</p>
-                      <div className="grid grid-cols-9 gap-1 max-h-56 overflow-y-auto custom-scroll pr-1">
-                        {WHATSAPP_EMOJI_CATEGORIES[emojiCategory].emojis.map((emoji, index) => (
-                          <button
-                            key={emoji + index}
-                            type="button"
-                            onClick={() => handleInsertEmoji(emoji)}
-                            className="w-8 h-8 text-xl flex items-center justify-center hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors"
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
+                      <EmojiPicker
+                        onEmojiClick={(emojiData) => {
+                          if (emojiData && emojiData.emoji) {
+                            handleInsertEmoji(emojiData.emoji);
+                          }
+                        }}
+                        autoFocusSearch={false}
+                        theme={dark ? Theme.DARK : Theme.LIGHT}
+                        emojiStyle={EmojiStyle.APPLE}
+                        searchPlaceHolder="Search emojis..."
+                        lazyLoadEmojis={true}
+                        width={typeof window !== 'undefined' && window.innerWidth < 420 ? 290 : 340}
+                        height={380}
+                        previewConfig={{
+                          showPreview: false
+                        }}
+                      />
                     </div>
                   )}
                 </div>
