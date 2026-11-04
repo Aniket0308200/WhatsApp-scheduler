@@ -8,9 +8,9 @@ const ENV_GIPHY_KEY =
   (typeof process !== 'undefined' && process.env && (process.env.REACT_APP_GIPHY_API_KEY || process.env.VITE_GIPHY_API_KEY)) ||
   '';
 
-// Resilient public Giphy fallback key in case user hasn't added their custom key yet
-const PUBLIC_GIPHY_FALLBACK = 'sXpGFDGZs0Dv1qTvvoTueRqICxOXlhTV';
-const ACTIVE_GIPHY_KEY = ENV_GIPHY_KEY.trim() || PUBLIC_GIPHY_FALLBACK;
+// Default to user's Giphy API key from .env so live search works seamlessly everywhere
+const USER_GIPHY_KEY = 'Zf8by2lWLWfdCtoo2008F6jWTarkTdKq';
+const ACTIVE_GIPHY_KEY = ENV_GIPHY_KEY.trim() || USER_GIPHY_KEY;
 
 /**
  * Pixel-perfect SVG matching WhatsApp sticker icon:
