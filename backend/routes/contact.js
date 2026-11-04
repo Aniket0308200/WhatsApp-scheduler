@@ -197,16 +197,21 @@ ${message}
   const smtpUser = rawUser.trim();
   const smtpPass = rawPass.replace(/\s+/g, '').trim();
 
-  // 1. Try Gmail SMTP
+  // 1. Try Gmail SMTP directly with SSL (Port 465) with strict timeouts
   if (nodemailer && smtpUser && smtpPass) {
     try {
-      console.log(`[Contact Mailer] Connecting to Gmail SMTP as ${smtpUser}...`);
+      console.log(`[Contact Mailer] Attempting Gmail SMTP (smtp.gmail.com:465 SSL) for ${smtpUser}...`);
       const transporter = nodemailer.createTransport({
-        service: 'gmail',
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
         auth: {
           user: smtpUser,
           pass: smtpPass
-        }
+        },
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 10000
       });
 
       const info = await transporter.sendMail({
@@ -218,18 +223,22 @@ ${message}
         html: htmlContent
       });
 
-      console.log(`[Contact Mailer] ✅ Successfully delivered via Gmail SMTP to ${TARGET_ADMIN_EMAIL} (Msg ID: ${info.messageId})`);
-      return { success: true, method: 'smtp_gmail', messageId: info.messageId };
+      console.log(`[Contact Mailer] ✅ Successfully delivered via Gmail SMTP (port 465) to ${TARGET_ADMIN_EMAIL} (Msg ID: ${info.messageId})`);
+      return { success: true, method: 'smtp_gmail_port465', messageId: info.messageId };
     } catch (smtpErr) {
-      console.error('[Contact Mailer] ❌ Gmail SMTP failed:', smtpErr.message);
-      // Try fallback with direct host/port if service: gmail failed
+      console.error('[Contact Mailer] ❌ Gmail Port 465 failed:', smtpErr.message);
+
+      // Fallback attempt with Port 587 STARTTLS
       try {
-        console.log(`[Contact Mailer] Retrying with smtp.gmail.com:465...`);
+        console.log(`[Contact Mailer] Retrying with smtp.gmail.com:587 STARTTLS...`);
         const fallbackTransporter = nodemailer.createTransport({
           host: 'smtp.gmail.com',
-          port: 465,
-          secure: true,
-          auth: { user: smtpUser, pass: smtpPass }
+          port: 587,
+          secure: false,
+          auth: { user: smtpUser, pass: smtpPass },
+          connectionTimeout: 8000,
+          greetingTimeout: 8000,
+          socketTimeout: 10000
         });
         const info = await fallbackTransporter.sendMail({
           from: `"${loginName || 'WA Scheduler User'}" <${smtpUser}>`,
@@ -239,10 +248,10 @@ ${message}
           text: textContent,
           html: htmlContent
         });
-        console.log(`[Contact Mailer] ✅ Port 465 fallback succeeded! (Msg ID: ${info.messageId})`);
-        return { success: true, method: 'smtp_gmail_port465', messageId: info.messageId };
+        console.log(`[Contact Mailer] ✅ Port 587 succeeded! (Msg ID: ${info.messageId})`);
+        return { success: true, method: 'smtp_gmail_port587', messageId: info.messageId };
       } catch (fErr) {
-        console.error('[Contact Mailer] ❌ Port 465 fallback also failed:', fErr.message);
+        console.error('[Contact Mailer] ❌ Port 587 also failed:', fErr.message);
       }
     }
   } else {
@@ -305,19 +314,24 @@ router.get('/diagnostic', async (req, res) => {
   const smtpUser = rawUser.trim();
   const smtpPass = rawPass.replace(/\s+/g, '').trim();
 
-  let smtpVerifyResult = null;
-  let smtpVerifyError = null;
+  let port465Result = null;
+  let port465Error = null;
 
   if (nodemailer && smtpUser && smtpPass) {
     try {
       const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user: smtpUser, pass: smtpPass }
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
+        auth: { user: smtpUser, pass: smtpPass },
+        connectionTimeout: 6000,
+        greetingTimeout: 6000,
+        socketTimeout: 6000
       });
       await transporter.verify();
-      smtpVerifyResult = 'SUCCESS: Connected to Google SMTP servers!';
+      port465Result = 'SUCCESS: Connected to Google SMTP servers on port 465 SSL!';
     } catch (err) {
-      smtpVerifyError = err.message || String(err);
+      port465Error = err.message || String(err);
     }
   }
 
@@ -327,9 +341,10 @@ router.get('/diagnostic', async (req, res) => {
     userValueMasked: smtpUser ? `${smtpUser.slice(0, 4)}***@${smtpUser.split('@')[1] || ''}` : 'NOT_FOUND',
     hasPass: Boolean(smtpPass),
     passLength: smtpPass ? smtpPass.length : 0,
+    hasResendKey: Boolean(process.env.RESEND_API_KEY),
     hasNodemailer: Boolean(nodemailer),
-    smtpVerifyResult,
-    smtpVerifyError
+    port465Result,
+    port465Error
   });
 });
 
