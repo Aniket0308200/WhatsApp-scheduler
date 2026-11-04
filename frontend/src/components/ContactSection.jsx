@@ -11,6 +11,7 @@ export const PAYMENT_METHODS = [
   'BHIM UPI',
   'Amazon Pay UPI',
   'WhatsApp Pay',
+  'FamApp (FamPay)',
   'CRED UPI',
   'Alipay',
   'WeChat Pay',
@@ -213,33 +214,18 @@ Sent via WA Scheduler Contact Form`;
         message: formData.message.trim()
       };
 
-      // 1. Save to Database
+      // 1. Send directly via backend API (which automatically dispatches email to aniketchouhan243@gmail.com)
       await submitContactForm(payload);
 
-      // 2. Open User's default Email Client (mailto) addressed to aniketchouhan243@gmail.com
-      const mailSubject = encodeURIComponent(`[WA Scheduler Support] ${formData.subject} - ${formData.loginName || formData.contactEmail}`);
-      const mailBody = encodeURIComponent(generateEmailBody());
-      const mailtoUrl = `mailto:${TARGET_SUPPORT_EMAIL}?subject=${mailSubject}&body=${mailBody}`;
-
-      // Trigger mailto
-      window.location.href = mailtoUrl;
-
       setSubmitted(true);
-      toast.success('Message sent & recorded! Opening your email app...');
+      toast.success('Your message has been sent directly to support! We will reply to your email shortly.', { duration: 5000 });
     } catch (err) {
-      console.warn('Backend contact save error, opening mailto directly:', err);
-      // Even if backend fails, still open mailto to ensure user reaches the admin!
-      const mailSubject = encodeURIComponent(`[WA Scheduler Support] ${formData.subject} - ${formData.contactEmail}`);
-      const mailBody = encodeURIComponent(generateEmailBody());
-      window.location.href = `mailto:${TARGET_SUPPORT_EMAIL}?subject=${mailSubject}&body=${mailBody}`;
-      setSubmitted(true);
-      toast.success('Opening your email app to send details directly!');
+      console.error('Contact form submission error:', err);
+      toast.error('Failed to send message: ' + (err.response?.data?.error || err.message));
     } finally {
       setLoading(false);
     }
   };
-
-  const gmailWebUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(TARGET_SUPPORT_EMAIL)}&su=${encodeURIComponent(`[WA Scheduler Support] ${formData.subject}`)}&body=${encodeURIComponent(generateEmailBody())}`;
 
   // Filter payment methods based on search input
   const filteredPaymentMethods = PAYMENT_METHODS.filter(method =>
@@ -250,20 +236,20 @@ Sent via WA Scheduler Contact Form`;
     <section id="contact" className="relative max-w-5xl mx-auto px-2 sm:px-4 py-8">
       {/* Background container */}
       <div className="relative bg-white/90 dark:bg-wa-dpanel/90 backdrop-blur-xl rounded-3xl border border-slate-200 dark:border-white/10 p-6 sm:p-10 shadow-xl overflow-hidden transition-colors">
-        
+
         {/* Glow ambient background graphics */}
         <div className="absolute top-0 right-0 w-72 h-72 bg-emerald-500/10 dark:bg-emerald-500/5 blur-3xl pointer-events-none rounded-full" />
         <div className="absolute bottom-0 left-0 w-72 h-72 bg-wa-teal/10 dark:bg-wa-teal/5 blur-3xl pointer-events-none rounded-full" />
 
         <div className="relative z-10 space-y-6">
-          
+
           {/* Section Header */}
           <div className="text-center max-w-2xl mx-auto space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>Contact Us & Priority Support</span>
             </div>
-            
+
             <h2 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
               Have Questions or Need Help? <br />
               <span className="bg-gradient-to-r from-wa-teal to-emerald-500 bg-clip-text text-transparent">
@@ -292,47 +278,78 @@ Sent via WA Scheduler Contact Form`;
           </div>
 
           {submitted ? (
-            <div className="max-w-xl mx-auto p-6 sm:p-8 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 rounded-2xl text-center space-y-4">
-              <div className="w-14 h-14 bg-emerald-500 text-white rounded-full flex items-center justify-center text-2xl mx-auto shadow-md">
+            <div className="max-w-xl mx-auto p-6 sm:p-8 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 rounded-3xl text-center space-y-4 shadow-lg animate-fadeIn">
+              <div className="w-16 h-16 bg-gradient-to-tr from-wa-teal to-emerald-500 text-white rounded-full flex items-center justify-center text-3xl mx-auto shadow-md">
                 ✓
               </div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                Thank You! Your Inquiry is Ready to Send
+              <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                Message Sent Directly to Support!
               </h3>
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                Your details have been saved. If your email application didn't open automatically, you can open Gmail Web or copy the formatted text below.
+                Your message has been delivered directly to <strong>{TARGET_SUPPORT_EMAIL}</strong>.
+                Our team will review your inquiry & payment details and respond to your email (<strong>{formData.contactEmail}</strong>) shortly.
               </p>
 
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                <a
-                  href={gmailWebUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md transition-all flex items-center gap-1.5"
-                >
-                  <span>✉️</span>
-                  <span>Open in Gmail Web</span>
-                </a>
+              {/* Inquiry Receipt Card */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr text-left text-xs space-y-1.5 text-slate-700 dark:text-slate-300">
+                <div className="flex justify-between py-1 border-b border-slate-100 dark:border-wa-dbdr/50">
+                  <span className="text-slate-500">Contact Email:</span>
+                  <span className="font-semibold">{formData.contactEmail}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-100 dark:border-wa-dbdr/50">
+                  <span className="text-slate-500">Topic:</span>
+                  <span className="font-semibold truncate max-w-[240px]">{formData.subject}</span>
+                </div>
+                {formData.hasPaid && (
+                  <>
+                    <div className="flex justify-between py-1 border-b border-slate-100 dark:border-wa-dbdr/50">
+                      <span className="text-slate-500">Amount Paid:</span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400">{getEffectiveAmount()}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-slate-100 dark:border-wa-dbdr/50">
+                      <span className="text-slate-500">Payment App:</span>
+                      <span className="font-bold text-blue-600 dark:text-blue-400">{getEffectiveMethod()}</span>
+                    </div>
+                  </>
+                )}
+                <div className="flex justify-between py-1">
+                  <span className="text-slate-500">Status:</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">Delivered & Queued ✓</span>
+                </div>
+              </div>
+
+              <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
                 <button
                   type="button"
-                  onClick={handleCopyFormattedBody}
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-slate-200 dark:bg-wa-dsurf text-slate-800 dark:text-white hover:bg-slate-300 dark:hover:bg-slate-700 transition-all flex items-center gap-1.5"
+                  onClick={() => {
+                    setSubmitted(false);
+                    setFormData(prev => ({
+                      ...prev,
+                      hasPaid: false,
+                      customAmount: '',
+                      customPaymentMethod: '',
+                      payerName: '',
+                      payerEmail: '',
+                      payerRef: '',
+                      message: ''
+                    }));
+                  }}
+                  className="px-6 py-2.5 rounded-xl text-xs font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 transition-all shadow"
                 >
-                  <span>📋</span>
-                  <span>Copy Details</span>
+                  Send Another Message
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSubmitted(false)}
+                  onClick={handleCopyFormattedBody}
                   className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
                 >
-                  Send Another Message
+                  📋 Copy My Details
                 </button>
               </div>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="max-w-3xl mx-auto space-y-5">
-              
+
               {/* Row 1: Login Account Details */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -441,7 +458,7 @@ Sent via WA Scheduler Contact Form`;
 
                     {/* Row A: Amount Paid & Payment Method Dropdowns */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      
+
                       {/* Option 1: Amount Paid Dropdown */}
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -508,7 +525,7 @@ Sent via WA Scheduler Contact Form`;
                             {/* Dropdown Menu Popup with Search */}
                             {methodDropdownOpen && (
                               <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white dark:bg-wa-dpanel border border-slate-200 dark:border-wa-dbdr rounded-2xl shadow-2xl p-2 space-y-2 animate-fadeIn max-h-72 flex flex-col">
-                                
+
                                 {/* Search Filter Input */}
                                 <div className="relative">
                                   <span className="absolute left-2.5 top-2.5 text-xs text-slate-400">🔍</span>
@@ -534,11 +551,10 @@ Sent via WA Scheduler Contact Form`;
                                           setIsCustomMethod(false);
                                           setMethodDropdownOpen(false);
                                         }}
-                                        className={`w-full px-3 py-2 text-left text-xs rounded-lg transition-colors flex items-center justify-between ${
-                                          formData.paymentMethod === method
+                                        className={`w-full px-3 py-2 text-left text-xs rounded-lg transition-colors flex items-center justify-between ${formData.paymentMethod === method
                                             ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold'
                                             : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-wa-dsurf'
-                                        }`}
+                                          }`}
                                       >
                                         <span>{method}</span>
                                         {formData.paymentMethod === method && (
@@ -668,7 +684,7 @@ Sent via WA Scheduler Contact Form`;
                   disabled={loading}
                   className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-xs sm:text-sm text-white bg-gradient-to-r from-wa-teal via-emerald-600 to-wa-green hover:from-emerald-600 hover:to-wa-teal shadow-lg shadow-emerald-500/25 border border-emerald-400/20 transition-all transform hover:scale-[1.02] disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  <span>{loading ? 'Submitting...' : 'Send Message & Email to Support'}</span>
+                  <span>{loading ? 'Sending Directly...' : 'Send Message to Support'}</span>
                   <span>✈️</span>
                 </button>
 
