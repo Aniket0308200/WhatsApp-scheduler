@@ -99,6 +99,63 @@ function sendResendEmail({ apiKey, to, replyTo, subject, html, text }) {
 }
 
 /**
+ * Helper: Send via Web3Forms HTTPS API (Free, port 443)
+ */
+function sendWeb3FormsEmail({ accessKey, name, email, subject, message, paymentDetails, whatsappNumber }) {
+  return new Promise((resolve, reject) => {
+    const postData = JSON.stringify({
+      access_key: accessKey,
+      subject: `[WA Scheduler] ${subject} - ${name || email}`,
+      from_name: name || 'WA Scheduler User',
+      reply_to: email,
+      login_name: name || 'Guest',
+      contact_email: email,
+      whatsapp_number: whatsappNumber || 'Not connected',
+      payment_amount: paymentDetails?.amountPaid || 'None',
+      payment_method: paymentDetails?.paymentMethod || 'None',
+      payer_name: paymentDetails?.payerName || 'None',
+      payer_email: paymentDetails?.payerEmail || 'None',
+      payer_utr: paymentDetails?.payerRef || 'None',
+      message: message
+    });
+
+    const options = {
+      hostname: 'api.web3forms.com',
+      port: 443,
+      path: '/submit',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
+      },
+      timeout: 10000
+    };
+
+    const req = https.request(options, (res) => {
+      let body = '';
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve(body);
+        } else {
+          reject(new Error(`Web3Forms HTTP ${res.statusCode}: ${body}`));
+        }
+      });
+    });
+
+    req.on('error', err => reject(err));
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Web3Forms timed out'));
+    });
+
+    req.write(postData);
+    req.end();
+  });
+}
+
+/**
  * Direct HTTPS Dispatcher to FormSubmit (Fallback)
  */
 function sendFormSubmitHttp(payload) {
@@ -197,7 +254,48 @@ ${message}
   const smtpUser = rawUser.trim();
   const smtpPass = rawPass.replace(/\s+/g, '').trim();
 
-  // 1. Try Gmail SMTP directly with SSL (Port 465) with strict timeouts
+  // 1. Try Resend API first (Standard HTTPS Port 443 - 100% Reliable on Render)
+  const resendApiKey = process.env.RESEND_API_KEY || process.env.RESEND_KEY;
+  if (resendApiKey) {
+    try {
+      console.log(`[Contact Mailer] Sending via Resend HTTPS API...`);
+      await sendResendEmail({
+        apiKey: resendApiKey.trim(),
+        to: TARGET_ADMIN_EMAIL,
+        replyTo: contactEmail,
+        subject: mailSubject,
+        html: htmlContent,
+        text: textContent
+      });
+      console.log(`[Contact Mailer] ✅ Successfully delivered via Resend API to ${TARGET_ADMIN_EMAIL}`);
+      return { success: true, method: 'resend' };
+    } catch (resendErr) {
+      console.warn('[Contact Mailer] ⚠️ Resend API failed:', resendErr.message);
+    }
+  }
+
+  // 2. Try Web3Forms API (HTTPS Port 443)
+  const web3FormsKey = process.env.WEB3FORMS_KEY || process.env.WEB3FORMS_ACCESS_KEY;
+  if (web3FormsKey) {
+    try {
+      console.log(`[Contact Mailer] Sending via Web3Forms HTTPS API...`);
+      await sendWeb3FormsEmail({
+        accessKey: web3FormsKey.trim(),
+        name: loginName || 'WA Scheduler User',
+        email: contactEmail,
+        subject: subject,
+        message: message,
+        paymentDetails: paymentDetails,
+        whatsappNumber: whatsappNumber
+      });
+      console.log(`[Contact Mailer] ✅ Successfully delivered via Web3Forms to ${TARGET_ADMIN_EMAIL}`);
+      return { success: true, method: 'web3forms' };
+    } catch (w3Err) {
+      console.warn('[Contact Mailer] ⚠️ Web3Forms failed:', w3Err.message);
+    }
+  }
+
+  // 3. Try Gmail SMTP (Will timeout on Render free tier if outbound SMTP is blocked)
   if (nodemailer && smtpUser && smtpPass) {
     try {
       console.log(`[Contact Mailer] Attempting Gmail SMTP (smtp.gmail.com:465 SSL) for ${smtpUser}...`);
@@ -209,9 +307,9 @@ ${message}
           user: smtpUser,
           pass: smtpPass
         },
-        connectionTimeout: 8000,
-        greetingTimeout: 8000,
-        socketTimeout: 10000
+        connectionTimeout: 5000,
+        greetingTimeout: 5000,
+        socketTimeout: 5000
       });
 
       const info = await transporter.sendMail({
@@ -236,9 +334,9 @@ ${message}
           port: 587,
           secure: false,
           auth: { user: smtpUser, pass: smtpPass },
-          connectionTimeout: 8000,
-          greetingTimeout: 8000,
-          socketTimeout: 10000
+          connectionTimeout: 5000,
+          greetingTimeout: 5000,
+          socketTimeout: 5000
         });
         const info = await fallbackTransporter.sendMail({
           from: `"${loginName || 'WA Scheduler User'}" <${smtpUser}>`,
@@ -256,25 +354,6 @@ ${message}
     }
   } else {
     console.warn(`[Contact Mailer] SMTP credentials not detected. (hasUser=${Boolean(smtpUser)}, hasPass=${Boolean(smtpPass)})`);
-  }
-
-  // 2. Try Resend API if RESEND_API_KEY is configured
-  const resendApiKey = process.env.RESEND_API_KEY;
-  if (resendApiKey) {
-    try {
-      await sendResendEmail({
-        apiKey: resendApiKey,
-        to: TARGET_ADMIN_EMAIL,
-        replyTo: contactEmail,
-        subject: mailSubject,
-        html: htmlContent,
-        text: textContent
-      });
-      console.log(`[Contact Mailer] Sent via Resend API to ${TARGET_ADMIN_EMAIL}`);
-      return { success: true, method: 'resend' };
-    } catch (resendErr) {
-      console.warn('[Contact Mailer] Resend API failed:', resendErr.message);
-    }
   }
 
   // 3. Fallback: FormSubmit
@@ -306,7 +385,7 @@ ${message}
 // GET /api/contact/diagnostic
 router.get('/diagnostic', async (req, res) => {
   const envKeys = Object.keys(process.env).filter(k => 
-    k.includes('SMTP') || k.includes('GMAIL') || k.includes('MAIL') || k.includes('EMAIL') || k.includes('RESEND')
+    k.includes('SMTP') || k.includes('GMAIL') || k.includes('MAIL') || k.includes('EMAIL') || k.includes('RESEND') || k.includes('WEB3FORMS')
   );
 
   const rawUser = process.env.SMTP_USER || process.env.GMAIL_USER || process.env.EMAIL_USER || '';
@@ -324,9 +403,9 @@ router.get('/diagnostic', async (req, res) => {
         port: 465,
         secure: true,
         auth: { user: smtpUser, pass: smtpPass },
-        connectionTimeout: 6000,
-        greetingTimeout: 6000,
-        socketTimeout: 6000
+        connectionTimeout: 4000,
+        greetingTimeout: 4000,
+        socketTimeout: 4000
       });
       await transporter.verify();
       port465Result = 'SUCCESS: Connected to Google SMTP servers on port 465 SSL!';
@@ -341,7 +420,8 @@ router.get('/diagnostic', async (req, res) => {
     userValueMasked: smtpUser ? `${smtpUser.slice(0, 4)}***@${smtpUser.split('@')[1] || ''}` : 'NOT_FOUND',
     hasPass: Boolean(smtpPass),
     passLength: smtpPass ? smtpPass.length : 0,
-    hasResendKey: Boolean(process.env.RESEND_API_KEY),
+    hasResendKey: Boolean(process.env.RESEND_API_KEY || process.env.RESEND_KEY),
+    hasWeb3FormsKey: Boolean(process.env.WEB3FORMS_KEY || process.env.WEB3FORMS_ACCESS_KEY),
     hasNodemailer: Boolean(nodemailer),
     port465Result,
     port465Error
