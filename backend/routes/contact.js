@@ -1,32 +1,94 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
-const axios = require('axios');
+const https = require('https');
 const db = require('../db');
 
-const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'wa_admin_jwt_secret_dev_key_2026';
-const TARGET_ADMIN_EMAIL = 'aniketchouhan243@gmail.com';
+let nodemailer = null;
+try {
+  nodemailer = require('nodemailer');
+} catch (e) {
+  console.warn('[Contact] Nodemailer not available, will use direct HTTP dispatcher.');
+}
 
-function authenticateAdmin(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Admin authentication required.' });
-  }
-  const token = authHeader.split(' ')[1];
+const TARGET_ADMIN_EMAIL = 'aniketchouhan243@gmail.com';
+const ADMIN_EMAIL = 'aniketchouhan314@gmail.com';
+
+/**
+ * Middleware: Verify Admin Session (Same as routes/admin.js)
+ */
+function requireAdminAuth(req, res, next) {
   try {
-    const decoded = jwt.verify(token, ADMIN_JWT_SECRET);
-    if (!decoded || !decoded.isAdmin) {
-      return res.status(403).json({ error: 'Access denied: not an admin.' });
+    const authHeader = req.headers.authorization || req.headers['x-admin-token'];
+    let token = '';
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (authHeader) {
+      token = authHeader;
     }
-    req.admin = decoded;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Admin session required.' });
+    }
+
+    const decryptedStr = db.decrypt(token);
+    const decrypted = JSON.parse(decryptedStr);
+
+    if (
+      !decrypted ||
+      decrypted.role !== 'admin' ||
+      String(decrypted.email || '').toLowerCase() !== ADMIN_EMAIL.toLowerCase()
+    ) {
+      return res.status(401).json({ error: 'Unauthorized or expired admin session.' });
+    }
+
+    req.admin = decrypted;
     next();
   } catch {
-    return res.status(401).json({ error: 'Invalid or expired admin token.' });
+    return res.status(401).json({ error: 'Invalid or expired admin session.' });
   }
 }
 
-// ─── Direct Background Email Dispatcher ──────────────────────────────────────
+/**
+ * Direct HTTPS Dispatcher to FormSubmit (Zero config, direct to target email)
+ */
+function sendFormSubmitHttp(payload) {
+  return new Promise((resolve, reject) => {
+    const postData = JSON.stringify(payload);
+    const options = {
+      hostname: 'formsubmit.co',
+      port: 443,
+      path: `/ajax/${TARGET_ADMIN_EMAIL}`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
+      },
+      timeout: 8000
+    };
+
+    const req = https.request(options, (res) => {
+      let body = '';
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => {
+        resolve({ statusCode: res.statusCode, body });
+      });
+    });
+
+    req.on('error', err => reject(err));
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Request timed out'));
+    });
+
+    req.write(postData);
+    req.end();
+  });
+}
+
+/**
+ * Dispatch email via SMTP or direct HTTP
+ */
 async function dispatchDirectEmail({ loginName, loginEmail, whatsappNumber, contactEmail, paymentDetails, subject, message }) {
   const mailSubject = `[WA Scheduler] ${subject} - ${loginName || contactEmail}`;
   const textContent = `
@@ -35,12 +97,12 @@ NEW SUPPORT INQUIRY RECEIVED ON WA SCHEDULER:
 Login Name: ${loginName || 'Guest'}
 Login Email: ${loginEmail || 'Guest'}
 Connected WhatsApp: ${whatsappNumber || 'Not connected'}
-Reply-To Email: ${contactEmail}
+Contact / Reply Email: ${contactEmail}
 
 PAYMENT DETAILS:
 Payment Made: ${paymentDetails.hasPaid ? 'YES' : 'NO'}
 Amount Paid: ${paymentDetails.amountPaid || 'N/A'}
-Payment Method/App: ${paymentDetails.paymentMethod || 'N/A'}
+Payment Method / App: ${paymentDetails.paymentMethod || 'N/A'}
 Payer Name: ${paymentDetails.payerName || 'N/A'}
 Payer Email: ${paymentDetails.payerEmail || 'N/A'}
 UPI Ref / UTR: ${paymentDetails.payerRef || 'N/A'}
@@ -83,7 +145,7 @@ ${message}
   const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || process.env.EMAIL_USER;
   const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_PASS || process.env.EMAIL_PASS;
 
-  if (smtpUser && smtpPass) {
+  if (nodemailer && smtpUser && smtpPass) {
     try {
       const transporter = nodemailer.createTransport({
         service: process.env.SMTP_SERVICE || 'gmail',
@@ -98,16 +160,16 @@ ${message}
         text: textContent,
         html: htmlContent
       });
-      console.log(`[Contact Mailer] Sent via SMTP to ${TARGET_ADMIN_EMAIL}`);
+      console.log(`[Contact Mailer] Sent via SMTP directly to ${TARGET_ADMIN_EMAIL}`);
       return true;
     } catch (smtpErr) {
       console.warn('[Contact Mailer] SMTP delivery failed:', smtpErr.message);
     }
   }
 
-  // 2. Direct HTTP Delivery to FormSubmit (Zero config direct to target inbox)
+  // 2. Direct HTTPS Delivery to FormSubmit (Zero config)
   try {
-    await axios.post(`https://formsubmit.co/ajax/${TARGET_ADMIN_EMAIL}`, {
+    await sendFormSubmitHttp({
       _subject: mailSubject,
       _replyto: contactEmail,
       loginName: loginName || 'Guest',
@@ -120,17 +182,11 @@ ${message}
       payerEmail: paymentDetails.payerEmail || 'None',
       payerRef: paymentDetails.payerRef || 'None',
       message: message
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      timeout: 8000
     });
-    console.log(`[Contact Mailer] Dispatched directly via HTTP to ${TARGET_ADMIN_EMAIL}`);
+    console.log(`[Contact Mailer] Dispatched directly via HTTPS to ${TARGET_ADMIN_EMAIL}`);
     return true;
   } catch (httpErr) {
-    console.warn('[Contact Mailer] Direct HTTP delivery failed:', httpErr.message);
+    console.warn('[Contact Mailer] Direct HTTPS delivery failed:', httpErr.message);
   }
 
   return false;
@@ -205,7 +261,7 @@ router.post('/', async (req, res) => {
 
 // ─── Admin View All Contact Messages ─────────────────────────────────────────
 // GET /api/contact/messages
-router.get('/messages', authenticateAdmin, async (req, res) => {
+router.get('/messages', requireAdminAuth, async (req, res) => {
   try {
     const messages = await db.ContactMessage.find().sort({ createdAt: -1 }).limit(100).lean();
     res.json({ success: true, messages });
@@ -216,7 +272,7 @@ router.get('/messages', authenticateAdmin, async (req, res) => {
 
 // ─── Admin Update Message Status ─────────────────────────────────────────────
 // PUT /api/contact/messages/:id
-router.put('/messages/:id', authenticateAdmin, async (req, res) => {
+router.put('/messages/:id', requireAdminAuth, async (req, res) => {
   try {
     const { status, adminReply } = req.body;
     const update = {};

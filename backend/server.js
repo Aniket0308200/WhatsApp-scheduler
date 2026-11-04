@@ -94,7 +94,8 @@ app.use((req, res, next) => {
       req.path === '/api/health' ||
       req.path.startsWith('/api/auth') ||
       req.path.startsWith('/api/admin') ||
-      req.path.startsWith('/api/subscription')
+      req.path.startsWith('/api/subscription') ||
+      req.path.startsWith('/api/contact')
     ) {
       return next();
     }
