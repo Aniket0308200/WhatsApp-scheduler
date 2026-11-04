@@ -115,6 +115,8 @@ export const adminGetContactMessages = (token) =>
   api.get('/contact/messages', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
 export const adminUpdateContactStatus = (token, id, data) =>
   api.put(`/contact/messages/${id}`, data, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+export const adminDeleteContactMessage = (token, id) =>
+  api.delete(`/contact/messages/${id}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
 
 // ─── Subscription & UPI Manual Verification ──────────────────────────────────
 export const fetchSubscriptionConfig = () =>

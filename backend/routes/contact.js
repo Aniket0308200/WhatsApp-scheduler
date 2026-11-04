@@ -192,17 +192,26 @@ ${message}
   `;
 
   // 1. Try Nodemailer if SMTP configured
-  const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || process.env.EMAIL_USER;
-  const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_PASS || process.env.EMAIL_PASS;
+  const rawUser = process.env.SMTP_USER || process.env.GMAIL_USER || process.env.EMAIL_USER || '';
+  const rawPass = process.env.SMTP_PASS || process.env.GMAIL_PASS || process.env.EMAIL_PASS || '';
+  const smtpUser = rawUser.trim();
+  // Strip all whitespace/spaces from Google App Password (e.g. "tzxx xxxx xxxx xxxo" -> "tzxxxxxxxxxxxxo")
+  const smtpPass = rawPass.replace(/\s+/g, '').trim();
 
   if (nodemailer && smtpUser && smtpPass) {
     try {
+      console.log(`[Contact Mailer] Attempting Gmail SMTP connection for ${smtpUser}...`);
       const transporter = nodemailer.createTransport({
-        service: process.env.SMTP_SERVICE || 'gmail',
-        auth: { user: smtpUser, pass: smtpPass }
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true, // SSL
+        auth: {
+          user: smtpUser,
+          pass: smtpPass
+        }
       });
 
-      await transporter.sendMail({
+      const info = await transporter.sendMail({
         from: `"${loginName || 'WA Scheduler User'}" <${smtpUser}>`,
         to: TARGET_ADMIN_EMAIL,
         replyTo: contactEmail,
@@ -210,10 +219,10 @@ ${message}
         text: textContent,
         html: htmlContent
       });
-      console.log(`[Contact Mailer] Sent via SMTP directly to ${TARGET_ADMIN_EMAIL}`);
+      console.log(`[Contact Mailer] ✅ Successfully delivered via Gmail SMTP to ${TARGET_ADMIN_EMAIL} (Msg ID: ${info.messageId})`);
       return true;
     } catch (smtpErr) {
-      console.warn('[Contact Mailer] SMTP delivery failed:', smtpErr.message);
+      console.error('[Contact Mailer] ❌ SMTP delivery failed:', smtpErr.message);
     }
   }
 
@@ -352,6 +361,20 @@ router.put('/messages/:id', requireAdminAuth, async (req, res) => {
     if (!updated) return res.status(404).json({ error: 'Contact message not found.' });
 
     res.json({ success: true, message: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Admin Permanently Delete Message ─────────────────────────────────────────
+// DELETE /api/contact/messages/:id
+router.delete('/messages/:id', requireAdminAuth, async (req, res) => {
+  try {
+    const deleted = await db.ContactMessage.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: 'Inquiry not found.' });
+
+    console.log(`[Contact] Inquiry ${req.params.id} permanently deleted from database`);
+    res.json({ success: true, message: 'Inquiry permanently deleted from database.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

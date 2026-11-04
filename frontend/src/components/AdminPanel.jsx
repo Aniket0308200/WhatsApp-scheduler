@@ -12,7 +12,8 @@ import {
   adminApproveSubscription,
   adminRejectSubscription,
   adminGetContactMessages,
-  adminUpdateContactStatus
+  adminUpdateContactStatus,
+  adminDeleteContactMessage
 } from '../api';
 
 const ADMIN_STORAGE_KEY = 'wa_admin_token';
@@ -251,6 +252,20 @@ export default function AdminPanel() {
       toast.error(err.response?.data?.error || 'Rejection failed.');
     } finally {
       setActionLoadingId(null);
+    }
+  };
+
+  // ── Handle Delete Inquiry ──────────────────────────────────────────────────
+  const handleDeleteInquiry = async (id, senderName) => {
+    if (!window.confirm(`Are you sure you want to PERMANENTLY delete this inquiry from "${senderName || 'this user'}"?\n\nThis will remove it from the database completely and cannot be undone.`)) {
+      return;
+    }
+    try {
+      await adminDeleteContactMessage(token, id);
+      setContactMessages(prev => prev.filter(m => m._id !== id));
+      toast.success('Inquiry permanently deleted from database!');
+    } catch (err) {
+      toast.error('Failed to delete inquiry: ' + (err.response?.data?.error || err.message));
     }
   };
 
@@ -1036,34 +1051,47 @@ export default function AdminPanel() {
                     </div>
 
                     {/* Action buttons */}
-                    <div className="mt-3 flex items-center justify-between pt-2">
-                      <a
-                        href={`mailto:${msg.contactEmail}?subject=Re: [WA Scheduler Support] ${encodeURIComponent(msg.subject)}`}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-all flex items-center gap-1.5"
-                      >
-                        <span>✉️</span>
-                        <span>Reply to User</span>
-                      </a>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pt-2">
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={`mailto:${msg.contactEmail}?subject=Re: [WA Scheduler Support] ${encodeURIComponent(msg.subject)}`}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-all flex items-center gap-1.5"
+                        >
+                          <span>✉️</span>
+                          <span>Reply to User</span>
+                        </a>
 
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const nextStatus = msg.status === 'resolved' ? 'new' : 'resolved';
+                            try {
+                              await adminUpdateContactStatus(token, msg._id, { status: nextStatus });
+                              setContactMessages(prev => prev.map(m => m._id === msg._id ? { ...m, status: nextStatus } : m));
+                              toast.success(`Marked as ${nextStatus}!`);
+                            } catch (err) {
+                              toast.error('Failed to update status.');
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                            msg.status === 'resolved'
+                              ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                              : 'bg-emerald-950 text-emerald-300 border-emerald-800 hover:bg-emerald-900'
+                          }`}
+                        >
+                          {msg.status === 'resolved' ? 'Mark as Unresolved' : '✓ Mark as Resolved'}
+                        </button>
+                      </div>
+
+                      {/* Delete Inquiry Button with confirmation */}
                       <button
                         type="button"
-                        onClick={async () => {
-                          const nextStatus = msg.status === 'resolved' ? 'new' : 'resolved';
-                          try {
-                            await adminUpdateContactStatus(token, msg._id, { status: nextStatus });
-                            setContactMessages(prev => prev.map(m => m._id === msg._id ? { ...m, status: nextStatus } : m));
-                            toast.success(`Marked as ${nextStatus}!`);
-                          } catch (err) {
-                            toast.error('Failed to update status.');
-                          }
-                        }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                          msg.status === 'resolved'
-                            ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-                            : 'bg-emerald-950 text-emerald-300 border-emerald-800 hover:bg-emerald-900'
-                        }`}
+                        onClick={() => handleDeleteInquiry(msg._id, msg.loginName || msg.contactEmail)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-950/60 text-rose-300 border border-rose-800/80 hover:bg-rose-900/80 transition-all flex items-center gap-1.5"
+                        title="Permanently remove inquiry from database"
                       >
-                        {msg.status === 'resolved' ? 'Mark as Unresolved' : '✓ Mark as Resolved'}
+                        <span>🗑️</span>
+                        <span>Delete Permanently</span>
                       </button>
                     </div>
                   </div>
