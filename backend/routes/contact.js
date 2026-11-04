@@ -52,6 +52,8 @@ router.post('/', async (req, res) => {
       contactEmail: String(contactEmail).trim(),
       paymentDetails: {
         hasPaid: Boolean(paymentDetails?.hasPaid),
+        amountPaid: String(paymentDetails?.amountPaid || '').trim(),
+        paymentMethod: String(paymentDetails?.paymentMethod || '').trim(),
         payerName: String(paymentDetails?.payerName || '').trim(),
         payerEmail: String(paymentDetails?.payerEmail || '').trim(),
         payerRef: String(paymentDetails?.payerRef || '').trim()
@@ -108,3 +110,4 @@ router.put('/messages/:id', authenticateAdmin, async (req, res) => {
 });
 
 module.exports = router;
+

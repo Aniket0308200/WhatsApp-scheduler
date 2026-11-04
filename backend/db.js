@@ -291,6 +291,8 @@ const ContactMessageSchema = new mongoose.Schema({
   contactEmail: { type: String, required: true },
   paymentDetails: {
     hasPaid: { type: Boolean, default: false },
+    amountPaid: { type: String, default: '' },
+    paymentMethod: { type: String, default: '' },
     payerName: { type: String, default: '' },
     payerEmail: { type: String, default: '' },
     payerRef: { type: String, default: '' }

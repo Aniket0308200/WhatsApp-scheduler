@@ -1014,6 +1014,12 @@ export default function AdminPanel() {
                       <div className="my-2.5 p-2.5 rounded-xl bg-purple-950/30 border border-purple-900/50 text-xs">
                         <span className="text-purple-300 font-bold block mb-1">💳 Payment Verification Details:</span>
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-purple-200">
+                          {msg.paymentDetails.amountPaid && (
+                            <span>Amount: <strong className="text-emerald-400 font-bold">{msg.paymentDetails.amountPaid}</strong></span>
+                          )}
+                          {msg.paymentDetails.paymentMethod && (
+                            <span>Method/App: <strong className="text-blue-300 font-bold">{msg.paymentDetails.paymentMethod}</strong></span>
+                          )}
                           <span>Payer Name: <strong>{msg.paymentDetails.payerName || '—'}</strong></span>
                           <span>Payer Email: <strong>{msg.paymentDetails.payerEmail || '—'}</strong></span>
                           <span>UPI Ref / UTR: <strong>{msg.paymentDetails.payerRef || '—'}</strong></span>

@@ -1,8 +1,67 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { submitContactForm } from '../api';
 
 const TARGET_SUPPORT_EMAIL = 'aniketchouhan243@gmail.com';
+
+export const PAYMENT_METHODS = [
+  'Google Pay',
+  'PhonePe',
+  'Paytm',
+  'BHIM UPI',
+  'Amazon Pay UPI',
+  'WhatsApp Pay',
+  'CRED UPI',
+  'Alipay',
+  'WeChat Pay',
+  'UnionPay QR',
+  'Pix',
+  'PicPay',
+  'Mercado Pago',
+  'PayNow',
+  'GrabPay',
+  'DBS PayLah!',
+  'GoPay',
+  'OVO',
+  'DANA',
+  'ShopeePay',
+  'QRIS',
+  'Touch \'n Go eWallet',
+  'DuitNow QR',
+  'Boost',
+  'PromptPay',
+  'TrueMoney',
+  'GCash',
+  'Maya',
+  'QR Ph',
+  'bKash',
+  'Nagad',
+  'Rocket',
+  'Easypaisa',
+  'JazzCash',
+  'Raast',
+  'PayPay',
+  'Rakuten Pay',
+  'KakaoPay',
+  'Naver Pay',
+  'Toss Pay',
+  'mada',
+  'e& money',
+  'Careem Pay',
+  'PayBy',
+  'M-Pesa',
+  'Airtel Money',
+  'Bizum',
+  'Swish',
+  'Vipps',
+  'MobilePay',
+  'BLIK',
+  'TWINT',
+  'MB WAY',
+  'Satispay',
+  'Bancomat Pay',
+  'Payconiq'
+];
 
 export default function ContactSection({ authUser, profile }) {
   const [formData, setFormData] = useState({
@@ -11,6 +70,10 @@ export default function ContactSection({ authUser, profile }) {
     whatsappNumber: '',
     contactEmail: '',
     hasPaid: false,
+    amountPaid: '199', // '199' | '499' | 'other'
+    customAmount: '',
+    paymentMethod: 'Google Pay',
+    customPaymentMethod: '',
     payerName: '',
     payerEmail: '',
     payerRef: '',
@@ -21,6 +84,12 @@ export default function ContactSection({ authUser, profile }) {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
+
+  // Searchable Payment Method Dropdown States
+  const [methodDropdownOpen, setMethodDropdownOpen] = useState(false);
+  const [methodSearch, setMethodSearch] = useState('');
+  const [isCustomMethod, setIsCustomMethod] = useState(false);
+  const dropdownRef = useRef(null);
 
   // Auto-prefill authenticated user details & connected whatsapp phone
   useEffect(() => {
@@ -33,12 +102,38 @@ export default function ContactSection({ authUser, profile }) {
     }));
   }, [authUser, profile]);
 
+  // Click outside listener for searchable payment method dropdown
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setMethodDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+  };
+
+  const getEffectiveAmount = () => {
+    if (!formData.hasPaid) return 'N/A';
+    if (formData.amountPaid === '199') return '₹199 (Starter Plan)';
+    if (formData.amountPaid === '499') return '₹499 (Pro Plan)';
+    return formData.customAmount.trim() ? `₹${formData.customAmount.trim()}` : 'Custom / Other';
+  };
+
+  const getEffectiveMethod = () => {
+    if (!formData.hasPaid) return 'N/A';
+    if (isCustomMethod || formData.paymentMethod === 'other') {
+      return formData.customPaymentMethod.trim() || 'Other Payment Method';
+    }
+    return formData.paymentMethod || 'Google Pay';
   };
 
   const generateEmailBody = () => {
@@ -58,7 +153,9 @@ export default function ContactSection({ authUser, profile }) {
 
 💳 PAYMENT DETAILS (IF APPLICABLE):
 • Payment Made: ${formData.hasPaid ? 'YES' : 'NO (Empty/Free)'}
-${formData.hasPaid ? `• Payer Name: ${formData.payerName || 'N/A'}
+${formData.hasPaid ? `• Amount Paid: ${getEffectiveAmount()}
+• Payment Method / UPI App: ${getEffectiveMethod()}
+• Payer Name: ${formData.payerName || 'N/A'}
 • Payer Email: ${formData.payerEmail || 'N/A'}
 • UPI Ref / Phone / UTR No: ${formData.payerRef || 'N/A'}` : '• No payment details needed.'}
 
@@ -106,6 +203,8 @@ Sent via WA Scheduler Contact Form`;
         contactEmail: formData.contactEmail.trim(),
         paymentDetails: {
           hasPaid: formData.hasPaid,
+          amountPaid: getEffectiveAmount(),
+          paymentMethod: getEffectiveMethod(),
           payerName: formData.payerName.trim(),
           payerEmail: formData.payerEmail.trim(),
           payerRef: formData.payerRef.trim()
@@ -141,6 +240,11 @@ Sent via WA Scheduler Contact Form`;
   };
 
   const gmailWebUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(TARGET_SUPPORT_EMAIL)}&su=${encodeURIComponent(`[WA Scheduler Support] ${formData.subject}`)}&body=${encodeURIComponent(generateEmailBody())}`;
+
+  // Filter payment methods based on search input
+  const filteredPaymentMethods = PAYMENT_METHODS.filter(method =>
+    method.toLowerCase().includes(methodSearch.toLowerCase().trim())
+  );
 
   return (
     <section id="contact" className="relative max-w-5xl mx-auto px-2 sm:px-4 py-8">
@@ -314,7 +418,7 @@ Sent via WA Scheduler Contact Form`;
               </div>
 
               {/* Payment Details Accordion/Checkbox */}
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-wa-dsurf/60 border border-slate-200 dark:border-wa-dbdr space-y-3">
+              <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-wa-dsurf/60 border border-slate-200 dark:border-wa-dbdr space-y-4">
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -330,10 +434,169 @@ Sent via WA Scheduler Contact Form`;
                 </div>
 
                 {formData.hasPaid && (
-                  <div className="pt-2 border-t border-slate-200 dark:border-wa-dbdr space-y-3 animate-fadeIn">
+                  <div className="pt-3 border-t border-slate-200 dark:border-wa-dbdr space-y-4 animate-fadeIn">
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
                       Please provide payment details so we can verify and activate your Pro / Starter plan immediately:
                     </p>
+
+                    {/* Row A: Amount Paid & Payment Method Dropdowns */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      
+                      {/* Option 1: Amount Paid Dropdown */}
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Amount Paid (Kitna pay kara he) <span className="text-rose-500">*</span>
+                        </label>
+                        <select
+                          name="amountPaid"
+                          value={formData.amountPaid}
+                          onChange={handleChange}
+                          className="w-full px-3 py-2.5 rounded-xl text-xs bg-white dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-wa-teal"
+                        >
+                          <option value="199">₹199 - Starter Plan (500 Messages/Month)</option>
+                          <option value="499">₹499 - Pro Plan (Unlimited Messages)</option>
+                          <option value="other">Other / Custom Amount</option>
+                        </select>
+
+                        {formData.amountPaid === 'other' && (
+                          <input
+                            type="text"
+                            name="customAmount"
+                            value={formData.customAmount}
+                            onChange={handleChange}
+                            placeholder="Enter exact amount (e.g. 299)"
+                            className="mt-2 w-full px-3 py-2 rounded-lg text-xs bg-white dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-wa-teal"
+                          />
+                        )}
+                      </div>
+
+                      {/* Option 2: Searchable Payment Method Dropdown with ADD custom option */}
+                      <div className="relative" ref={dropdownRef}>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                            Payment Method / UPI App <span className="text-rose-500">*</span>
+                          </label>
+                          {isCustomMethod && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsCustomMethod(false);
+                                setFormData(prev => ({ ...prev, paymentMethod: 'Google Pay' }));
+                              }}
+                              className="text-[10px] text-wa-teal hover:underline font-bold"
+                            >
+                              Pick from list
+                            </button>
+                          )}
+                        </div>
+
+                        {!isCustomMethod ? (
+                          <>
+                            {/* Selector Trigger Button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMethodDropdownOpen(prev => !prev);
+                                setMethodSearch('');
+                              }}
+                              className="w-full px-3 py-2.5 rounded-xl text-xs bg-white dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr text-slate-800 dark:text-white flex items-center justify-between hover:border-wa-teal focus:outline-none focus:ring-2 focus:ring-wa-teal transition-all text-left"
+                            >
+                              <span className="truncate font-medium">{formData.paymentMethod || 'Select Payment Method'}</span>
+                              <span className="text-[10px] text-slate-400 ml-2">▼</span>
+                            </button>
+
+                            {/* Dropdown Menu Popup with Search */}
+                            {methodDropdownOpen && (
+                              <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white dark:bg-wa-dpanel border border-slate-200 dark:border-wa-dbdr rounded-2xl shadow-2xl p-2 space-y-2 animate-fadeIn max-h-72 flex flex-col">
+                                
+                                {/* Search Filter Input */}
+                                <div className="relative">
+                                  <span className="absolute left-2.5 top-2.5 text-xs text-slate-400">🔍</span>
+                                  <input
+                                    type="text"
+                                    autoFocus
+                                    placeholder="Search payment app (e.g. PhonePe, Paytm, Pix)..."
+                                    value={methodSearch}
+                                    onChange={(e) => setMethodSearch(e.target.value)}
+                                    className="w-full pl-8 pr-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-wa-teal"
+                                  />
+                                </div>
+
+                                {/* Methods Scroll List */}
+                                <div className="overflow-y-auto max-h-48 divide-y divide-slate-100 dark:divide-wa-dbdr/50 pr-1">
+                                  {filteredPaymentMethods.length > 0 ? (
+                                    filteredPaymentMethods.map((method) => (
+                                      <button
+                                        key={method}
+                                        type="button"
+                                        onClick={() => {
+                                          setFormData(prev => ({ ...prev, paymentMethod: method }));
+                                          setIsCustomMethod(false);
+                                          setMethodDropdownOpen(false);
+                                        }}
+                                        className={`w-full px-3 py-2 text-left text-xs rounded-lg transition-colors flex items-center justify-between ${
+                                          formData.paymentMethod === method
+                                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold'
+                                            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-wa-dsurf'
+                                        }`}
+                                      >
+                                        <span>{method}</span>
+                                        {formData.paymentMethod === method && (
+                                          <span className="text-emerald-500 text-xs">✓</span>
+                                        )}
+                                      </button>
+                                    ))
+                                  ) : (
+                                    <div className="p-3 text-center text-xs text-slate-400">
+                                      No matching payment method found.
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Add Custom Payment Method Button at bottom */}
+                                <div className="pt-2 border-t border-slate-100 dark:border-wa-dbdr/80">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setIsCustomMethod(true);
+                                      setFormData(prev => ({
+                                        ...prev,
+                                        paymentMethod: 'other',
+                                        customPaymentMethod: methodSearch.trim() || ''
+                                      }));
+                                      setMethodDropdownOpen(false);
+                                    }}
+                                    className="w-full px-3 py-2 rounded-xl text-xs font-bold text-wa-teal hover:bg-wa-teal/10 dark:hover:bg-wa-teal/20 transition-colors flex items-center justify-center gap-1.5"
+                                  >
+                                    <span>➕ Add Custom / Other Method</span>
+                                    {methodSearch.trim() && <span className="font-normal italic">("{methodSearch.trim()}")</span>}
+                                  </button>
+                                </div>
+
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          /* Custom Payment Method Text Input */
+                          <div className="space-y-1">
+                            <input
+                              type="text"
+                              autoFocus
+                              placeholder="Type your payment method / UPI app name..."
+                              value={formData.customPaymentMethod}
+                              onChange={(e) => setFormData(prev => ({ ...prev, customPaymentMethod: e.target.value }))}
+                              className="w-full px-3 py-2.5 rounded-xl text-xs bg-white dark:bg-wa-dsurf border border-wa-teal text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-wa-teal"
+                            />
+                            <p className="text-[10px] text-slate-400">
+                              Custom method entered. Click 'Pick from list' above to choose from predefined methods.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+
+                    {/* Row B: Payer Name, Payer Email, UPI Ref */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -377,6 +640,7 @@ Sent via WA Scheduler Contact Form`;
                         />
                       </div>
                     </div>
+
                   </div>
                 )}
               </div>
