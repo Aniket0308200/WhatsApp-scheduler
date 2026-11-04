@@ -123,10 +123,11 @@ async function processAllDueMessages() {
           }
 
           const waId = lastResult?.id || lastResult?.key?.id || null;
-          // Atomically mark as sent and store WhatsApp message id
+          const rawMsg = lastResult?.message ? JSON.stringify(lastResult.message) : null;
+          // Atomically mark as sent and store WhatsApp message id and full raw message payload
           await db.ScheduledMessage.updateOne(
             { _id: msg.id },
-            { $set: { status: 'sent', waMessageId: waId, error: null } }
+            { $set: { status: 'sent', waMessageId: waId, rawMessage: rawMsg, error: null } }
           );
           console.log(`[Scheduler] [${sessionId}] ✓ #${msg.id} sent to +${msg.phone} (waId: ${waId})`);
         } catch (err) {

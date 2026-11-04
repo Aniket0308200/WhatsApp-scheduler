@@ -19,6 +19,7 @@ const {
   proto,
 } = require('@whiskeysockets/baileys');
 
+const { NodeCache } = require('@cacheable/node-cache');
 const QRCode = require('qrcode');
 const pino = require('pino');
 const path = require('path');
@@ -710,6 +711,9 @@ async function _performInitWhatsApp(sessionId) {
   if (!session.messageCache) {
     session.messageCache = new Map();
   }
+  if (!session.msgRetryCounterCache) {
+    session.msgRetryCounterCache = new NodeCache();
+  }
 
   const getMessage = async (key) => {
     try {
@@ -721,6 +725,22 @@ async function _performInitWhatsApp(sessionId) {
       // 2. Database store lookup
       const doc = await db.ScheduledMessage.findOne({ waMessageId: key.id }).lean();
       if (doc) {
+        if (doc.rawMessage) {
+          try {
+            const raw = JSON.parse(doc.rawMessage);
+            if (raw && typeof raw === 'object') {
+              if (raw.messageContextInfo?.messageSecret && typeof raw.messageContextInfo.messageSecret === 'string') {
+                raw.messageContextInfo.messageSecret = Buffer.from(raw.messageContextInfo.messageSecret, 'base64');
+              }
+              const protoMsg = proto.Message.fromObject(raw);
+              session.messageCache.set(key.id, protoMsg);
+              return protoMsg;
+            }
+          } catch (err) {
+            console.error(`[WA] [${sessionId}] rawMessage deserialization error:`, err.message);
+          }
+        }
+
         if (doc.pollData && doc.pollData.question) {
           const validOptions = (doc.pollData.options || []).map(o => String(o).trim()).filter(Boolean);
           const pollCreation = {
@@ -728,16 +748,21 @@ async function _performInitWhatsApp(sessionId) {
             selectableOptionsCount: doc.pollData.allowMultiple ? 0 : 1,
             options: validOptions.map(optionName => ({ optionName }))
           };
-          const msgObj = doc.pollData.allowMultiple
-            ? { pollCreationMessage: pollCreation }
-            : { pollCreationMessageV3: pollCreation };
-          session.messageCache.set(key.id, msgObj);
-          return msgObj;
+          const protoMsg = proto.Message.fromObject({
+            messageContextInfo: {
+              messageSecret: require('crypto').randomBytes(32)
+            },
+            ...(doc.pollData.allowMultiple
+              ? { pollCreationMessage: pollCreation }
+              : { pollCreationMessageV3: pollCreation })
+          });
+          session.messageCache.set(key.id, protoMsg);
+          return protoMsg;
         }
 
         const text = db.decrypt(doc.encryptedMessageText);
         if (text) {
-          const msgObj = { conversation: text };
+          const msgObj = proto.Message.fromObject({ conversation: text });
           session.messageCache.set(key.id, msgObj);
           return msgObj;
         }
@@ -755,6 +780,7 @@ async function _performInitWhatsApp(sessionId) {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
+    msgRetryCounterCache: session.msgRetryCounterCache,
     getMessage,
     printQRInTerminal: false,
     browser: Browsers.windows('Desktop'),
@@ -1439,7 +1465,7 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
       session.messageCache.delete(oldestKey);
     }
 
-    return { id: result.key.id, jid };
+    return { id: result.key.id, jid, message: result.message };
   } catch (err) {
     console.error(`[WA] [${sessionId}] ✗ Failed to send to ${jid}: ${err.message}`);
     throw err;

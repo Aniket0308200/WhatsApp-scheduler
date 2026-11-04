@@ -401,6 +401,7 @@ const ScheduledMessageSchema = new mongoose.Schema({
   status: { type: String, default: 'pending' }, // 'pending' | 'submitted' | 'sent' | 'failed' | 'cancelled'
   error: { type: String, default: null },
   waMessageId: { type: String, default: null },
+  rawMessage: { type: String, default: null },
   createdAt: { type: Date, default: Date.now }
 });
 
