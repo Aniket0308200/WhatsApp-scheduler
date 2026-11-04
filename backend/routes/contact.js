@@ -191,20 +191,18 @@ ${message}
   </div>
   `;
 
-  // 1. Try Nodemailer if SMTP configured
+  // Detect credentials from env
   const rawUser = process.env.SMTP_USER || process.env.GMAIL_USER || process.env.EMAIL_USER || '';
   const rawPass = process.env.SMTP_PASS || process.env.GMAIL_PASS || process.env.EMAIL_PASS || '';
   const smtpUser = rawUser.trim();
-  // Strip all whitespace/spaces from Google App Password (e.g. "tzxx xxxx xxxx xxxo" -> "tzxxxxxxxxxxxxo")
   const smtpPass = rawPass.replace(/\s+/g, '').trim();
 
+  // 1. Try Gmail SMTP
   if (nodemailer && smtpUser && smtpPass) {
     try {
-      console.log(`[Contact Mailer] Attempting Gmail SMTP connection for ${smtpUser}...`);
+      console.log(`[Contact Mailer] Connecting to Gmail SMTP as ${smtpUser}...`);
       const transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 465,
-        secure: true, // SSL
+        service: 'gmail',
         auth: {
           user: smtpUser,
           pass: smtpPass
@@ -219,11 +217,36 @@ ${message}
         text: textContent,
         html: htmlContent
       });
+
       console.log(`[Contact Mailer] ✅ Successfully delivered via Gmail SMTP to ${TARGET_ADMIN_EMAIL} (Msg ID: ${info.messageId})`);
-      return true;
+      return { success: true, method: 'smtp_gmail', messageId: info.messageId };
     } catch (smtpErr) {
-      console.error('[Contact Mailer] ❌ SMTP delivery failed:', smtpErr.message);
+      console.error('[Contact Mailer] ❌ Gmail SMTP failed:', smtpErr.message);
+      // Try fallback with direct host/port if service: gmail failed
+      try {
+        console.log(`[Contact Mailer] Retrying with smtp.gmail.com:465...`);
+        const fallbackTransporter = nodemailer.createTransport({
+          host: 'smtp.gmail.com',
+          port: 465,
+          secure: true,
+          auth: { user: smtpUser, pass: smtpPass }
+        });
+        const info = await fallbackTransporter.sendMail({
+          from: `"${loginName || 'WA Scheduler User'}" <${smtpUser}>`,
+          to: TARGET_ADMIN_EMAIL,
+          replyTo: contactEmail,
+          subject: mailSubject,
+          text: textContent,
+          html: htmlContent
+        });
+        console.log(`[Contact Mailer] ✅ Port 465 fallback succeeded! (Msg ID: ${info.messageId})`);
+        return { success: true, method: 'smtp_gmail_port465', messageId: info.messageId };
+      } catch (fErr) {
+        console.error('[Contact Mailer] ❌ Port 465 fallback also failed:', fErr.message);
+      }
     }
+  } else {
+    console.warn(`[Contact Mailer] SMTP credentials not detected. (hasUser=${Boolean(smtpUser)}, hasPass=${Boolean(smtpPass)})`);
   }
 
   // 2. Try Resend API if RESEND_API_KEY is configured
@@ -239,7 +262,7 @@ ${message}
         text: textContent
       });
       console.log(`[Contact Mailer] Sent via Resend API to ${TARGET_ADMIN_EMAIL}`);
-      return true;
+      return { success: true, method: 'resend' };
     } catch (resendErr) {
       console.warn('[Contact Mailer] Resend API failed:', resendErr.message);
     }
@@ -262,13 +285,53 @@ ${message}
       message: message
     });
     console.log(`[Contact Mailer] Dispatched via FormSubmit to ${TARGET_ADMIN_EMAIL}`);
-    return true;
+    return { success: true, method: 'formsubmit' };
   } catch (httpErr) {
     console.warn('[Contact Mailer] FormSubmit fallback failed:', httpErr.message);
   }
 
-  return false;
+  return { success: false, method: 'none', error: 'No working email transport succeeded' };
 }
+
+// ─── Public Diagnostic Probe Route ───────────────────────────────────────────
+// GET /api/contact/diagnostic
+router.get('/diagnostic', async (req, res) => {
+  const envKeys = Object.keys(process.env).filter(k => 
+    k.includes('SMTP') || k.includes('GMAIL') || k.includes('MAIL') || k.includes('EMAIL') || k.includes('RESEND')
+  );
+
+  const rawUser = process.env.SMTP_USER || process.env.GMAIL_USER || process.env.EMAIL_USER || '';
+  const rawPass = process.env.SMTP_PASS || process.env.GMAIL_PASS || process.env.EMAIL_PASS || '';
+  const smtpUser = rawUser.trim();
+  const smtpPass = rawPass.replace(/\s+/g, '').trim();
+
+  let smtpVerifyResult = null;
+  let smtpVerifyError = null;
+
+  if (nodemailer && smtpUser && smtpPass) {
+    try {
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: { user: smtpUser, pass: smtpPass }
+      });
+      await transporter.verify();
+      smtpVerifyResult = 'SUCCESS: Connected to Google SMTP servers!';
+    } catch (err) {
+      smtpVerifyError = err.message || String(err);
+    }
+  }
+
+  res.json({
+    detectedKeys: envKeys,
+    hasUser: Boolean(smtpUser),
+    userValueMasked: smtpUser ? `${smtpUser.slice(0, 4)}***@${smtpUser.split('@')[1] || ''}` : 'NOT_FOUND',
+    hasPass: Boolean(smtpPass),
+    passLength: smtpPass ? smtpPass.length : 0,
+    hasNodemailer: Boolean(nodemailer),
+    smtpVerifyResult,
+    smtpVerifyError
+  });
+});
 
 // ─── Public Submit Contact Form ──────────────────────────────────────────────
 // POST /api/contact
@@ -312,8 +375,8 @@ router.post('/', async (req, res) => {
 
     await newContact.save();
 
-    // Automatically trigger direct email dispatch to target admin
-    dispatchDirectEmail({
+    // Trigger direct email dispatch
+    const emailResult = await dispatchDirectEmail({
       loginName: String(loginName).trim(),
       loginEmail: String(loginEmail).trim(),
       whatsappNumber: String(whatsappNumber).trim(),
@@ -321,13 +384,17 @@ router.post('/', async (req, res) => {
       paymentDetails: newContact.paymentDetails,
       subject: String(subject).trim() || 'General Support',
       message: String(message).trim()
-    }).catch(e => console.warn('[Contact] Background email dispatch error:', e.message));
+    });
 
-    console.log(`[Contact] Inquiry saved & dispatched for ${contactEmail} (Target: ${TARGET_ADMIN_EMAIL})`);
+    console.log(`[Contact] Inquiry saved & dispatch result:`, emailResult);
 
     res.status(201).json({
       success: true,
-      message: 'Inquiry received successfully and dispatched directly to support!',
+      message: emailResult.success
+        ? 'Inquiry received and email delivered to support inbox!'
+        : 'Inquiry saved to database and queued for support review.',
+      emailDelivered: emailResult.success,
+      emailMethod: emailResult.method,
       targetEmail: TARGET_ADMIN_EMAIL,
       contactId: newContact._id
     });
