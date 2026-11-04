@@ -414,6 +414,26 @@ router.get('/diagnostic', async (req, res) => {
     }
   }
 
+  let resendTestResult = null;
+  let resendTestError = null;
+
+  if (req.query.test && (process.env.RESEND_API_KEY || process.env.RESEND_KEY)) {
+    try {
+      const apiKey = (process.env.RESEND_API_KEY || process.env.RESEND_KEY).trim();
+      const testRes = await sendResendEmail({
+        apiKey,
+        to: TARGET_ADMIN_EMAIL,
+        replyTo: TARGET_ADMIN_EMAIL,
+        subject: '[WA Scheduler] Diagnostic Test Email',
+        html: '<p>This is a live diagnostic test from WA Scheduler backend.</p>',
+        text: 'This is a live diagnostic test from WA Scheduler backend.'
+      });
+      resendTestResult = testRes;
+    } catch (err) {
+      resendTestError = err.message || String(err);
+    }
+  }
+
   res.json({
     detectedKeys: envKeys,
     hasUser: Boolean(smtpUser),
@@ -424,7 +444,9 @@ router.get('/diagnostic', async (req, res) => {
     hasWeb3FormsKey: Boolean(process.env.WEB3FORMS_KEY || process.env.WEB3FORMS_ACCESS_KEY),
     hasNodemailer: Boolean(nodemailer),
     port465Result,
-    port465Error
+    port465Error,
+    resendTestResult,
+    resendTestError
   });
 });
 
