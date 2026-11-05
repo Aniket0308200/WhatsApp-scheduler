@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
+import { WhatsAppGifIcon } from './GifStickerPickerModal';
+import { fetchAllContacts } from '../api';
 
 // ─── Giphy API Key ───────────────────────────────────────────────────────────
 const ENV_GIPHY_KEY =
@@ -36,14 +38,14 @@ const STATUS_FONTS = [
   { id: 'artistic', name: 'Artistic', family: '"Lucida Handwriting", "Apple Chancery", cursive' },
 ];
 
-// ─── 6 Gradient Presets for Text Background ─────────────────────────────────
+// ─── 6 Gradient Presets ──────────────────────────────────────────────────────
 const GRADIENT_PRESETS = [
-  { id: 'sunset', name: 'Sunset', css: 'linear-gradient(135deg, #FF512F, #DD2476)', colors: ['#FF512F', '#DD2476'] },
-  { id: 'ocean', name: 'Ocean', css: 'linear-gradient(135deg, #00c6ff, #0072ff)', colors: ['#00c6ff', '#0072ff'] },
-  { id: 'emerald', name: 'Emerald', css: 'linear-gradient(135deg, #11998e, #38ef7d)', colors: ['#11998e', '#38ef7d'] },
-  { id: 'violet', name: 'Violet', css: 'linear-gradient(135deg, #8A2387, #E94057)', colors: ['#8A2387', '#E94057'] },
-  { id: 'gold', name: 'Gold', css: 'linear-gradient(135deg, #f7971e, #ffd200)', colors: ['#f7971e', '#ffd200'] },
-  { id: 'cyber', name: 'Dark', css: 'linear-gradient(135deg, #232526, #414345)', colors: ['#232526', '#414345'] },
+  { id: 'sunset', name: 'Sunset', colors: ['#FF512F', '#DD2476'] },
+  { id: 'ocean', name: 'Ocean', colors: ['#00c6ff', '#0072ff'] },
+  { id: 'emerald', name: 'Emerald', colors: ['#11998e', '#38ef7d'] },
+  { id: 'violet', name: 'Violet', colors: ['#8A2387', '#E94057'] },
+  { id: 'gold', name: 'Gold', colors: ['#f7971e', '#ffd200'] },
+  { id: 'cyber', name: 'Dark', colors: ['#232526', '#414345'] },
 ];
 
 // ─── Aspect Ratio Presets for Cropping ───────────────────────────────────────
@@ -60,8 +62,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
   // Media State
   const [mediaType, setMediaType] = useState('image'); // 'image' | 'video'
   const [mediaSrc, setMediaSrc] = useState(null);
-  const [originalMediaSrc, setOriginalMediaSrc] = useState(null); // preserved for crop reset
-  const [mediaFile, setMediaFile] = useState(null);
+  const [originalMediaSrc, setOriginalMediaSrc] = useState(null);
   const [caption, setCaption] = useState('');
 
   // Active Tool Mode
@@ -71,7 +72,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
   const [rotation, setRotation] = useState(0); // 0, 90, 180, 270
   const [isFlippedH, setIsFlippedH] = useState(false);
   const [selectedRatio, setSelectedRatio] = useState('free');
-  const [cropBox, setCropBox] = useState({ x: 10, y: 10, width: 80, height: 80 }); // in percentages (0-100)
+  const [cropBox, setCropBox] = useState({ x: 10, y: 10, width: 80, height: 80 });
 
   // Drawing / Doodle State
   const [drawColor, setDrawColor] = useState('#25D366');
@@ -80,37 +81,64 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
   const [isDrawing, setIsDrawing] = useState(false);
 
   // Advanced Text Overlays State
-  const [textElements, setTextElements] = useState([]); // { id, text, color, bgMode, bgColor, bgGradient, fontId, x, y }
+  const [textElements, setTextElements] = useState([]); // { id, text, textColorMode, color, textGrad1, textGrad2, bgMode, bgColor, bgGrad1, bgGrad2, font, size, x, y }
+  const [editingTextId, setEditingTextId] = useState(null);
   const [newTextInput, setNewTextInput] = useState('');
+  const [textColorMode, setTextColorMode] = useState('solid'); // 'solid' | 'gradient'
   const [textColor, setTextColor] = useState('#FFFFFF');
+  const [textGrad1, setTextGrad1] = useState('#FF512F');
+  const [textGrad2, setTextGrad2] = useState('#DD2476');
   const [textBgMode, setTextBgMode] = useState('solid'); // 'none' | 'solid' | 'gradient'
   const [textBgColor, setTextBgColor] = useState('#000000');
-  const [selectedGradient, setSelectedGradient] = useState(GRADIENT_PRESETS[0]);
+  const [bgGrad1, setBgGrad1] = useState('#FF512F');
+  const [bgGrad2, setBgGrad2] = useState('#DD2476');
   const [selectedFont, setSelectedFont] = useState(STATUS_FONTS[0]);
+  const [textSize, setTextSize] = useState(56);
 
-  // Stickers / Emojis / GIFs Library State
-  const [stickers, setStickers] = useState([]); // { id, type: 'emoji'|'image', content, x, y, size }
+  // Stickers / Emojis / GIFs State
+  const [stickers, setStickers] = useState([]); // { id, type: 'emoji'|'image', content, size, x, y }
   const [stickerTab, setStickerTab] = useState('emoji'); // 'emoji' | 'sticker' | 'gif'
   const [giphySearch, setGiphySearch] = useState('');
   const [giphyItems, setGiphyItems] = useState([]);
   const [isGiphyLoading, setIsGiphyLoading] = useState(false);
 
-  // Video State & Dual-Handle Trimmer
+  // Selected Item for Resizing & Controls
+  const [selectedItemId, setSelectedItemId] = useState(null);
+  const [selectedItemType, setSelectedItemType] = useState(null); // 'text' | 'sticker'
+
+  // Contact Mention (@) State
+  const [showMentionPicker, setShowMentionPicker] = useState(false);
+  const [contactDirectory, setContactDirectory] = useState([]);
+  const [mentionSearch, setMentionSearch] = useState('');
+  const [mentionedContacts, setMentionedContacts] = useState([]); // [{ name, phone, jid }]
+
+  // Video State & Dual Trimmer
   const [videoDuration, setVideoDuration] = useState(0);
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(30);
 
   // Dragging State
-  const [draggingItem, setDraggingItem] = useState(null); // { type, id, startX, startY, origX, origY }
+  const [draggingItem, setDraggingItem] = useState(null);
 
   // Refs
   const fileInputRef = useRef(null);
   const canvasRef = useRef(null);
   const viewportRef = useRef(null);
   const videoRef = useRef(null);
-  const cropImageRef = useRef(null);
+  const captionInputRef = useRef(null);
 
-  // Initialize data
+  // Load Contacts Directory for Mentions
+  useEffect(() => {
+    if (isOpen) {
+      fetchAllContacts()
+        .then((data) => {
+          if (Array.isArray(data)) setContactDirectory(data);
+        })
+        .catch((err) => console.warn('Failed to load contacts for mention:', err.message));
+    }
+  }, [isOpen]);
+
+  // Initialize data on open
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
@@ -124,7 +152,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
         setMediaType('image');
         setMediaSrc(null);
         setOriginalMediaSrc(null);
-        setMediaFile(null);
         setCaption('');
         setDrawings([]);
         setTextElements([]);
@@ -133,9 +160,12 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
         setIsFlippedH(false);
         setTrimStart(0);
         setTrimEnd(30);
+        setMentionedContacts([]);
       }
       setActiveTool(null);
-      setGiphySearch('');
+      setSelectedItemId(null);
+      setEditingTextId(null);
+      setShowMentionPicker(false);
     }
   }, [isOpen, initialData]);
 
@@ -152,13 +182,13 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
       return;
     }
 
-    setMediaFile(file);
     setMediaType(isVideo ? 'video' : 'image');
     setDrawings([]);
     setTextElements([]);
     setStickers([]);
     setRotation(0);
     setIsFlippedH(false);
+    setSelectedItemId(null);
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -168,7 +198,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
     reader.readAsDataURL(file);
   };
 
-  // Video metadata & auto-loop trim
+  // Video loaded & time update
   const handleVideoLoadedMetadata = () => {
     if (videoRef.current) {
       const dur = Math.round(videoRef.current.duration) || 30;
@@ -187,16 +217,13 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
     }
   };
 
-  // Dual Trimmer adjustments
   const handleTrimStartChange = (val) => {
     const newStart = Math.max(0, Math.min(val, trimEnd - 1));
     setTrimStart(newStart);
     if (trimEnd - newStart > 30) {
       setTrimEnd(newStart + 30);
     }
-    if (videoRef.current) {
-      videoRef.current.currentTime = newStart;
-    }
+    if (videoRef.current) videoRef.current.currentTime = newStart;
   };
 
   const handleTrimEndChange = (val) => {
@@ -205,9 +232,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
       setTrimStart(Math.max(0, newEnd - 30));
     }
     setTrimEnd(newEnd);
-    if (videoRef.current) {
-      videoRef.current.currentTime = newEnd;
-    }
+    if (videoRef.current) videoRef.current.currentTime = newEnd;
   };
 
   // ─── Giphy Live Search for Stickers & GIFs ──────────────────────────────────
@@ -243,13 +268,8 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
   }, [activeTool, stickerTab, giphySearch, fetchGiphyMedia]);
 
   // ─── Crop & Rotate Functions ───────────────────────────────────────────────
-  const handleRotate90 = () => {
-    setRotation((prev) => (prev + 90) % 360);
-  };
-
-  const handleFlipHorizontal = () => {
-    setIsFlippedH((prev) => !prev);
-  };
+  const handleRotate90 = () => setRotation((prev) => (prev + 90) % 360);
+  const handleFlipHorizontal = () => setIsFlippedH((prev) => !prev);
 
   const handleRatioSelect = (ratioItem) => {
     setSelectedRatio(ratioItem.id);
@@ -257,9 +277,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
       setCropBox({ x: 5, y: 5, width: 90, height: 90 });
       return;
     }
-
-    // Adapt crop box to selected aspect ratio inside 100x100 space
-    const targetAspect = ratioItem.ratio; // width / height
+    const targetAspect = ratioItem.ratio;
     let w = 85;
     let h = w / targetAspect;
     if (h > 85) {
@@ -282,7 +300,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
         img.onerror = reject;
       });
 
-      // Calculate pixel crop region
       const cropPixelX = (cropBox.x / 100) * img.width;
       const cropPixelY = (cropBox.y / 100) * img.height;
       const cropPixelW = (cropBox.width / 100) * img.width;
@@ -398,34 +415,87 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
     });
   };
 
-  const handleEndDraw = () => {
-    setIsDrawing(false);
-  };
+  const handleEndDraw = () => setIsDrawing(false);
 
-  // ─── Advanced Text Handlers ─────────────────────────────────────────────────
-  const handleAddText = () => {
+  // ─── Advanced Text Handlers (Add, Edit, Gradients) ───────────────────────────
+  const handleSaveText = () => {
     if (!newTextInput.trim()) {
       setActiveTool(null);
+      setEditingTextId(null);
       return;
     }
-    const newEl = {
-      id: Date.now().toString(),
-      text: newTextInput.trim(),
-      color: textColor,
-      bgMode: textBgMode,
-      bgColor: textBgColor,
-      bgGradient: selectedGradient,
-      font: selectedFont,
-      x: 50,
-      y: 45 + (textElements.length % 4) * 8,
-    };
-    setTextElements((prev) => [...prev, newEl]);
+
+    if (editingTextId) {
+      // Update existing text element
+      setTextElements((prev) =>
+        prev.map((t) =>
+          t.id === editingTextId
+            ? {
+                ...t,
+                text: newTextInput.trim(),
+                textColorMode,
+                color: textColor,
+                textGrad1,
+                textGrad2,
+                bgMode: textBgMode,
+                bgColor: textBgColor,
+                bgGrad1,
+                bgGrad2,
+                font: selectedFont,
+                size: textSize,
+              }
+            : t
+        )
+      );
+      toast.success('Text updated');
+    } else {
+      // Add new text element
+      const newEl = {
+        id: Date.now().toString(),
+        text: newTextInput.trim(),
+        textColorMode,
+        color: textColor,
+        textGrad1,
+        textGrad2,
+        bgMode: textBgMode,
+        bgColor: textBgColor,
+        bgGrad1,
+        bgGrad2,
+        font: selectedFont,
+        size: 56, // default base font size
+        x: 50,
+        y: 45 + (textElements.length % 4) * 8,
+      };
+      setTextElements((prev) => [...prev, newEl]);
+      setSelectedItemId(newEl.id);
+      setSelectedItemType('text');
+    }
+
     setNewTextInput('');
+    setEditingTextId(null);
     setActiveTool(null);
+  };
+
+  // Double click or button edit text
+  const handleEditText = (t) => {
+    setEditingTextId(t.id);
+    setNewTextInput(t.text);
+    setTextColorMode(t.textColorMode || 'solid');
+    setTextColor(t.color || '#FFFFFF');
+    setTextGrad1(t.textGrad1 || '#FF512F');
+    setTextGrad2(t.textGrad2 || '#DD2476');
+    setTextBgMode(t.bgMode || 'solid');
+    setTextBgColor(t.bgColor || '#000000');
+    setBgGrad1(t.bgGrad1 || '#FF512F');
+    setBgGrad2(t.bgGrad2 || '#DD2476');
+    setSelectedFont(t.font || STATUS_FONTS[0]);
+    setTextSize(t.size || 56);
+    setActiveTool('text');
   };
 
   const handleDeleteText = (id) => {
     setTextElements((prev) => prev.filter((t) => t.id !== id));
+    if (selectedItemId === id) setSelectedItemId(null);
   };
 
   // ─── Sticker / Emoji / GIF Handlers ─────────────────────────────────────────
@@ -437,9 +507,11 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
       content: emoji,
       x: 45 + (stickers.length % 3) * 10,
       y: 50,
-      size: 48,
+      size: 52,
     };
     setStickers((prev) => [...prev, newSticker]);
+    setSelectedItemId(newSticker.id);
+    setSelectedItemType('sticker');
     setActiveTool(null);
   };
 
@@ -452,19 +524,86 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
       content: imgUrl,
       x: 45 + (stickers.length % 3) * 10,
       y: 50,
-      size: 80,
+      size: 90,
     };
     setStickers((prev) => [...prev, newSticker]);
+    setSelectedItemId(newSticker.id);
+    setSelectedItemType('sticker');
     setActiveTool(null);
   };
 
   const handleDeleteSticker = (id) => {
     setStickers((prev) => prev.filter((s) => s.id !== id));
+    if (selectedItemId === id) setSelectedItemId(null);
   };
+
+  // ─── Resize Helper for ALL Items (Text & Stickers) ──────────────────────────
+  const updateItemSize = (id, type, delta) => {
+    if (type === 'text') {
+      setTextElements((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, size: Math.max(20, Math.min(140, (t.size || 56) + delta)) } : t))
+      );
+    } else if (type === 'sticker') {
+      setStickers((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, size: Math.max(24, Math.min(240, s.size + delta)) } : s))
+      );
+    }
+  };
+
+  const setItemExactSize = (id, type, newSize) => {
+    if (type === 'text') {
+      setTextElements((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, size: newSize } : t))
+      );
+    } else if (type === 'sticker') {
+      setStickers((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, size: newSize } : s))
+      );
+    }
+  };
+
+  // Find currently selected item object
+  const getSelectedItem = () => {
+    if (!selectedItemId) return null;
+    if (selectedItemType === 'text') {
+      return textElements.find((t) => t.id === selectedItemId);
+    }
+    return stickers.find((s) => s.id === selectedItemId);
+  };
+  const activeSelectedItem = getSelectedItem();
+
+  // ─── Contact Mention Handlers ───────────────────────────────────────────────
+  const handleSelectMention = (contact) => {
+    const mentionTag = `@${contact.name || contact.phone} `;
+    setCaption((prev) => prev + (prev.endsWith(' ') || !prev ? '' : ' ') + mentionTag);
+    const jid = contact.jid || `${String(contact.phone).replace(/\D/g, '')}@s.whatsapp.net`;
+    if (!mentionedContacts.some((m) => m.phone === contact.phone)) {
+      setMentionedContacts((prev) => [...prev, { name: contact.name, phone: contact.phone, jid }]);
+    }
+    setShowMentionPicker(false);
+    setMentionSearch('');
+    if (captionInputRef.current) captionInputRef.current.focus();
+    toast.success(`Mentioned ${contact.name || contact.phone}`);
+  };
+
+  const handleRemoveMentionTag = (phone) => {
+    setMentionedContacts((prev) => prev.filter((m) => m.phone !== phone));
+  };
+
+  const filteredContacts = contactDirectory.filter((c) => {
+    const q = mentionSearch.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      (c.name && c.name.toLowerCase().includes(q)) ||
+      (c.phone && c.phone.includes(q))
+    );
+  });
 
   // ─── Drag Overlays ──────────────────────────────────────────────────────────
   const handleDragStart = (e, type, id, currentX, currentY) => {
     if (activeTool === 'draw' || activeTool === 'crop') return;
+    setSelectedItemId(id);
+    setSelectedItemType(type);
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     setDraggingItem({
@@ -522,6 +661,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
         trimStart,
         trimEnd,
         duration: trimEnd - trimStart,
+        mentions: mentionedContacts.map((m) => m.jid).filter(Boolean),
       });
       onClose();
       return;
@@ -590,9 +730,10 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
       for (const s of stickers) {
         const posX = (s.x / 100) * targetWidth;
         const posY = (s.y / 100) * targetHeight;
+        const renderSize = (s.size || 52) * 2.8;
 
         if (s.type === 'emoji') {
-          const fontPx = Math.round(s.size * 2.4);
+          const fontPx = Math.round(renderSize * 0.85);
           ctx.font = `${fontPx}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
@@ -606,7 +747,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               stickerImg.onload = res;
               stickerImg.onerror = rej;
             });
-            const renderSize = s.size * 2.8;
             ctx.drawImage(stickerImg, posX - renderSize / 2, posY - renderSize / 2, renderSize, renderSize);
           } catch {
             // Ignore corrupted sticker load
@@ -618,7 +758,8 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
       textElements.forEach((t) => {
         const posX = (t.x / 100) * targetWidth;
         const posY = (t.y / 100) * targetHeight;
-        const fontPx = 56;
+        const basePx = t.size || 56;
+        const fontPx = Math.round(basePx * 1.6);
         const fontFamily = t.font?.family || 'sans-serif';
 
         ctx.font = `bold ${fontPx}px ${fontFamily}`;
@@ -627,8 +768,8 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
 
         const metrics = ctx.measureText(t.text);
         const textW = metrics.width;
-        const padX = 32;
-        const padY = 20;
+        const padX = Math.round(fontPx * 0.45);
+        const padY = Math.round(fontPx * 0.28);
         const pillH = fontPx + padY * 2;
         const pillW = textW + padX * 2;
         const rectX = posX - pillW / 2;
@@ -642,16 +783,24 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
           ctx.fill();
         } else if (t.bgMode === 'gradient') {
           const grad = ctx.createLinearGradient(rectX, rectY, rectX + pillW, rectY + pillH);
-          const colors = t.bgGradient?.colors || ['#FF512F', '#DD2476'];
-          grad.addColorStop(0, colors[0]);
-          grad.addColorStop(1, colors[1]);
+          grad.addColorStop(0, t.bgGrad1 || '#FF512F');
+          grad.addColorStop(1, t.bgGrad2 || '#DD2476');
           ctx.fillStyle = grad;
           ctx.beginPath();
           ctx.roundRect(rectX, rectY, pillW, pillH, 22);
           ctx.fill();
         }
 
-        ctx.fillStyle = t.color;
+        // Draw Text (Solid or Gradient)
+        if (t.textColorMode === 'gradient') {
+          const textGrad = ctx.createLinearGradient(rectX, rectY, rectX + pillW, rectY + pillH);
+          textGrad.addColorStop(0, t.textGrad1 || '#FF512F');
+          textGrad.addColorStop(1, t.textGrad2 || '#DD2476');
+          ctx.fillStyle = textGrad;
+        } else {
+          ctx.fillStyle = t.color || '#FFFFFF';
+        }
+
         ctx.fillText(t.text, posX, posY);
       });
 
@@ -664,6 +813,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
         caption: caption.trim(),
         preview: bakedDataUri,
         isStatus: true,
+        mentions: mentionedContacts.map((m) => m.jid).filter(Boolean),
       });
       onClose();
     } catch (err) {
@@ -699,7 +849,10 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               {mediaType === 'image' && (
                 <button
                   type="button"
-                  onClick={() => setActiveTool(activeTool === 'crop' ? null : 'crop')}
+                  onClick={() => {
+                    setActiveTool(activeTool === 'crop' ? null : 'crop');
+                    setSelectedItemId(null);
+                  }}
                   className={`p-2 rounded-full transition-colors ${
                     activeTool === 'crop' ? 'bg-wa-teal text-white' : 'hover:bg-white/20 text-white'
                   }`}
@@ -711,22 +864,30 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                 </button>
               )}
 
-              {/* Emoji / Sticker / GIF Button */}
+              {/* Emoji / Sticker / GIF Button - Simple Clean GIF Icon from Message section */}
               <button
                 type="button"
-                onClick={() => setActiveTool(activeTool === 'sticker' ? null : 'sticker')}
+                onClick={() => {
+                  setActiveTool(activeTool === 'sticker' ? null : 'sticker');
+                  setSelectedItemId(null);
+                }}
                 className={`p-2 rounded-full transition-colors ${
                   activeTool === 'sticker' ? 'bg-wa-teal text-white' : 'hover:bg-white/20 text-white'
                 }`}
                 title="Stickers, Emojis & GIFs"
               >
-                <span className="text-xl leading-none">😊</span>
+                <WhatsAppGifIcon className="w-5 h-5" />
               </button>
 
               {/* Advanced Text Tool Button */}
               <button
                 type="button"
-                onClick={() => setActiveTool(activeTool === 'text' ? null : 'text')}
+                onClick={() => {
+                  setEditingTextId(null);
+                  setNewTextInput('');
+                  setActiveTool(activeTool === 'text' ? null : 'text');
+                  setSelectedItemId(null);
+                }}
                 className={`p-2 rounded-full transition-colors ${
                   activeTool === 'text' ? 'bg-wa-teal text-white' : 'hover:bg-white/20 text-white'
                 }`}
@@ -739,7 +900,10 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               {mediaType === 'image' && (
                 <button
                   type="button"
-                  onClick={() => setActiveTool(activeTool === 'draw' ? null : 'draw')}
+                  onClick={() => {
+                    setActiveTool(activeTool === 'draw' ? null : 'draw');
+                    setSelectedItemId(null);
+                  }}
                   className={`p-2 rounded-full transition-colors ${
                     activeTool === 'draw' ? 'bg-wa-teal text-white' : 'hover:bg-white/20 text-white'
                   }`}
@@ -783,7 +947,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                   style={{ backgroundColor: col }}
                 />
               ))}
-              {/* Brush size slider */}
               <input
                 type="range"
                 min="2"
@@ -808,7 +971,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
         {/* 2. CROP & ROTATE SUB-BAR */}
         {activeTool === 'crop' && (
           <div className="relative z-30 p-3 bg-neutral-900/95 border-b border-white/10 animate-fade-in flex flex-col gap-2.5 text-xs text-white">
-            {/* Rotate & Flip Controls */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <button
@@ -838,7 +1000,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               </button>
             </div>
 
-            {/* Aspect Ratio Chips */}
             <div className="flex items-center gap-1.5 overflow-x-auto py-1 custom-scroll">
               {ASPECT_RATIOS.map((item) => (
                 <button
@@ -856,7 +1017,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               ))}
             </div>
 
-            {/* Crop Size Sliders & Apply Button */}
             <div className="flex items-center justify-between pt-1 border-t border-white/10 gap-2">
               <div className="flex-1 flex items-center gap-2">
                 <span className="text-[10px] text-white/50">Box Size:</span>
@@ -891,167 +1051,299 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
           </div>
         )}
 
-        {/* 3. ADVANCED TEXT SUB-PANEL (10 Fonts, Colors, Gradients) */}
+        {/* 3. ADVANCED TEXT SUB-PANEL (10 Fonts, Custom Gradients for Text & Background) */}
         {activeTool === 'text' && (
-          <div className="absolute inset-x-3 top-14 z-40 p-3.5 bg-neutral-900/95 border border-white/20 rounded-2xl shadow-2xl backdrop-blur-xl animate-scale-in text-white">
-            <input
-              type="text"
-              autoFocus
-              value={newTextInput}
-              onChange={(e) => setNewTextInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddText()}
-              placeholder="Type your status text..."
-              className="w-full text-center text-lg font-bold bg-transparent border-b border-wa-teal focus:outline-none pb-2 text-white"
-              style={{
-                fontFamily: selectedFont.family,
-                color: textColor,
-              }}
-            />
+          <div className="absolute inset-x-2 top-12 bottom-16 z-40 p-3.5 bg-neutral-900/98 border border-white/20 rounded-2xl shadow-2xl backdrop-blur-2xl flex flex-col justify-between overflow-y-auto custom-scroll animate-scale-in text-white">
+            <div>
+              <div className="flex items-center justify-between pb-1 border-b border-white/10 mb-2">
+                <span className="text-xs font-bold text-wa-teal">
+                  {editingTextId ? '✏️ Edit Text Overlay' : '✍️ New Text Overlay'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTool(null);
+                    setEditingTextId(null);
+                  }}
+                  className="text-white/60 hover:text-white text-xs px-2 py-0.5"
+                >
+                  ✕
+                </button>
+              </div>
 
-            {/* 10 Fonts Switcher Strip */}
-            <div className="mt-3">
-              <div className="flex items-center justify-between text-[11px] font-semibold text-white/60 mb-1.5">
-                <span>Select Font (10 Styles)</span>
-                <span className="text-wa-teal">{selectedFont.name}</span>
+              {/* Text Input with Live Preview styling */}
+              <div
+                className="p-3 rounded-xl border border-white/15 my-2 flex items-center justify-center min-h-[64px]"
+                style={{
+                  backgroundColor: textBgMode === 'solid' ? textBgColor : undefined,
+                  backgroundImage:
+                    textBgMode === 'gradient'
+                      ? `linear-gradient(135deg, ${bgGrad1}, ${bgGrad2})`
+                      : undefined,
+                }}
+              >
+                <input
+                  type="text"
+                  autoFocus
+                  value={newTextInput}
+                  onChange={(e) => setNewTextInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSaveText()}
+                  placeholder="Type your status text..."
+                  className="w-full text-center text-lg font-bold bg-transparent focus:outline-none"
+                  style={{
+                    fontFamily: selectedFont.family,
+                    color: textColorMode === 'solid' ? textColor : undefined,
+                    backgroundImage:
+                      textColorMode === 'gradient'
+                        ? `linear-gradient(135deg, ${textGrad1}, ${textGrad2})`
+                        : undefined,
+                    WebkitBackgroundClip: textColorMode === 'gradient' ? 'text' : undefined,
+                    WebkitTextFillColor: textColorMode === 'gradient' ? 'transparent' : undefined,
+                  }}
+                />
               </div>
-              <div className="flex items-center gap-1.5 overflow-x-auto py-1 custom-scroll">
-                {STATUS_FONTS.map((font) => (
-                  <button
-                    key={font.id}
-                    type="button"
-                    onClick={() => setSelectedFont(font)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all border ${
-                      selectedFont.id === font.id
-                        ? 'border-wa-teal bg-wa-teal/20 text-white ring-1 ring-wa-teal'
-                        : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/15'
-                    }`}
-                    style={{ fontFamily: font.family }}
-                  >
-                    {font.name}
-                  </button>
-                ))}
-              </div>
-            </div>
 
-            {/* Text Color Picker & Palettes */}
-            <div className="mt-2.5">
-              <div className="flex items-center justify-between text-[11px] font-semibold text-white/60 mb-1">
-                <span>Text Color</span>
-                <label className="flex items-center gap-1 cursor-pointer text-xs text-white/80 hover:text-white">
-                  <span>Pick:</span>
-                  <input
-                    type="color"
-                    value={textColor}
-                    onChange={(e) => setTextColor(e.target.value)}
-                    className="w-5 h-5 rounded cursor-pointer border-none bg-transparent"
-                  />
-                </label>
-              </div>
-              <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
-                {COLOR_PALETTE.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setTextColor(c)}
-                    className={`w-5 h-5 rounded-full border-2 transition-transform ${
-                      textColor === c ? 'scale-125 border-white ring-2 ring-wa-teal' : 'border-transparent'
-                    }`}
-                    style={{ backgroundColor: c }}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Background Style: None | Solid | Gradient */}
-            <div className="mt-3 pt-2 border-t border-white/10">
-              <div className="flex items-center justify-between text-[11px] font-semibold text-white/60 mb-1.5">
-                <span>Background Style</span>
-                <div className="flex items-center gap-1 bg-white/10 p-0.5 rounded-lg text-[10px]">
-                  <button
-                    type="button"
-                    onClick={() => setTextBgMode('none')}
-                    className={`px-2 py-0.5 rounded-md ${textBgMode === 'none' ? 'bg-wa-teal text-white font-bold' : 'text-white/70'}`}
-                  >
-                    None
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTextBgMode('solid')}
-                    className={`px-2 py-0.5 rounded-md ${textBgMode === 'solid' ? 'bg-wa-teal text-white font-bold' : 'text-white/70'}`}
-                  >
-                    Solid
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTextBgMode('gradient')}
-                    className={`px-2 py-0.5 rounded-md ${textBgMode === 'gradient' ? 'bg-wa-teal text-white font-bold' : 'text-white/70'}`}
-                  >
-                    Gradient
-                  </button>
+              {/* 10 Fonts Switcher Strip */}
+              <div className="mt-2.5">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-white/60 mb-1">
+                  <span>Font Style (10 Types)</span>
+                  <span className="text-wa-teal font-mono">{selectedFont.name}</span>
                 </div>
-              </div>
-
-              {/* Solid Background Colors */}
-              {textBgMode === 'solid' && (
-                <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-                  {COLOR_PALETTE.map((c) => (
+                <div className="flex items-center gap-1.5 overflow-x-auto py-1 custom-scroll">
+                  {STATUS_FONTS.map((font) => (
                     <button
-                      key={c}
+                      key={font.id}
                       type="button"
-                      onClick={() => setTextBgColor(c)}
-                      className={`w-5 h-5 rounded-full border-2 transition-transform ${
-                        textBgColor === c ? 'scale-125 border-white ring-2 ring-wa-teal' : 'border-transparent'
+                      onClick={() => setSelectedFont(font)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all border ${
+                        selectedFont.id === font.id
+                          ? 'border-wa-teal bg-wa-teal/20 text-white ring-1 ring-wa-teal'
+                          : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/15'
                       }`}
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
-                  <label className="flex items-center gap-1 cursor-pointer text-[10px] text-white/70 ml-1">
-                    <span>Custom:</span>
-                    <input
-                      type="color"
-                      value={textBgColor}
-                      onChange={(e) => setTextBgColor(e.target.value)}
-                      className="w-5 h-5 rounded cursor-pointer border-none bg-transparent"
-                    />
-                  </label>
-                </div>
-              )}
-
-              {/* Gradient Presets */}
-              {textBgMode === 'gradient' && (
-                <div className="flex items-center gap-2 overflow-x-auto py-1 custom-scroll">
-                  {GRADIENT_PRESETS.map((g) => (
-                    <button
-                      key={g.id}
-                      type="button"
-                      onClick={() => setSelectedGradient(g)}
-                      className={`px-3 py-1 rounded-full text-xs font-bold transition-transform ${
-                        selectedGradient.id === g.id ? 'scale-105 ring-2 ring-white shadow-lg' : 'opacity-80 hover:opacity-100'
-                      }`}
-                      style={{ background: g.css }}
+                      style={{ fontFamily: font.family }}
                     >
-                      {g.name}
+                      {font.name}
                     </button>
                   ))}
                 </div>
-              )}
+              </div>
+
+              {/* Text Color Section: Solid or Gradient with Pickers */}
+              <div className="mt-3 pt-2 border-t border-white/10">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-white/60 mb-1.5">
+                  <span>Text Color</span>
+                  <div className="flex items-center gap-1 bg-white/10 p-0.5 rounded-lg text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setTextColorMode('solid')}
+                      className={`px-2 py-0.5 rounded-md ${textColorMode === 'solid' ? 'bg-wa-teal text-white font-bold' : 'text-white/70'}`}
+                    >
+                      Solid
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTextColorMode('gradient')}
+                      className={`px-2 py-0.5 rounded-md ${textColorMode === 'gradient' ? 'bg-wa-teal text-white font-bold' : 'text-white/70'}`}
+                    >
+                      Gradient
+                    </button>
+                  </div>
+                </div>
+
+                {textColorMode === 'solid' ? (
+                  <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+                    {COLOR_PALETTE.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setTextColor(c)}
+                        className={`w-5 h-5 rounded-full border-2 transition-transform ${
+                          textColor === c ? 'scale-125 border-white ring-2 ring-wa-teal' : 'border-transparent'
+                        }`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                    <label className="flex items-center gap-1 cursor-pointer text-[10px] text-white/70 ml-1">
+                      <span>Pick:</span>
+                      <input
+                        type="color"
+                        value={textColor}
+                        onChange={(e) => setTextColor(e.target.value)}
+                        className="w-5 h-5 rounded cursor-pointer border-none bg-transparent"
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    {/* Text Gradient Presets */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 custom-scroll">
+                      {GRADIENT_PRESETS.map((g) => (
+                        <button
+                          key={g.id}
+                          type="button"
+                          onClick={() => {
+                            setTextGrad1(g.colors[0]);
+                            setTextGrad2(g.colors[1]);
+                          }}
+                          className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white shadow-sm shrink-0"
+                          style={{ background: `linear-gradient(135deg, ${g.colors[0]}, ${g.colors[1]})` }}
+                        >
+                          {g.name}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Text Gradient Custom Color Pickers */}
+                    <div className="flex items-center gap-3 bg-white/5 p-1.5 rounded-lg text-[11px]">
+                      <span className="text-white/50 text-[10px]">Custom Pick:</span>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <span>Color 1:</span>
+                        <input
+                          type="color"
+                          value={textGrad1}
+                          onChange={(e) => setTextGrad1(e.target.value)}
+                          className="w-5 h-5 rounded cursor-pointer border-none bg-transparent"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <span>Color 2:</span>
+                        <input
+                          type="color"
+                          value={textGrad2}
+                          onChange={(e) => setTextGrad2(e.target.value)}
+                          className="w-5 h-5 rounded cursor-pointer border-none bg-transparent"
+                        />
+                      </label>
+                      <div
+                        className="w-8 h-4 rounded ml-auto shadow-inner border border-white/20"
+                        style={{ background: `linear-gradient(135deg, ${textGrad1}, ${textGrad2})` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Background Style: None | Solid | Gradient */}
+              <div className="mt-3 pt-2 border-t border-white/10">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-white/60 mb-1.5">
+                  <span>Background Pill</span>
+                  <div className="flex items-center gap-1 bg-white/10 p-0.5 rounded-lg text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setTextBgMode('none')}
+                      className={`px-2 py-0.5 rounded-md ${textBgMode === 'none' ? 'bg-wa-teal text-white font-bold' : 'text-white/70'}`}
+                    >
+                      None
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTextBgMode('solid')}
+                      className={`px-2 py-0.5 rounded-md ${textBgMode === 'solid' ? 'bg-wa-teal text-white font-bold' : 'text-white/70'}`}
+                    >
+                      Solid
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTextBgMode('gradient')}
+                      className={`px-2 py-0.5 rounded-md ${textBgMode === 'gradient' ? 'bg-wa-teal text-white font-bold' : 'text-white/70'}`}
+                    >
+                      Gradient
+                    </button>
+                  </div>
+                </div>
+
+                {textBgMode === 'solid' && (
+                  <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+                    {COLOR_PALETTE.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setTextBgColor(c)}
+                        className={`w-5 h-5 rounded-full border-2 transition-transform ${
+                          textBgColor === c ? 'scale-125 border-white ring-2 ring-wa-teal' : 'border-transparent'
+                        }`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                    <label className="flex items-center gap-1 cursor-pointer text-[10px] text-white/70 ml-1">
+                      <span>Pick:</span>
+                      <input
+                        type="color"
+                        value={textBgColor}
+                        onChange={(e) => setTextBgColor(e.target.value)}
+                        className="w-5 h-5 rounded cursor-pointer border-none bg-transparent"
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {textBgMode === 'gradient' && (
+                  <div className="flex flex-col gap-1.5">
+                    {/* Background Gradient Presets */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 custom-scroll">
+                      {GRADIENT_PRESETS.map((g) => (
+                        <button
+                          key={g.id}
+                          type="button"
+                          onClick={() => {
+                            setBgGrad1(g.colors[0]);
+                            setBgGrad2(g.colors[1]);
+                          }}
+                          className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white shadow-sm shrink-0"
+                          style={{ background: `linear-gradient(135deg, ${g.colors[0]}, ${g.colors[1]})` }}
+                        >
+                          {g.name}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Background Gradient Custom Color Pickers */}
+                    <div className="flex items-center gap-3 bg-white/5 p-1.5 rounded-lg text-[11px]">
+                      <span className="text-white/50 text-[10px]">Custom Pick:</span>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <span>Color 1:</span>
+                        <input
+                          type="color"
+                          value={bgGrad1}
+                          onChange={(e) => setBgGrad1(e.target.value)}
+                          className="w-5 h-5 rounded cursor-pointer border-none bg-transparent"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <span>Color 2:</span>
+                        <input
+                          type="color"
+                          value={bgGrad2}
+                          onChange={(e) => setBgGrad2(e.target.value)}
+                          className="w-5 h-5 rounded cursor-pointer border-none bg-transparent"
+                        />
+                      </label>
+                      <div
+                        className="w-8 h-4 rounded ml-auto shadow-inner border border-white/20"
+                        style={{ background: `linear-gradient(135deg, ${bgGrad1}, ${bgGrad2})` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Bottom Actions */}
-            <div className="flex justify-end gap-2 mt-3 pt-2.5 border-t border-white/10">
+            <div className="flex justify-end gap-2 pt-3 border-t border-white/10 mt-3">
               <button
                 type="button"
-                onClick={() => setActiveTool(null)}
+                onClick={() => {
+                  setActiveTool(null);
+                  setEditingTextId(null);
+                }}
                 className="text-xs text-white/70 hover:text-white px-3 py-1.5"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={handleAddText}
+                onClick={handleSaveText}
                 className="text-xs font-bold bg-wa-teal hover:bg-teal-600 text-white px-4 py-1.5 rounded-lg shadow-md transition-colors"
               >
-                Add Text
+                {editingTextId ? 'Update Text' : 'Add Text'}
               </button>
             </div>
           </div>
@@ -1060,7 +1352,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
         {/* 4. STICKER / EMOJI / GIF FULL PICKER DRAWER */}
         {activeTool === 'sticker' && (
           <div className="absolute inset-x-2 top-14 bottom-16 z-40 bg-neutral-900/98 border border-white/20 rounded-2xl shadow-2xl backdrop-blur-2xl flex flex-col overflow-hidden animate-scale-in text-white">
-            {/* Tabs Header */}
             <div className="flex items-center justify-between p-2.5 border-b border-white/10 bg-black/40">
               <div className="flex items-center gap-1 bg-white/10 p-0.5 rounded-xl">
                 <button
@@ -1100,7 +1391,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               </button>
             </div>
 
-            {/* Giphy Search input (for stickers & gifs) */}
             {stickerTab !== 'emoji' && (
               <div className="p-2 border-b border-white/10 bg-neutral-900">
                 <input
@@ -1113,7 +1403,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               </div>
             )}
 
-            {/* Tab 1: Emoji Picker */}
             {stickerTab === 'emoji' && (
               <div className="flex-1 overflow-hidden">
                 <EmojiPicker
@@ -1129,7 +1418,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               </div>
             )}
 
-            {/* Tab 2 & 3: Stickers & GIFs Grid */}
             {stickerTab !== 'emoji' && (
               <div className="flex-1 p-2 overflow-y-auto custom-scroll">
                 {isGiphyLoading ? (
@@ -1178,6 +1466,11 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
           onTouchMove={handleDragMove}
           onMouseUp={handleDragEnd}
           onTouchEnd={handleDragEnd}
+          onClick={() => {
+            if (activeTool !== 'draw' && activeTool !== 'crop') {
+              setSelectedItemId(null);
+            }
+          }}
           className="relative flex-1 w-full bg-black flex items-center justify-center overflow-hidden"
           style={{ aspectRatio: '9/16' }}
         >
@@ -1207,7 +1500,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               {/* Image Base Layer */}
               {mediaType === 'image' && (
                 <img
-                  ref={cropImageRef}
                   src={mediaSrc}
                   alt="Status Preview"
                   className="max-w-full max-h-full object-contain transition-transform duration-200"
@@ -1232,7 +1524,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                 />
               )}
 
-              {/* Crop Box Overlay in Crop Mode */}
+              {/* Crop Box Overlay */}
               {activeTool === 'crop' && mediaType === 'image' && (
                 <div className="absolute inset-0 z-20 pointer-events-none">
                   <div
@@ -1270,76 +1562,230 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                 />
               )}
 
-              {/* Draggable Text Overlays */}
-              {textElements.map((t) => (
-                <div
-                  key={t.id}
-                  onMouseDown={(e) => handleDragStart(e, 'text', t.id, t.x, t.y)}
-                  onTouchStart={(e) => handleDragStart(e, 'text', t.id, t.x, t.y)}
-                  className="absolute z-20 cursor-move group select-none"
-                  style={{
-                    left: `${t.x}%`,
-                    top: `${t.y}%`,
-                    transform: 'translate(-50%, -50%)',
-                  }}
-                >
+              {/* Draggable Text Overlays (Double click to edit, controls to resize) */}
+              {textElements.map((t) => {
+                const isSelected = selectedItemId === t.id;
+                const fontPx = Math.round((t.size || 56) * 0.3); // Responsive preview scale
+                return (
                   <div
-                    className="px-3.5 py-1.5 rounded-xl font-bold text-center text-sm sm:text-base transition-shadow"
-                    style={{
-                      fontFamily: t.font?.family || 'sans-serif',
-                      color: t.color,
-                      backgroundColor: t.bgMode === 'solid' ? t.bgColor : undefined,
-                      backgroundImage: t.bgMode === 'gradient' ? t.bgGradient?.css : undefined,
-                      boxShadow: t.bgMode !== 'none' ? '0 4px 14px rgba(0,0,0,0.5)' : undefined,
-                      textShadow: t.bgMode === 'none' ? '0 2px 4px rgba(0,0,0,0.8)' : undefined,
+                    key={t.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedItemId(t.id);
+                      setSelectedItemType('text');
                     }}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      handleEditText(t);
+                    }}
+                    onMouseDown={(e) => handleDragStart(e, 'text', t.id, t.x, t.y)}
+                    onTouchStart={(e) => handleDragStart(e, 'text', t.id, t.x, t.y)}
+                    className={`absolute z-20 cursor-move group select-none transition-all ${
+                      isSelected ? 'ring-2 ring-wa-teal ring-offset-2 ring-offset-black/50 rounded-xl' : ''
+                    }`}
+                    style={{
+                      left: `${t.x}%`,
+                      top: `${t.y}%`,
+                      transform: 'translate(-50%, -50%)',
+                    }}
+                    title="Double-click to edit text • Drag to move"
                   >
-                    {t.text}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteText(t.id)}
-                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Delete"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
+                    <div
+                      className="px-3 py-1.5 rounded-xl font-bold text-center transition-all whitespace-pre-wrap"
+                      style={{
+                        fontFamily: t.font?.family || 'sans-serif',
+                        fontSize: `${fontPx}px`,
+                        color: t.textColorMode === 'solid' ? t.color : undefined,
+                        backgroundImage:
+                          t.textColorMode === 'gradient'
+                            ? `linear-gradient(135deg, ${t.textGrad1 || '#FF512F'}, ${t.textGrad2 || '#DD2476'})`
+                            : undefined,
+                        WebkitBackgroundClip: t.textColorMode === 'gradient' ? 'text' : undefined,
+                        WebkitTextFillColor: t.textColorMode === 'gradient' ? 'transparent' : undefined,
+                        backgroundColor: t.bgMode === 'solid' ? t.bgColor : undefined,
+                        background:
+                          t.bgMode === 'gradient'
+                            ? `linear-gradient(135deg, ${t.bgGrad1 || '#FF512F'}, ${t.bgGrad2 || '#DD2476'})`
+                            : undefined,
+                        boxShadow: t.bgMode !== 'none' ? '0 4px 14px rgba(0,0,0,0.5)' : undefined,
+                        textShadow: t.bgMode === 'none' ? '0 2px 4px rgba(0,0,0,0.8)' : undefined,
+                      }}
+                    >
+                      {t.text}
+                    </div>
 
-              {/* Draggable Stickers & Emojis & GIFs */}
-              {stickers.map((s) => (
+                    {/* Quick Item Controls (Edit, Resize & Delete) */}
+                    {isSelected && (
+                      <div className="absolute -top-7 inset-x-0 flex items-center justify-between pointer-events-auto">
+                        <div className="flex items-center gap-1 bg-black/80 rounded-lg p-0.5 border border-white/20">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateItemSize(t.id, 'text', -6);
+                            }}
+                            className="w-5 h-5 rounded bg-white/20 hover:bg-white/30 text-white text-xs font-bold flex items-center justify-center"
+                            title="Smaller"
+                          >
+                            -
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateItemSize(t.id, 'text', +6);
+                            }}
+                            className="w-5 h-5 rounded bg-white/20 hover:bg-white/30 text-white text-xs font-bold flex items-center justify-center"
+                            title="Larger"
+                          >
+                            +
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditText(t);
+                            }}
+                            className="px-1.5 h-5 rounded bg-wa-teal hover:bg-teal-600 text-white text-[10px] font-bold flex items-center justify-center"
+                            title="Edit text"
+                          >
+                            ✏️
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteText(t.id);
+                          }}
+                          className="w-5 h-5 bg-red-600 hover:bg-red-700 text-white rounded-full text-xs flex items-center justify-center shadow"
+                          title="Delete"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Draggable Stickers, Emojis & GIFs */}
+              {stickers.map((s) => {
+                const isSelected = selectedItemId === s.id;
+                return (
+                  <div
+                    key={s.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedItemId(s.id);
+                      setSelectedItemType('sticker');
+                    }}
+                    onMouseDown={(e) => handleDragStart(e, 'sticker', s.id, s.x, s.y)}
+                    onTouchStart={(e) => handleDragStart(e, 'sticker', s.id, s.x, s.y)}
+                    className={`absolute z-20 cursor-move group select-none leading-none transition-all ${
+                      isSelected ? 'ring-2 ring-wa-teal ring-offset-2 ring-offset-black/50 rounded-xl' : ''
+                    }`}
+                    style={{
+                      left: `${s.x}%`,
+                      top: `${s.y}%`,
+                      transform: 'translate(-50%, -50%)',
+                    }}
+                    title="Click to resize • Drag to move"
+                  >
+                    {s.type === 'emoji' ? (
+                      <span style={{ fontSize: `${s.size}px` }}>{s.content}</span>
+                    ) : (
+                      <img
+                        src={s.content}
+                        alt="sticker"
+                        className="object-contain pointer-events-none rounded-lg"
+                        style={{ width: `${s.size}px`, height: `${s.size}px` }}
+                      />
+                    )}
+
+                    {/* Quick Resize & Delete controls when selected */}
+                    {isSelected && (
+                      <div className="absolute -top-7 inset-x-0 flex items-center justify-between pointer-events-auto">
+                        <div className="flex items-center gap-1 bg-black/80 rounded-lg p-0.5 border border-white/20">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateItemSize(s.id, 'sticker', -8);
+                            }}
+                            className="w-5 h-5 rounded bg-white/20 hover:bg-white/30 text-white text-xs font-bold flex items-center justify-center"
+                            title="Smaller"
+                          >
+                            -
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateItemSize(s.id, 'sticker', +8);
+                            }}
+                            className="w-5 h-5 rounded bg-white/20 hover:bg-white/30 text-white text-xs font-bold flex items-center justify-center"
+                            title="Larger"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteSticker(s.id);
+                          }}
+                          className="w-5 h-5 bg-red-600 hover:bg-red-700 text-white rounded-full text-xs flex items-center justify-center shadow"
+                          title="Delete"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Bottom Floating Resize Dock when any item is selected */}
+              {activeSelectedItem && !activeTool && (
                 <div
-                  key={s.id}
-                  onMouseDown={(e) => handleDragStart(e, 'sticker', s.id, s.x, s.y)}
-                  onTouchStart={(e) => handleDragStart(e, 'sticker', s.id, s.x, s.y)}
-                  className="absolute z-20 cursor-move group select-none leading-none"
-                  style={{
-                    left: `${s.x}%`,
-                    top: `${s.y}%`,
-                    transform: 'translate(-50%, -50%)',
-                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute bottom-2 inset-x-4 z-30 px-3 py-1.5 rounded-2xl bg-neutral-900/95 border border-white/20 shadow-2xl backdrop-blur-md flex items-center justify-between gap-2 text-white animate-fade-in"
                 >
-                  {s.type === 'emoji' ? (
-                    <span style={{ fontSize: `${s.size}px` }}>{s.content}</span>
-                  ) : (
-                    <img
-                      src={s.content}
-                      alt="sticker"
-                      className="object-contain pointer-events-none rounded-lg"
-                      style={{ width: `${s.size}px`, height: `${s.size}px` }}
-                    />
-                  )}
+                  <span className="text-[10px] font-bold text-white/60 uppercase tracking-wide">Resize:</span>
                   <button
                     type="button"
-                    onClick={() => handleDeleteSticker(s.id)}
-                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity font-bold leading-none shadow"
-                    title="Delete"
+                    onClick={() => updateItemSize(activeSelectedItem.id, selectedItemType, -6)}
+                    className="w-6 h-6 rounded-md bg-white/10 hover:bg-white/20 flex items-center justify-center font-bold text-sm"
                   >
-                    ✕
+                    -
+                  </button>
+                  <input
+                    type="range"
+                    min={selectedItemType === 'text' ? 24 : 30}
+                    max={selectedItemType === 'text' ? 120 : 220}
+                    value={activeSelectedItem.size || (selectedItemType === 'text' ? 56 : 52)}
+                    onChange={(e) => setItemExactSize(activeSelectedItem.id, selectedItemType, Number(e.target.value))}
+                    className="flex-1 accent-wa-teal h-1.5"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => updateItemSize(activeSelectedItem.id, selectedItemType, +6)}
+                    className="w-6 h-6 rounded-md bg-white/10 hover:bg-white/20 flex items-center justify-center font-bold text-sm"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedItemId(null)}
+                    className="text-[10px] text-white/70 hover:text-white px-2 py-0.5 rounded bg-white/15 font-semibold"
+                  >
+                    Done
                   </button>
                 </div>
-              ))}
+              )}
             </div>
           )}
         </div>
@@ -1357,7 +1803,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               </span>
             </div>
 
-            {/* Visual Timeline Track */}
             <div className="relative w-full h-3 bg-white/10 rounded-full overflow-hidden mb-2">
               <div
                 className="absolute top-0 bottom-0 bg-wa-teal rounded-full transition-all"
@@ -1368,9 +1813,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               />
             </div>
 
-            {/* Dual Front & Back Handles with Fine-Tuning */}
             <div className="grid grid-cols-2 gap-2 text-[11px]">
-              {/* Start Handle */}
               <div className="flex flex-col gap-1">
                 <div className="flex items-center justify-between text-white/60">
                   <span>Start: {trimStart}s</span>
@@ -1401,7 +1844,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                 />
               </div>
 
-              {/* End Handle */}
               <div className="flex flex-col gap-1">
                 <div className="flex items-center justify-between text-white/60">
                   <span>End: {trimEnd}s</span>
@@ -1435,28 +1877,117 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
           </div>
         )}
 
-        {/* ── BOTTOM CAPTION & SEND BAR ───────────────────────────────────── */}
+        {/* ── BOTTOM CAPTION, @ MENTION & SEND BAR ────────────────────────── */}
         <div className="relative z-30 p-3 bg-gradient-to-t from-black via-black/90 to-transparent flex flex-col gap-2">
-          {/* Audience Pill */}
-          <div className="flex items-center justify-between">
-            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-white/15 text-white/90 text-[11px] font-semibold backdrop-blur-sm">
-              <span>🔒 Status (My contacts)</span>
-            </div>
-            {mediaSrc && (
-              <p className="text-[10px] text-white/50">
-                {mediaType === 'image' ? '9:16 Photo Story' : '30s Video Story'}
-              </p>
-            )}
-          </div>
+          
+          {/* Contact Mention Dropdown Popup */}
+          {showMentionPicker && (
+            <div className="absolute inset-x-3 bottom-16 z-50 p-2.5 bg-neutral-900/98 border border-white/20 rounded-2xl shadow-2xl backdrop-blur-2xl text-white animate-scale-in">
+              <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-white/10">
+                <span className="text-xs font-bold text-wa-teal">@ Mention Contact in Status</span>
+                <button
+                  type="button"
+                  onClick={() => setShowMentionPicker(false)}
+                  className="text-white/60 hover:text-white text-xs px-2"
+                >
+                  ✕
+                </button>
+              </div>
 
-          {/* Caption Input & Green Done/Send Button */}
-          <div className="flex items-center gap-2">
-            <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-full bg-white/15 border border-white/20 backdrop-blur-md text-white text-sm focus-within:border-wa-teal focus-within:bg-black/60 transition-all">
+              {/* Search contacts input */}
               <input
                 type="text"
+                autoFocus
+                value={mentionSearch}
+                onChange={(e) => setMentionSearch(e.target.value)}
+                placeholder="Search name or phone number..."
+                className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/15 text-xs text-white placeholder-white/40 focus:outline-none focus:border-wa-teal mb-2"
+              />
+
+              {/* Contacts list */}
+              <div className="max-h-44 overflow-y-auto custom-scroll flex flex-col gap-1">
+                {filteredContacts.length === 0 ? (
+                  <div className="py-4 text-center text-white/40 text-xs">
+                    No contacts found in directory
+                  </div>
+                ) : (
+                  filteredContacts.map((contact, idx) => (
+                    <button
+                      key={contact.phone || idx}
+                      type="button"
+                      onClick={() => handleSelectMention(contact)}
+                      className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/15 transition-colors text-left"
+                    >
+                      <div className="w-7 h-7 rounded-full bg-wa-teal/20 text-wa-teal border border-wa-teal/30 flex items-center justify-center font-bold text-xs shrink-0">
+                        {(contact.name || contact.phone || '?').charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-white truncate">
+                          {contact.name || 'Unnamed Contact'}
+                        </p>
+                        <p className="text-[10px] text-white/50 truncate">
+                          {contact.phone}
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-bold text-wa-teal bg-wa-teal/15 px-2 py-0.5 rounded">
+                        Tag
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Mentioned contacts badges */}
+          {mentionedContacts.length > 0 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 custom-scroll">
+              <span className="text-[10px] text-wa-teal font-bold shrink-0">Tagged:</span>
+              {mentionedContacts.map((m) => (
+                <div
+                  key={m.phone}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-wa-teal/20 border border-wa-teal/40 text-wa-teal text-[10px] font-semibold shrink-0"
+                >
+                  <span>@{m.name || m.phone}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveMentionTag(m.phone)}
+                    className="hover:text-red-400 font-bold ml-0.5"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Caption Input Bar with @ Mention trigger & Send Button */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-full bg-white/15 border border-white/20 backdrop-blur-md text-white text-sm focus-within:border-wa-teal focus-within:bg-black/60 transition-all">
+              {/* @ Mention button */}
+              <button
+                type="button"
+                onClick={() => setShowMentionPicker((p) => !p)}
+                className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm shrink-0 transition-colors ${
+                  showMentionPicker ? 'bg-wa-teal text-white' : 'hover:bg-white/20 text-white/80'
+                }`}
+                title="Mention a contact (@)"
+              >
+                @
+              </button>
+
+              <input
+                ref={captionInputRef}
+                type="text"
                 value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-                placeholder="Add a caption..."
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setCaption(val);
+                  if (val.endsWith('@')) {
+                    setShowMentionPicker(true);
+                  }
+                }}
+                placeholder="Add a caption... (use @ to mention)"
                 className="w-full bg-transparent text-white placeholder-white/50 text-xs sm:text-sm focus:outline-none"
               />
             </div>

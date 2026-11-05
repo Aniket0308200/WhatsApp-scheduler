@@ -1426,6 +1426,41 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
       messagePayload = { text: text || '' };
     }
 
+    // Extract mentions from caption / text (both @phone numbers and @Name from contacts directory)
+    let mentionJids = [];
+    if (text) {
+      const atNumbers = text.match(/@(\d{7,15})/g);
+      if (atNumbers) {
+        atNumbers.forEach(m => {
+          const num = m.replace('@', '');
+          const mj = `${num}@s.whatsapp.net`;
+          if (!mentionJids.includes(mj)) mentionJids.push(mj);
+        });
+      }
+      try {
+        const atNames = text.match(/@([a-zA-Z0-9_\s]{2,30})/g);
+        if (atNames && atNames.length > 0) {
+          const allDbContacts = await db.Contact.find({ sessionId }).lean();
+          atNames.forEach(an => {
+            const cleanName = an.replace('@', '').trim().toLowerCase();
+            const found = (allDbContacts || []).find(c =>
+              c.name && c.name.toLowerCase() === cleanName
+            );
+            if (found && found.phone) {
+              const mj = `${found.phone.replace(/\D/g, '')}@s.whatsapp.net`;
+              if (!mentionJids.includes(mj)) mentionJids.push(mj);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn(`[WA] [${sessionId}] Mention resolution note:`, e.message);
+      }
+    }
+
+    if (mentionJids.length > 0 && messagePayload) {
+      messagePayload.mentions = mentionJids;
+    }
+
     let sendOptions = {};
     if (isStatus) {
       try {
@@ -1442,9 +1477,16 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
           }
         }
 
+        // Guarantee mentioned contacts are included in status broadcast list
+        if (mentionJids.length > 0) {
+          mentionJids.forEach(mj => {
+            if (!contactJids.includes(mj)) contactJids.push(mj);
+          });
+        }
+
         if (contactJids.length > 0) {
           sendOptions.statusJidList = contactJids;
-          console.log(`[WA Status] [${sessionId}] Broadcasting status to ${contactJids.length} contacts`);
+          console.log(`[WA Status] [${sessionId}] Broadcasting status to ${contactJids.length} contacts (Mentions: ${mentionJids.length})`);
         }
       } catch (e) {
         console.warn(`[WA Status] [${sessionId}] Note: sending status without explicit contact filter:`, e.message);
