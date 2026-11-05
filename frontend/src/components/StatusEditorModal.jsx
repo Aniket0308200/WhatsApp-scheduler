@@ -127,6 +127,18 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
   const videoRef = useRef(null);
   const captionInputRef = useRef(null);
 
+  // ─── Body Scroll Lock when Modal is Open ──────────────────────────────────
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   // ─── Load Contacts Directory for Mentions ──────────────────────────────────
   useEffect(() => {
     if (isOpen) {
@@ -596,16 +608,18 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
 
   // ─── Contact Mention Handlers ───────────────────────────────────────────────
   const handleSelectMention = (contact) => {
-    const mentionTag = `@${contact.name || contact.phone} `;
+    const rawName = contact.name || contact.displayName || contact.pushName || '';
+    const cleanName = rawName && !rawName.startsWith('Contact +') ? rawName : contact.phone;
+    const mentionTag = `@${cleanName} `;
     setCaption((prev) => prev + (prev.endsWith(' ') || !prev ? '' : ' ') + mentionTag);
     const jid = contact.jid || `${String(contact.phone).replace(/\D/g, '')}@s.whatsapp.net`;
     if (!mentionedContacts.some((m) => m.phone === contact.phone)) {
-      setMentionedContacts((prev) => [...prev, { name: contact.name, phone: contact.phone, jid }]);
+      setMentionedContacts((prev) => [...prev, { name: cleanName, phone: contact.phone, jid }]);
     }
     setShowMentionPicker(false);
     setMentionSearch('');
     if (captionInputRef.current) captionInputRef.current.focus();
-    toast.success(`Mentioned ${contact.name || contact.phone}`);
+    toast.success(`Mentioned ${cleanName}`);
   };
 
   const handleRemoveMentionTag = (phone) => {
@@ -614,11 +628,19 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
 
   const filteredContacts = contactDirectory.filter((c) => {
     if (!c) return false;
-    const q = mentionSearch.toLowerCase().trim();
+    const q = mentionSearch.trim().toLowerCase();
     if (!q) return true;
-    const nameMatch = c.name && String(c.name).toLowerCase().includes(q);
-    const phoneMatch = c.phone && String(c.phone).replace(/\D/g, '').includes(q.replace(/\D/g, ''));
-    return Boolean(nameMatch || phoneMatch);
+
+    // 1. Comprehensive name matching
+    const nameStr = String(c.name || c.displayName || c.pushName || c.notify || '').toLowerCase();
+    const matchesName = nameStr.includes(q);
+
+    // 2. Phone number matching - ONLY if digits were actually entered
+    const searchDigits = q.replace(/\D/g, '');
+    const phoneDigits = String(c.phone || c.jid || '').replace(/\D/g, '');
+    const matchesPhone = searchDigits.length > 0 && phoneDigits.includes(searchDigits);
+
+    return Boolean(matchesName || matchesPhone);
   });
 
   // ─── Drag Overlays (Moves ONLY X/Y, Never touches Size) ─────────────────────
@@ -853,7 +875,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
 
   return (
     /* Outer Modal Backdrop - Pure Dark OLED Glassmorphism without top margin/gap */
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 backdrop-blur-md m-0 mt-0 p-0 sm:p-2 animate-fade-in select-none">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 backdrop-blur-md mt-0 p-0 sm:p-2 animate-fade-in select-none">
       
       {/* ── PHONE SHELL CONTAINER (Pure WhatsApp Dark Mode) ──────────────── */}
       <div className="relative w-full max-w-[390px] h-full sm:h-[94vh] max-h-[820px] bg-[#0b141a] sm:rounded-[32px] border-0 sm:border border-neutral-800 shadow-2xl overflow-hidden flex flex-col justify-between m-0 mt-0">
@@ -1911,7 +1933,11 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
           
           {/* Contact Mention Dropdown Popup (Dark Theme & Full Directory Search) */}
           {showMentionPicker && (
-            <div className="absolute inset-x-3 bottom-16 z-50 p-3 bg-[#111b21] border border-neutral-700 rounded-2xl shadow-2xl text-white animate-scale-in">
+            <div
+              onClick={(e) => e.stopPropagation()}
+              onWheel={(e) => e.stopPropagation()}
+              className="absolute inset-x-3 bottom-16 z-50 p-3 bg-[#111b21] border border-neutral-700 rounded-2xl shadow-2xl text-white animate-scale-in"
+            >
               <div className="flex items-center justify-between pb-2 mb-2 border-b border-neutral-800">
                 <span className="text-xs font-bold text-wa-teal">@ Mention Contact in Status</span>
                 <button
@@ -1924,19 +1950,37 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               </div>
 
               {/* Search contacts input */}
-              <input
-                type="text"
-                autoFocus
-                value={mentionSearch}
-                onChange={(e) => setMentionSearch(e.target.value)}
-                placeholder="Search name or phone number..."
-                className="w-full px-3 py-2 rounded-xl bg-neutral-800 border border-neutral-700 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-wa-teal mb-2"
-              />
+              <div className="relative mb-2">
+                <input
+                  type="text"
+                  autoFocus
+                  value={mentionSearch}
+                  onChange={(e) => setMentionSearch(e.target.value)}
+                  placeholder="Search by name or phone number..."
+                  className="w-full pl-8 pr-7 py-2 rounded-xl bg-neutral-800 border border-neutral-700 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-wa-teal"
+                />
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs">
+                  🔍
+                </span>
+                {mentionSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setMentionSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white text-xs p-0.5"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
 
-              {/* Contacts list */}
-              <div className="max-h-48 overflow-y-auto custom-scroll flex flex-col gap-1">
+              {/* Contacts list with isolated overscroll contain */}
+              <div
+                onWheel={(e) => e.stopPropagation()}
+                className="max-h-56 overflow-y-auto overscroll-contain custom-scroll flex flex-col gap-1 pr-1 touch-pan-y"
+                style={{ overscrollBehavior: 'contain' }}
+              >
                 {filteredContacts.length === 0 ? (
-                  <div className="py-5 text-center text-neutral-400 text-xs">
+                  <div className="py-6 text-center text-neutral-400 text-xs">
                     {contactDirectory.length === 0
                       ? 'Loading contacts directory...'
                       : 'No matching contacts found'}
