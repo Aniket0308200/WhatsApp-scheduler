@@ -117,7 +117,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(30);
 
-  // Dragging State
+  // Dragging State (Position only, no size change)
   const [draggingItem, setDraggingItem] = useState(null);
 
   // Refs
@@ -127,12 +127,38 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
   const videoRef = useRef(null);
   const captionInputRef = useRef(null);
 
-  // Load Contacts Directory for Mentions
+  // ─── Load Contacts Directory for Mentions ──────────────────────────────────
   useEffect(() => {
     if (isOpen) {
+      // 1. Read instant local cache
+      try {
+        const cached = localStorage.getItem('wa_cached_contacts');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          const list = Array.isArray(parsed)
+            ? parsed
+            : Array.isArray(parsed.all)
+            ? parsed.all
+            : Array.isArray(parsed.personal)
+            ? parsed.personal
+            : [];
+          if (list.length > 0) setContactDirectory(list);
+        }
+      } catch {}
+
+      // 2. Fetch fresh contacts from backend API
       fetchAllContacts()
         .then((data) => {
-          if (Array.isArray(data)) setContactDirectory(data);
+          const list = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.all)
+            ? data.all
+            : Array.isArray(data?.personal)
+            ? data.personal
+            : [];
+          if (list.length > 0) {
+            setContactDirectory(list);
+          }
         })
         .catch((err) => console.warn('Failed to load contacts for mention:', err.message));
     }
@@ -426,7 +452,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
     }
 
     if (editingTextId) {
-      // Update existing text element
       setTextElements((prev) =>
         prev.map((t) =>
           t.id === editingTextId
@@ -449,7 +474,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
       );
       toast.success('Text updated');
     } else {
-      // Add new text element
       const newEl = {
         id: Date.now().toString(),
         text: newTextInput.trim(),
@@ -462,7 +486,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
         bgGrad1,
         bgGrad2,
         font: selectedFont,
-        size: 56, // default base font size
+        size: 56,
         x: 50,
         y: 45 + (textElements.length % 4) * 8,
       };
@@ -476,7 +500,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
     setActiveTool(null);
   };
 
-  // Double click or button edit text
   const handleEditText = (t) => {
     setEditingTextId(t.id);
     setNewTextInput(t.text);
@@ -537,7 +560,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
     if (selectedItemId === id) setSelectedItemId(null);
   };
 
-  // ─── Resize Helper for ALL Items (Text & Stickers) ──────────────────────────
+  // ─── Resize Helper for ALL Items (Strictly via Sliders/Buttons) ─────────────
   const updateItemSize = (id, type, delta) => {
     if (type === 'text') {
       setTextElements((prev) =>
@@ -545,7 +568,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
       );
     } else if (type === 'sticker') {
       setStickers((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, size: Math.max(24, Math.min(240, s.size + delta)) } : s))
+        prev.map((s) => (s.id === id ? { ...s, size: Math.max(24, Math.min(240, (s.size || 52) + delta)) } : s))
       );
     }
   };
@@ -562,7 +585,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
     }
   };
 
-  // Find currently selected item object
   const getSelectedItem = () => {
     if (!selectedItemId) return null;
     if (selectedItemType === 'text') {
@@ -591,19 +613,23 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
   };
 
   const filteredContacts = contactDirectory.filter((c) => {
+    if (!c) return false;
     const q = mentionSearch.toLowerCase().trim();
     if (!q) return true;
-    return (
-      (c.name && c.name.toLowerCase().includes(q)) ||
-      (c.phone && c.phone.includes(q))
-    );
+    const nameMatch = c.name && String(c.name).toLowerCase().includes(q);
+    const phoneMatch = c.phone && String(c.phone).replace(/\D/g, '').includes(q.replace(/\D/g, ''));
+    return Boolean(nameMatch || phoneMatch);
   });
 
-  // ─── Drag Overlays ──────────────────────────────────────────────────────────
+  // ─── Drag Overlays (Moves ONLY X/Y, Never touches Size) ─────────────────────
   const handleDragStart = (e, type, id, currentX, currentY) => {
     if (activeTool === 'draw' || activeTool === 'crop') return;
+    // Prevent default browser drag/selection behavior which caused erratic resizing
+    if (e.cancelable) e.preventDefault();
+    e.stopPropagation();
     setSelectedItemId(id);
     setSelectedItemType(type);
+
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     setDraggingItem({
@@ -618,6 +644,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
 
   const handleDragMove = (e) => {
     if (!draggingItem || !viewportRef.current) return;
+    if (e.cancelable) e.preventDefault();
     const rect = viewportRef.current.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -726,7 +753,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
         });
       }
 
-      // 4. Stickers & GIFs
+      // 4. Stickers & GIFs (Using Exact Configured Size)
       for (const s of stickers) {
         const posX = (s.x / 100) * targetWidth;
         const posY = (s.y / 100) * targetHeight;
@@ -825,17 +852,18 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-md p-2 sm:p-4 animate-fade-in select-none">
+    /* Outer Modal Backdrop - Pure Dark OLED Glassmorphism without top margin/gap */
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 backdrop-blur-md m-0 mt-0 p-0 sm:p-2 animate-fade-in select-none">
       
-      {/* ── PHONE SHELL CONTAINER ────────────────────────────────────────── */}
-      <div className="relative w-full max-w-[390px] h-[92vh] max-h-[820px] bg-neutral-950 rounded-[32px] border border-white/20 shadow-2xl overflow-hidden flex flex-col justify-between ring-1 ring-white/10">
+      {/* ── PHONE SHELL CONTAINER (Pure WhatsApp Dark Mode) ──────────────── */}
+      <div className="relative w-full max-w-[390px] h-full sm:h-[94vh] max-h-[820px] bg-[#0b141a] sm:rounded-[32px] border-0 sm:border border-neutral-800 shadow-2xl overflow-hidden flex flex-col justify-between m-0 mt-0">
         
-        {/* ── TOP HEADER / TOOLBAR ────────────────────────────────────────── */}
-        <div className="relative z-30 flex items-center justify-between px-3.5 py-3 bg-gradient-to-b from-black/90 via-black/50 to-transparent text-white">
+        {/* ── TOP HEADER / TOOLBAR (Dark WhatsApp Theme) ─────────────────── */}
+        <div className="relative z-30 flex items-center justify-between px-3.5 py-3 bg-[#111b21]/95 border-b border-neutral-800/80 text-white">
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-full hover:bg-white/20 transition-colors"
+            className="p-2 rounded-full hover:bg-neutral-800 transition-colors text-neutral-300 hover:text-white"
             title="Discard Status"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -854,7 +882,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                     setSelectedItemId(null);
                   }}
                   className={`p-2 rounded-full transition-colors ${
-                    activeTool === 'crop' ? 'bg-wa-teal text-white' : 'hover:bg-white/20 text-white'
+                    activeTool === 'crop' ? 'bg-wa-teal text-white' : 'hover:bg-neutral-800 text-neutral-300 hover:text-white'
                   }`}
                   title="Crop & Rotate"
                 >
@@ -872,7 +900,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                   setSelectedItemId(null);
                 }}
                 className={`p-2 rounded-full transition-colors ${
-                  activeTool === 'sticker' ? 'bg-wa-teal text-white' : 'hover:bg-white/20 text-white'
+                  activeTool === 'sticker' ? 'bg-wa-teal text-white' : 'hover:bg-neutral-800 text-neutral-300 hover:text-white'
                 }`}
                 title="Stickers, Emojis & GIFs"
               >
@@ -889,7 +917,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                   setSelectedItemId(null);
                 }}
                 className={`p-2 rounded-full transition-colors ${
-                  activeTool === 'text' ? 'bg-wa-teal text-white' : 'hover:bg-white/20 text-white'
+                  activeTool === 'text' ? 'bg-wa-teal text-white' : 'hover:bg-neutral-800 text-neutral-300 hover:text-white'
                 }`}
                 title="Add Text"
               >
@@ -905,7 +933,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                     setSelectedItemId(null);
                   }}
                   className={`p-2 rounded-full transition-colors ${
-                    activeTool === 'draw' ? 'bg-wa-teal text-white' : 'hover:bg-white/20 text-white'
+                    activeTool === 'draw' ? 'bg-wa-teal text-white' : 'hover:bg-neutral-800 text-neutral-300 hover:text-white'
                   }`}
                   title="Doodle / Draw"
                 >
@@ -919,7 +947,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="p-2 rounded-full hover:bg-white/20 transition-colors text-white"
+                className="p-2 rounded-full hover:bg-neutral-800 transition-colors text-neutral-300 hover:text-white"
                 title="Change Photo/Video"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -930,11 +958,11 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
           )}
         </div>
 
-        {/* ── TOOL SUB-PANELS ─────────────────────────────────────────────── */}
+        {/* ── TOOL SUB-PANELS (All Dark Mode Styled) ──────────────────────── */}
         
         {/* 1. DRAW SUB-BAR */}
         {activeTool === 'draw' && (
-          <div className="relative z-30 px-3 py-2 bg-neutral-900/95 border-b border-white/10 flex items-center justify-between gap-2 animate-fade-in">
+          <div className="relative z-30 px-3 py-2 bg-[#111b21] border-b border-neutral-800 flex items-center justify-between gap-2 animate-fade-in">
             <div className="flex items-center gap-1.5 overflow-x-auto py-1 custom-scroll">
               {COLOR_PALETTE.map((col) => (
                 <button
@@ -960,7 +988,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
             <button
               type="button"
               onClick={() => setDrawings((p) => p.slice(0, -1))}
-              className="text-xs text-white/90 hover:text-white px-2.5 py-1 rounded-md bg-white/15 shrink-0"
+              className="text-xs text-neutral-300 hover:text-white px-2.5 py-1 rounded-md bg-neutral-800 shrink-0"
               title="Undo stroke"
             >
               ↩ Undo
@@ -970,13 +998,13 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
 
         {/* 2. CROP & ROTATE SUB-BAR */}
         {activeTool === 'crop' && (
-          <div className="relative z-30 p-3 bg-neutral-900/95 border-b border-white/10 animate-fade-in flex flex-col gap-2.5 text-xs text-white">
+          <div className="relative z-30 p-3 bg-[#111b21] border-b border-neutral-800 animate-fade-in flex flex-col gap-2.5 text-xs text-white">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={handleRotate90}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 font-semibold transition-colors"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 font-semibold transition-colors text-neutral-200"
                 >
                   <span>🔄 Rotate 90°</span>
                 </button>
@@ -984,7 +1012,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                   type="button"
                   onClick={handleFlipHorizontal}
                   className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-semibold transition-colors ${
-                    isFlippedH ? 'bg-wa-teal text-white' : 'bg-white/15 hover:bg-white/25'
+                    isFlippedH ? 'bg-wa-teal text-white' : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200'
                   }`}
                 >
                   <span>↔ Flip</span>
@@ -994,7 +1022,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               <button
                 type="button"
                 onClick={handleResetCrop}
-                className="text-white/60 hover:text-white underline text-[11px]"
+                className="text-neutral-400 hover:text-white underline text-[11px]"
               >
                 Reset Original
               </button>
@@ -1009,7 +1037,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                   className={`px-2.5 py-1 rounded-full whitespace-nowrap text-xs font-semibold transition-all ${
                     selectedRatio === item.id
                       ? 'bg-wa-teal text-white ring-1 ring-white/50'
-                      : 'bg-white/10 text-white/70 hover:bg-white/20'
+                      : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
                   }`}
                 >
                   {item.label}
@@ -1017,9 +1045,9 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               ))}
             </div>
 
-            <div className="flex items-center justify-between pt-1 border-t border-white/10 gap-2">
+            <div className="flex items-center justify-between pt-1 border-t border-neutral-800 gap-2">
               <div className="flex-1 flex items-center gap-2">
-                <span className="text-[10px] text-white/50">Box Size:</span>
+                <span className="text-[10px] text-neutral-400">Box Size:</span>
                 <input
                   type="range"
                   min="30"
@@ -1051,11 +1079,11 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
           </div>
         )}
 
-        {/* 3. ADVANCED TEXT SUB-PANEL (10 Fonts, Custom Gradients for Text & Background) */}
+        {/* 3. ADVANCED TEXT SUB-PANEL (Pure Dark Mode) */}
         {activeTool === 'text' && (
-          <div className="absolute inset-x-2 top-12 bottom-16 z-40 p-3.5 bg-neutral-900/98 border border-white/20 rounded-2xl shadow-2xl backdrop-blur-2xl flex flex-col justify-between overflow-y-auto custom-scroll animate-scale-in text-white">
+          <div className="absolute inset-x-2 top-12 bottom-16 z-40 p-3.5 bg-[#111b21] border border-neutral-700 rounded-2xl shadow-2xl flex flex-col justify-between overflow-y-auto custom-scroll animate-scale-in text-white">
             <div>
-              <div className="flex items-center justify-between pb-1 border-b border-white/10 mb-2">
+              <div className="flex items-center justify-between pb-1.5 border-b border-neutral-800 mb-2">
                 <span className="text-xs font-bold text-wa-teal">
                   {editingTextId ? '✏️ Edit Text Overlay' : '✍️ New Text Overlay'}
                 </span>
@@ -1065,7 +1093,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                     setActiveTool(null);
                     setEditingTextId(null);
                   }}
-                  className="text-white/60 hover:text-white text-xs px-2 py-0.5"
+                  className="text-neutral-400 hover:text-white text-xs px-2 py-0.5"
                 >
                   ✕
                 </button>
@@ -1073,7 +1101,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
 
               {/* Text Input with Live Preview styling */}
               <div
-                className="p-3 rounded-xl border border-white/15 my-2 flex items-center justify-center min-h-[64px]"
+                className="p-3 rounded-xl border border-neutral-700 my-2 flex items-center justify-center min-h-[64px]"
                 style={{
                   backgroundColor: textBgMode === 'solid' ? textBgColor : undefined,
                   backgroundImage:
@@ -1105,7 +1133,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
 
               {/* 10 Fonts Switcher Strip */}
               <div className="mt-2.5">
-                <div className="flex items-center justify-between text-[11px] font-semibold text-white/60 mb-1">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-neutral-400 mb-1">
                   <span>Font Style (10 Types)</span>
                   <span className="text-wa-teal font-mono">{selectedFont.name}</span>
                 </div>
@@ -1118,7 +1146,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                       className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all border ${
                         selectedFont.id === font.id
                           ? 'border-wa-teal bg-wa-teal/20 text-white ring-1 ring-wa-teal'
-                          : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/15'
+                          : 'border-neutral-800 bg-neutral-800/80 text-neutral-300 hover:bg-neutral-700'
                       }`}
                       style={{ fontFamily: font.family }}
                     >
@@ -1129,21 +1157,21 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               </div>
 
               {/* Text Color Section: Solid or Gradient with Pickers */}
-              <div className="mt-3 pt-2 border-t border-white/10">
-                <div className="flex items-center justify-between text-[11px] font-semibold text-white/60 mb-1.5">
+              <div className="mt-3 pt-2 border-t border-neutral-800">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-neutral-400 mb-1.5">
                   <span>Text Color</span>
-                  <div className="flex items-center gap-1 bg-white/10 p-0.5 rounded-lg text-[10px]">
+                  <div className="flex items-center gap-1 bg-neutral-800 p-0.5 rounded-lg text-[10px]">
                     <button
                       type="button"
                       onClick={() => setTextColorMode('solid')}
-                      className={`px-2 py-0.5 rounded-md ${textColorMode === 'solid' ? 'bg-wa-teal text-white font-bold' : 'text-white/70'}`}
+                      className={`px-2 py-0.5 rounded-md ${textColorMode === 'solid' ? 'bg-wa-teal text-white font-bold' : 'text-neutral-400'}`}
                     >
                       Solid
                     </button>
                     <button
                       type="button"
                       onClick={() => setTextColorMode('gradient')}
-                      className={`px-2 py-0.5 rounded-md ${textColorMode === 'gradient' ? 'bg-wa-teal text-white font-bold' : 'text-white/70'}`}
+                      className={`px-2 py-0.5 rounded-md ${textColorMode === 'gradient' ? 'bg-wa-teal text-white font-bold' : 'text-neutral-400'}`}
                     >
                       Gradient
                     </button>
@@ -1163,7 +1191,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                         style={{ backgroundColor: c }}
                       />
                     ))}
-                    <label className="flex items-center gap-1 cursor-pointer text-[10px] text-white/70 ml-1">
+                    <label className="flex items-center gap-1 cursor-pointer text-[10px] text-neutral-300 ml-1">
                       <span>Pick:</span>
                       <input
                         type="color"
@@ -1175,7 +1203,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                   </div>
                 ) : (
                   <div className="flex flex-col gap-1.5">
-                    {/* Text Gradient Presets */}
                     <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 custom-scroll">
                       {GRADIENT_PRESETS.map((g) => (
                         <button
@@ -1192,9 +1219,8 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                         </button>
                       ))}
                     </div>
-                    {/* Text Gradient Custom Color Pickers */}
-                    <div className="flex items-center gap-3 bg-white/5 p-1.5 rounded-lg text-[11px]">
-                      <span className="text-white/50 text-[10px]">Custom Pick:</span>
+                    <div className="flex items-center gap-3 bg-neutral-800/80 p-1.5 rounded-lg text-[11px]">
+                      <span className="text-neutral-400 text-[10px]">Custom Pick:</span>
                       <label className="flex items-center gap-1 cursor-pointer">
                         <span>Color 1:</span>
                         <input
@@ -1214,7 +1240,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                         />
                       </label>
                       <div
-                        className="w-8 h-4 rounded ml-auto shadow-inner border border-white/20"
+                        className="w-8 h-4 rounded ml-auto shadow-inner border border-neutral-700"
                         style={{ background: `linear-gradient(135deg, ${textGrad1}, ${textGrad2})` }}
                       />
                     </div>
@@ -1223,28 +1249,28 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               </div>
 
               {/* Background Style: None | Solid | Gradient */}
-              <div className="mt-3 pt-2 border-t border-white/10">
-                <div className="flex items-center justify-between text-[11px] font-semibold text-white/60 mb-1.5">
+              <div className="mt-3 pt-2 border-t border-neutral-800">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-neutral-400 mb-1.5">
                   <span>Background Pill</span>
-                  <div className="flex items-center gap-1 bg-white/10 p-0.5 rounded-lg text-[10px]">
+                  <div className="flex items-center gap-1 bg-neutral-800 p-0.5 rounded-lg text-[10px]">
                     <button
                       type="button"
                       onClick={() => setTextBgMode('none')}
-                      className={`px-2 py-0.5 rounded-md ${textBgMode === 'none' ? 'bg-wa-teal text-white font-bold' : 'text-white/70'}`}
+                      className={`px-2 py-0.5 rounded-md ${textBgMode === 'none' ? 'bg-wa-teal text-white font-bold' : 'text-neutral-400'}`}
                     >
                       None
                     </button>
                     <button
                       type="button"
                       onClick={() => setTextBgMode('solid')}
-                      className={`px-2 py-0.5 rounded-md ${textBgMode === 'solid' ? 'bg-wa-teal text-white font-bold' : 'text-white/70'}`}
+                      className={`px-2 py-0.5 rounded-md ${textBgMode === 'solid' ? 'bg-wa-teal text-white font-bold' : 'text-neutral-400'}`}
                     >
                       Solid
                     </button>
                     <button
                       type="button"
                       onClick={() => setTextBgMode('gradient')}
-                      className={`px-2 py-0.5 rounded-md ${textBgMode === 'gradient' ? 'bg-wa-teal text-white font-bold' : 'text-white/70'}`}
+                      className={`px-2 py-0.5 rounded-md ${textBgMode === 'gradient' ? 'bg-wa-teal text-white font-bold' : 'text-neutral-400'}`}
                     >
                       Gradient
                     </button>
@@ -1264,7 +1290,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                         style={{ backgroundColor: c }}
                       />
                     ))}
-                    <label className="flex items-center gap-1 cursor-pointer text-[10px] text-white/70 ml-1">
+                    <label className="flex items-center gap-1 cursor-pointer text-[10px] text-neutral-300 ml-1">
                       <span>Pick:</span>
                       <input
                         type="color"
@@ -1278,7 +1304,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
 
                 {textBgMode === 'gradient' && (
                   <div className="flex flex-col gap-1.5">
-                    {/* Background Gradient Presets */}
                     <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 custom-scroll">
                       {GRADIENT_PRESETS.map((g) => (
                         <button
@@ -1295,9 +1320,8 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                         </button>
                       ))}
                     </div>
-                    {/* Background Gradient Custom Color Pickers */}
-                    <div className="flex items-center gap-3 bg-white/5 p-1.5 rounded-lg text-[11px]">
-                      <span className="text-white/50 text-[10px]">Custom Pick:</span>
+                    <div className="flex items-center gap-3 bg-neutral-800/80 p-1.5 rounded-lg text-[11px]">
+                      <span className="text-neutral-400 text-[10px]">Custom Pick:</span>
                       <label className="flex items-center gap-1 cursor-pointer">
                         <span>Color 1:</span>
                         <input
@@ -1317,7 +1341,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                         />
                       </label>
                       <div
-                        className="w-8 h-4 rounded ml-auto shadow-inner border border-white/20"
+                        className="w-8 h-4 rounded ml-auto shadow-inner border border-neutral-700"
                         style={{ background: `linear-gradient(135deg, ${bgGrad1}, ${bgGrad2})` }}
                       />
                     </div>
@@ -1327,14 +1351,14 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
             </div>
 
             {/* Bottom Actions */}
-            <div className="flex justify-end gap-2 pt-3 border-t border-white/10 mt-3">
+            <div className="flex justify-end gap-2 pt-3 border-t border-neutral-800 mt-3">
               <button
                 type="button"
                 onClick={() => {
                   setActiveTool(null);
                   setEditingTextId(null);
                 }}
-                className="text-xs text-white/70 hover:text-white px-3 py-1.5"
+                className="text-xs text-neutral-400 hover:text-white px-3 py-1.5"
               >
                 Cancel
               </button>
@@ -1349,16 +1373,16 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
           </div>
         )}
 
-        {/* 4. STICKER / EMOJI / GIF FULL PICKER DRAWER */}
+        {/* 4. STICKER / EMOJI / GIF FULL PICKER DRAWER (Pure Dark Mode) */}
         {activeTool === 'sticker' && (
-          <div className="absolute inset-x-2 top-14 bottom-16 z-40 bg-neutral-900/98 border border-white/20 rounded-2xl shadow-2xl backdrop-blur-2xl flex flex-col overflow-hidden animate-scale-in text-white">
-            <div className="flex items-center justify-between p-2.5 border-b border-white/10 bg-black/40">
-              <div className="flex items-center gap-1 bg-white/10 p-0.5 rounded-xl">
+          <div className="absolute inset-x-2 top-14 bottom-16 z-40 bg-[#111b21] border border-neutral-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-scale-in text-white">
+            <div className="flex items-center justify-between p-2.5 border-b border-neutral-800 bg-[#0b141a]">
+              <div className="flex items-center gap-1 bg-neutral-800 p-0.5 rounded-xl">
                 <button
                   type="button"
                   onClick={() => setStickerTab('emoji')}
                   className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                    stickerTab === 'emoji' ? 'bg-wa-teal text-white shadow' : 'text-white/70 hover:text-white'
+                    stickerTab === 'emoji' ? 'bg-wa-teal text-white shadow' : 'text-neutral-400 hover:text-white'
                   }`}
                 >
                   😊 Emojis
@@ -1367,7 +1391,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                   type="button"
                   onClick={() => setStickerTab('sticker')}
                   className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                    stickerTab === 'sticker' ? 'bg-wa-teal text-white shadow' : 'text-white/70 hover:text-white'
+                    stickerTab === 'sticker' ? 'bg-wa-teal text-white shadow' : 'text-neutral-400 hover:text-white'
                   }`}
                 >
                   ✨ Stickers
@@ -1376,7 +1400,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                   type="button"
                   onClick={() => setStickerTab('gif')}
                   className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                    stickerTab === 'gif' ? 'bg-wa-teal text-white shadow' : 'text-white/70 hover:text-white'
+                    stickerTab === 'gif' ? 'bg-wa-teal text-white shadow' : 'text-neutral-400 hover:text-white'
                   }`}
                 >
                   🎬 GIFs
@@ -1385,26 +1409,26 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               <button
                 type="button"
                 onClick={() => setActiveTool(null)}
-                className="p-1 rounded-full text-white/60 hover:text-white hover:bg-white/15"
+                className="p-1 rounded-full text-neutral-400 hover:text-white hover:bg-neutral-800"
               >
                 ✕
               </button>
             </div>
 
             {stickerTab !== 'emoji' && (
-              <div className="p-2 border-b border-white/10 bg-neutral-900">
+              <div className="p-2 border-b border-neutral-800 bg-[#111b21]">
                 <input
                   type="text"
                   value={giphySearch}
                   onChange={(e) => setGiphySearch(e.target.value)}
                   placeholder={`Search ${stickerTab === 'sticker' ? 'Stickers' : 'GIFs'} on Giphy...`}
-                  className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/15 text-xs text-white placeholder-white/40 focus:outline-none focus:border-wa-teal"
+                  className="w-full px-3 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-wa-teal"
                 />
               </div>
             )}
 
             {stickerTab === 'emoji' && (
-              <div className="flex-1 overflow-hidden">
+              <div className="flex-1 overflow-hidden bg-[#111b21]">
                 <EmojiPicker
                   onEmojiClick={handleAddEmoji}
                   theme={Theme.DARK}
@@ -1419,13 +1443,13 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
             )}
 
             {stickerTab !== 'emoji' && (
-              <div className="flex-1 p-2 overflow-y-auto custom-scroll">
+              <div className="flex-1 p-2 overflow-y-auto custom-scroll bg-[#111b21]">
                 {isGiphyLoading ? (
-                  <div className="flex items-center justify-center h-48 text-white/50 text-xs">
+                  <div className="flex items-center justify-center h-48 text-neutral-400 text-xs">
                     Loading {stickerTab === 'sticker' ? 'Stickers' : 'GIFs'}...
                   </div>
                 ) : giphyItems.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-48 text-white/40 text-xs text-center p-4">
+                  <div className="flex flex-col items-center justify-center h-48 text-neutral-500 text-xs text-center p-4">
                     <span>No media found</span>
                     <span className="text-[10px] mt-1">Try another search keyword</span>
                   </div>
@@ -1441,13 +1465,14 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                           key={item.id}
                           type="button"
                           onClick={() => handleAddGiphyMedia(item)}
-                          className="aspect-square rounded-xl bg-white/5 hover:bg-white/15 p-1 flex items-center justify-center overflow-hidden transition-transform hover:scale-105 active:scale-95"
+                          className="aspect-square rounded-xl bg-neutral-800/80 hover:bg-neutral-700 p-1 flex items-center justify-center overflow-hidden transition-transform hover:scale-105 active:scale-95 border border-neutral-700/50"
                         >
                           <img
                             src={thumb}
                             alt={item.title || 'media'}
                             className="w-full h-full object-contain"
                             loading="lazy"
+                            draggable={false}
                           />
                         </button>
                       );
@@ -1475,12 +1500,12 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
           style={{ aspectRatio: '9/16' }}
         >
           {!mediaSrc ? (
-            <div className="flex flex-col items-center justify-center p-6 text-center text-white/70">
-              <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center text-3xl mb-4 border border-white/20 animate-pulse">
+            <div className="flex flex-col items-center justify-center p-6 text-center text-neutral-300">
+              <div className="w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center text-3xl mb-4 border border-neutral-800 animate-pulse">
                 📱
               </div>
               <h3 className="text-base font-bold text-white mb-1">Create WhatsApp Status</h3>
-              <p className="text-xs text-white/60 mb-6 max-w-xs">
+              <p className="text-xs text-neutral-400 mb-6 max-w-xs">
                 Post an automated 24-hour Status to all your WhatsApp contacts.
               </p>
 
@@ -1502,7 +1527,8 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                 <img
                   src={mediaSrc}
                   alt="Status Preview"
-                  className="max-w-full max-h-full object-contain transition-transform duration-200"
+                  draggable={false}
+                  className="max-w-full max-h-full object-contain"
                   style={{
                     transform: `rotate(${rotation}deg) ${isFlippedH ? 'scaleX(-1)' : ''}`,
                   }}
@@ -1562,10 +1588,10 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                 />
               )}
 
-              {/* Draggable Text Overlays (Double click to edit, controls to resize) */}
+              {/* Draggable Text Overlays (Double-click to edit, Strictly size-locked while dragging) */}
               {textElements.map((t) => {
                 const isSelected = selectedItemId === t.id;
-                const fontPx = Math.round((t.size || 56) * 0.3); // Responsive preview scale
+                const fontPx = Math.round((t.size || 56) * 0.3);
                 return (
                   <div
                     key={t.id}
@@ -1580,8 +1606,8 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                     }}
                     onMouseDown={(e) => handleDragStart(e, 'text', t.id, t.x, t.y)}
                     onTouchStart={(e) => handleDragStart(e, 'text', t.id, t.x, t.y)}
-                    className={`absolute z-20 cursor-move group select-none transition-all ${
-                      isSelected ? 'ring-2 ring-wa-teal ring-offset-2 ring-offset-black/50 rounded-xl' : ''
+                    className={`absolute z-20 cursor-move group select-none ${
+                      isSelected ? 'ring-2 ring-wa-teal ring-offset-2 ring-offset-black rounded-xl' : ''
                     }`}
                     style={{
                       left: `${t.x}%`,
@@ -1591,7 +1617,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                     title="Double-click to edit text • Drag to move"
                   >
                     <div
-                      className="px-3 py-1.5 rounded-xl font-bold text-center transition-all whitespace-pre-wrap"
+                      className="px-3 py-1.5 rounded-xl font-bold text-center whitespace-pre-wrap select-none"
                       style={{
                         fontFamily: t.font?.family || 'sans-serif',
                         fontSize: `${fontPx}px`,
@@ -1617,14 +1643,14 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                     {/* Quick Item Controls (Edit, Resize & Delete) */}
                     {isSelected && (
                       <div className="absolute -top-7 inset-x-0 flex items-center justify-between pointer-events-auto">
-                        <div className="flex items-center gap-1 bg-black/80 rounded-lg p-0.5 border border-white/20">
+                        <div className="flex items-center gap-1 bg-[#111b21] rounded-lg p-0.5 border border-neutral-700 shadow-lg">
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               updateItemSize(t.id, 'text', -6);
                             }}
-                            className="w-5 h-5 rounded bg-white/20 hover:bg-white/30 text-white text-xs font-bold flex items-center justify-center"
+                            className="w-5 h-5 rounded bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold flex items-center justify-center"
                             title="Smaller"
                           >
                             -
@@ -1635,7 +1661,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                               e.stopPropagation();
                               updateItemSize(t.id, 'text', +6);
                             }}
-                            className="w-5 h-5 rounded bg-white/20 hover:bg-white/30 text-white text-xs font-bold flex items-center justify-center"
+                            className="w-5 h-5 rounded bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold flex items-center justify-center"
                             title="Larger"
                           >
                             +
@@ -1670,7 +1696,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                 );
               })}
 
-              {/* Draggable Stickers, Emojis & GIFs */}
+              {/* Draggable Stickers, Emojis & GIFs (Strictly moves X/Y, no resize while dragging) */}
               {stickers.map((s) => {
                 const isSelected = selectedItemId === s.id;
                 return (
@@ -1683,23 +1709,26 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                     }}
                     onMouseDown={(e) => handleDragStart(e, 'sticker', s.id, s.x, s.y)}
                     onTouchStart={(e) => handleDragStart(e, 'sticker', s.id, s.x, s.y)}
-                    className={`absolute z-20 cursor-move group select-none leading-none transition-all ${
-                      isSelected ? 'ring-2 ring-wa-teal ring-offset-2 ring-offset-black/50 rounded-xl' : ''
+                    className={`absolute z-20 cursor-move group select-none leading-none touch-none ${
+                      isSelected ? 'ring-2 ring-wa-teal ring-offset-2 ring-offset-black rounded-xl' : ''
                     }`}
                     style={{
                       left: `${s.x}%`,
                       top: `${s.y}%`,
                       transform: 'translate(-50%, -50%)',
                     }}
-                    title="Click to resize • Drag to move"
+                    title="Click to select & resize • Drag to move"
                   >
                     {s.type === 'emoji' ? (
-                      <span style={{ fontSize: `${s.size}px` }}>{s.content}</span>
+                      <span style={{ fontSize: `${s.size}px` }} className="select-none pointer-events-none">
+                        {s.content}
+                      </span>
                     ) : (
                       <img
                         src={s.content}
                         alt="sticker"
-                        className="object-contain pointer-events-none rounded-lg"
+                        draggable={false}
+                        className="object-contain pointer-events-none rounded-lg select-none"
                         style={{ width: `${s.size}px`, height: `${s.size}px` }}
                       />
                     )}
@@ -1707,14 +1736,14 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                     {/* Quick Resize & Delete controls when selected */}
                     {isSelected && (
                       <div className="absolute -top-7 inset-x-0 flex items-center justify-between pointer-events-auto">
-                        <div className="flex items-center gap-1 bg-black/80 rounded-lg p-0.5 border border-white/20">
+                        <div className="flex items-center gap-1 bg-[#111b21] rounded-lg p-0.5 border border-neutral-700 shadow-lg">
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               updateItemSize(s.id, 'sticker', -8);
                             }}
-                            className="w-5 h-5 rounded bg-white/20 hover:bg-white/30 text-white text-xs font-bold flex items-center justify-center"
+                            className="w-5 h-5 rounded bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold flex items-center justify-center"
                             title="Smaller"
                           >
                             -
@@ -1725,7 +1754,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                               e.stopPropagation();
                               updateItemSize(s.id, 'sticker', +8);
                             }}
-                            className="w-5 h-5 rounded bg-white/20 hover:bg-white/30 text-white text-xs font-bold flex items-center justify-center"
+                            className="w-5 h-5 rounded bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold flex items-center justify-center"
                             title="Larger"
                           >
                             +
@@ -1748,17 +1777,17 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                 );
               })}
 
-              {/* Bottom Floating Resize Dock when any item is selected */}
+              {/* Bottom Floating Resize Dock (Pure Dark Mode) */}
               {activeSelectedItem && !activeTool && (
                 <div
                   onClick={(e) => e.stopPropagation()}
-                  className="absolute bottom-2 inset-x-4 z-30 px-3 py-1.5 rounded-2xl bg-neutral-900/95 border border-white/20 shadow-2xl backdrop-blur-md flex items-center justify-between gap-2 text-white animate-fade-in"
+                  className="absolute bottom-2 inset-x-4 z-30 px-3 py-1.5 rounded-2xl bg-[#111b21] border border-neutral-700 shadow-2xl flex items-center justify-between gap-2 text-white animate-fade-in"
                 >
-                  <span className="text-[10px] font-bold text-white/60 uppercase tracking-wide">Resize:</span>
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">Resize:</span>
                   <button
                     type="button"
                     onClick={() => updateItemSize(activeSelectedItem.id, selectedItemType, -6)}
-                    className="w-6 h-6 rounded-md bg-white/10 hover:bg-white/20 flex items-center justify-center font-bold text-sm"
+                    className="w-6 h-6 rounded-md bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center font-bold text-sm"
                   >
                     -
                   </button>
@@ -1773,14 +1802,14 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                   <button
                     type="button"
                     onClick={() => updateItemSize(activeSelectedItem.id, selectedItemType, +6)}
-                    className="w-6 h-6 rounded-md bg-white/10 hover:bg-white/20 flex items-center justify-center font-bold text-sm"
+                    className="w-6 h-6 rounded-md bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center font-bold text-sm"
                   >
                     +
                   </button>
                   <button
                     type="button"
                     onClick={() => setSelectedItemId(null)}
-                    className="text-[10px] text-white/70 hover:text-white px-2 py-0.5 rounded bg-white/15 font-semibold"
+                    className="text-[10px] text-neutral-300 hover:text-white px-2 py-0.5 rounded bg-neutral-800 font-semibold"
                   >
                     Done
                   </button>
@@ -1790,20 +1819,20 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
           )}
         </div>
 
-        {/* ── DUAL-HANDLE VIDEO TRIMMER BAR ───────────────────────────────── */}
+        {/* ── DUAL-HANDLE VIDEO TRIMMER BAR (Pure Dark Mode) ──────────────── */}
         {mediaType === 'video' && mediaSrc && videoDuration > 0 && (
-          <div className="relative z-30 px-3.5 py-2.5 bg-neutral-900/95 border-t border-white/10 text-white text-xs">
+          <div className="relative z-30 px-3.5 py-2.5 bg-[#111b21] border-t border-neutral-800 text-white text-xs">
             <div className="flex items-center justify-between mb-1.5">
               <span className="font-bold flex items-center gap-1 text-wa-teal">
                 <span>✂️ Video Trimmer</span>
-                <span className="text-[10px] text-white/50">(Max 30s)</span>
+                <span className="text-[10px] text-neutral-400">(Max 30s)</span>
               </span>
-              <span className="font-mono text-white/80">
+              <span className="font-mono text-neutral-300">
                 {trimStart}s - {trimEnd}s <span className="text-wa-teal font-bold">({trimEnd - trimStart}s)</span>
               </span>
             </div>
 
-            <div className="relative w-full h-3 bg-white/10 rounded-full overflow-hidden mb-2">
+            <div className="relative w-full h-3 bg-neutral-800 rounded-full overflow-hidden mb-2">
               <div
                 className="absolute top-0 bottom-0 bg-wa-teal rounded-full transition-all"
                 style={{
@@ -1815,20 +1844,20 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
 
             <div className="grid grid-cols-2 gap-2 text-[11px]">
               <div className="flex flex-col gap-1">
-                <div className="flex items-center justify-between text-white/60">
+                <div className="flex items-center justify-between text-neutral-400">
                   <span>Start: {trimStart}s</span>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
                       onClick={() => handleTrimStartChange(trimStart - 1)}
-                      className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20"
+                      className="px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
                     >
                       -1s
                     </button>
                     <button
                       type="button"
                       onClick={() => handleTrimStartChange(trimStart + 1)}
-                      className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20"
+                      className="px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
                     >
                       +1s
                     </button>
@@ -1845,20 +1874,20 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               </div>
 
               <div className="flex flex-col gap-1">
-                <div className="flex items-center justify-between text-white/60">
+                <div className="flex items-center justify-between text-neutral-400">
                   <span>End: {trimEnd}s</span>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
                       onClick={() => handleTrimEndChange(trimEnd - 1)}
-                      className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20"
+                      className="px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
                     >
                       -1s
                     </button>
                     <button
                       type="button"
                       onClick={() => handleTrimEndChange(trimEnd + 1)}
-                      className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20"
+                      className="px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
                     >
                       +1s
                     </button>
@@ -1877,18 +1906,18 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
           </div>
         )}
 
-        {/* ── BOTTOM CAPTION, @ MENTION & SEND BAR ────────────────────────── */}
-        <div className="relative z-30 p-3 bg-gradient-to-t from-black via-black/90 to-transparent flex flex-col gap-2">
+        {/* ── BOTTOM CAPTION, @ MENTION & SEND BAR (Pure Dark Mode) ────────── */}
+        <div className="relative z-30 p-3 bg-[#111b21] border-t border-neutral-800/80 flex flex-col gap-2">
           
-          {/* Contact Mention Dropdown Popup */}
+          {/* Contact Mention Dropdown Popup (Dark Theme & Full Directory Search) */}
           {showMentionPicker && (
-            <div className="absolute inset-x-3 bottom-16 z-50 p-2.5 bg-neutral-900/98 border border-white/20 rounded-2xl shadow-2xl backdrop-blur-2xl text-white animate-scale-in">
-              <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-white/10">
+            <div className="absolute inset-x-3 bottom-16 z-50 p-3 bg-[#111b21] border border-neutral-700 rounded-2xl shadow-2xl text-white animate-scale-in">
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-neutral-800">
                 <span className="text-xs font-bold text-wa-teal">@ Mention Contact in Status</span>
                 <button
                   type="button"
                   onClick={() => setShowMentionPicker(false)}
-                  className="text-white/60 hover:text-white text-xs px-2"
+                  className="text-neutral-400 hover:text-white text-xs px-2"
                 >
                   ✕
                 </button>
@@ -1901,39 +1930,45 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                 value={mentionSearch}
                 onChange={(e) => setMentionSearch(e.target.value)}
                 placeholder="Search name or phone number..."
-                className="w-full px-3 py-1.5 rounded-lg bg-white/10 border border-white/15 text-xs text-white placeholder-white/40 focus:outline-none focus:border-wa-teal mb-2"
+                className="w-full px-3 py-2 rounded-xl bg-neutral-800 border border-neutral-700 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-wa-teal mb-2"
               />
 
               {/* Contacts list */}
-              <div className="max-h-44 overflow-y-auto custom-scroll flex flex-col gap-1">
+              <div className="max-h-48 overflow-y-auto custom-scroll flex flex-col gap-1">
                 {filteredContacts.length === 0 ? (
-                  <div className="py-4 text-center text-white/40 text-xs">
-                    No contacts found in directory
+                  <div className="py-5 text-center text-neutral-400 text-xs">
+                    {contactDirectory.length === 0
+                      ? 'Loading contacts directory...'
+                      : 'No matching contacts found'}
                   </div>
                 ) : (
-                  filteredContacts.map((contact, idx) => (
-                    <button
-                      key={contact.phone || idx}
-                      type="button"
-                      onClick={() => handleSelectMention(contact)}
-                      className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/15 transition-colors text-left"
-                    >
-                      <div className="w-7 h-7 rounded-full bg-wa-teal/20 text-wa-teal border border-wa-teal/30 flex items-center justify-center font-bold text-xs shrink-0">
-                        {(contact.name || contact.phone || '?').charAt(0).toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-white truncate">
-                          {contact.name || 'Unnamed Contact'}
-                        </p>
-                        <p className="text-[10px] text-white/50 truncate">
-                          {contact.phone}
-                        </p>
-                      </div>
-                      <span className="text-[10px] font-bold text-wa-teal bg-wa-teal/15 px-2 py-0.5 rounded">
-                        Tag
-                      </span>
-                    </button>
-                  ))
+                  filteredContacts.map((contact, idx) => {
+                    const displayName = contact.name || 'Unnamed Contact';
+                    const displayPhone = contact.phone || '';
+                    return (
+                      <button
+                        key={contact.phone || contact._id || idx}
+                        type="button"
+                        onClick={() => handleSelectMention(contact)}
+                        className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-neutral-800 transition-colors text-left"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-wa-teal/20 text-wa-teal border border-wa-teal/40 flex items-center justify-center font-bold text-xs shrink-0">
+                          {displayName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-white truncate">
+                            {displayName}
+                          </p>
+                          <p className="text-[11px] text-neutral-400 truncate">
+                            {displayPhone}
+                          </p>
+                        </div>
+                        <span className="text-[10px] font-bold text-wa-teal bg-wa-teal/15 px-2.5 py-1 rounded-md">
+                          Tag
+                        </span>
+                      </button>
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -1946,7 +1981,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               {mentionedContacts.map((m) => (
                 <div
                   key={m.phone}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-wa-teal/20 border border-wa-teal/40 text-wa-teal text-[10px] font-semibold shrink-0"
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-wa-teal/20 border border-wa-teal/40 text-wa-teal text-[10px] font-semibold shrink-0"
                 >
                   <span>@{m.name || m.phone}</span>
                   <button
@@ -1963,13 +1998,13 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
 
           {/* Caption Input Bar with @ Mention trigger & Send Button */}
           <div className="flex items-center gap-2">
-            <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-full bg-white/15 border border-white/20 backdrop-blur-md text-white text-sm focus-within:border-wa-teal focus-within:bg-black/60 transition-all">
+            <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-full bg-neutral-800/90 border border-neutral-700 text-white text-sm focus-within:border-wa-teal focus-within:bg-neutral-900 transition-all">
               {/* @ Mention button */}
               <button
                 type="button"
                 onClick={() => setShowMentionPicker((p) => !p)}
                 className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm shrink-0 transition-colors ${
-                  showMentionPicker ? 'bg-wa-teal text-white' : 'hover:bg-white/20 text-white/80'
+                  showMentionPicker ? 'bg-wa-teal text-white' : 'hover:bg-neutral-700 text-neutral-300'
                 }`}
                 title="Mention a contact (@)"
               >
@@ -1988,7 +2023,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                   }
                 }}
                 placeholder="Add a caption... (use @ to mention)"
-                className="w-full bg-transparent text-white placeholder-white/50 text-xs sm:text-sm focus:outline-none"
+                className="w-full bg-transparent text-white placeholder-neutral-500 text-xs sm:text-sm focus:outline-none"
               />
             </div>
 
@@ -2000,7 +2035,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 shadow-xl transition-all ${
                 mediaSrc
                   ? 'bg-wa-teal hover:bg-teal-600 text-white cursor-pointer active:scale-95 shadow-wa-teal/50'
-                  : 'bg-white/10 text-white/30 cursor-not-allowed'
+                  : 'bg-neutral-800 text-neutral-600 cursor-not-allowed'
               }`}
               title="Done & Set Status"
             >
