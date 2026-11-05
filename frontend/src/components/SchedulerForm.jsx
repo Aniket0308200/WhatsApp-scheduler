@@ -6,6 +6,7 @@ import DateTimePicker from './DateTimePicker';
 import GifStickerPickerModal, { WhatsAppStickerIcon, WhatsAppGifIcon, convertImageFileToWebpSticker } from './GifStickerPickerModal';
 import MediaGalleryModal from './MediaGalleryModal';
 import PollModal from './PollModal';
+import StatusEditorModal from './StatusEditorModal';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
 import { useTheme } from '../ThemeContext';
 
@@ -567,6 +568,10 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
   const [pollData, setPollData] = useState(null); // { question, options, allowMultiple }
   const [showPollModal, setShowPollModal] = useState(false);
 
+  // ── WhatsApp Status State & Modal ──
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [attachedStatus, setAttachedStatus] = useState(null); // { type, data, caption, preview, trimStart, trimEnd }
+
   // Categorized lists
   const imagesList = attachedMediaList.filter(m => m.type === 'image');
   const videosList = attachedMediaList.filter(m => m.type === 'video');
@@ -1057,12 +1062,16 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       }
     }
 
+    if (attachedStatus && finalRecipients.length === 0) {
+      finalRecipients = [{ phone: 'status@broadcast', name: 'WhatsApp Status (Story)', isStatus: true }];
+    }
+
     if (finalRecipients.length === 0) {
-      toast.error('Add at least one recipient.');
+      toast.error('Add at least one recipient or create a Status.');
       return;
     }
-    if (!message.trim() && attachedMediaList.length === 0 && !pollData) {
-      toast.error('Please enter a message, attach media, or create a poll.');
+    if (!message.trim() && attachedMediaList.length === 0 && !pollData && !attachedStatus) {
+      toast.error('Please enter a message, attach media, create a poll, or set a status.');
       return;
     }
 
@@ -1081,17 +1090,34 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
     try {
       for (const recipient of finalRecipients) {
         try {
-          await scheduleMessage({
-            phone: recipient.phone,
-            message: message.trim(),
-            scheduledAt: utcISO,
-            recipientName: recipient.name,
-            mediaType: attachedMediaList.length === 1 ? attachedMediaList[0].type : attachedMediaList.length > 1 ? 'multiple' : (pollData ? 'poll' : null),
-            mediaData: attachedMediaList.length === 1 ? attachedMediaList[0].data : null,
-            mediaName: attachedMediaList.length === 1 ? attachedMediaList[0].name : attachedMediaList.length > 1 ? `${attachedMediaList.length} items` : null,
-            mediaList: attachedMediaList,
-            pollData: pollData || null
-          });
+          if (recipient.phone === 'status@broadcast' && attachedStatus) {
+            await scheduleMessage({
+              phone: 'status@broadcast',
+              message: attachedStatus.caption || message.trim(),
+              scheduledAt: utcISO,
+              recipientName: 'WhatsApp Status (Story)',
+              mediaType: attachedStatus.type || 'image',
+              mediaData: attachedStatus.data,
+              mediaName: attachedStatus.type === 'video' ? 'status_video.mp4' : 'status_photo.jpg',
+              mediaList: [{
+                type: attachedStatus.type || 'image',
+                data: attachedStatus.data,
+                name: attachedStatus.type === 'video' ? 'status_video.mp4' : 'status_photo.jpg'
+              }]
+            });
+          } else {
+            await scheduleMessage({
+              phone: recipient.phone,
+              message: message.trim(),
+              scheduledAt: utcISO,
+              recipientName: recipient.name,
+              mediaType: attachedMediaList.length === 1 ? attachedMediaList[0].type : attachedMediaList.length > 1 ? 'multiple' : (pollData ? 'poll' : null),
+              mediaData: attachedMediaList.length === 1 ? attachedMediaList[0].data : null,
+              mediaName: attachedMediaList.length === 1 ? attachedMediaList[0].name : attachedMediaList.length > 1 ? `${attachedMediaList.length} items` : null,
+              mediaList: attachedMediaList,
+              pollData: pollData || null
+            });
+          }
           successCount++;
         } catch (err) {
           failCount++;
@@ -1112,6 +1138,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       setPhone('');
       setMessage('');
       setPollData(null);
+      setAttachedStatus(null);
       handleRemoveAllMedia();
       setScheduledAt(getDefaultTime());
       setTimeConfirmed(false);
@@ -1256,47 +1283,24 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
               </p>
             </div>
 
-            {/* Quick Button: WhatsApp Status / Story (Pro Feature) */}
+            {/* Quick Button: Create WhatsApp Status / Story */}
             <button
               type="button"
               onClick={() => {
-                if (userPlanKey !== 'pro') {
-                  toast('👑 WhatsApp Status & Story scheduling is a Pro Plan exclusive feature.', {
-                    icon: '🚀',
-                    duration: 3500
-                  });
-                  onViewQuota?.();
-                  return;
-                }
-                const hasStatus = recipients.some(r => r.phone === 'status@broadcast');
-                if (hasStatus) {
-                  setRecipients(prev => prev.filter(r => r.phone !== 'status@broadcast'));
-                  toast('Removed WhatsApp Status recipient.', { icon: 'ℹ️' });
-                } else {
-                  setRecipients(prev => [...prev, {
-                    phone: 'status@broadcast',
-                    name: 'WhatsApp Status (Story)',
-                    isStatus: true
-                  }]);
-                  toast.success('📱 Added WhatsApp Status (Story) as recipient!');
-                }
+                setShowStatusModal(true);
               }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs ${
-                recipients.some(r => r.phone === 'status@broadcast')
-                  ? 'bg-purple-600 text-white ring-2 ring-purple-400'
-                  : userPlanKey === 'pro'
-                  ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/40'
-                  : 'bg-slate-100 dark:bg-wa-dsurf text-slate-500 dark:text-wa-dmuted border border-slate-200 dark:border-wa-dbdr hover:text-purple-600'
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95 ${
+                attachedStatus || recipients.some(r => r.phone === 'status@broadcast')
+                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white ring-2 ring-purple-400 shadow-purple-500/30'
+                  : 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/40'
               }`}
-              title={userPlanKey === 'pro' ? 'Schedule automated WhatsApp Status / Story' : 'Pro Plan Exclusive: WhatsApp Status Scheduling'}
+              title="Create & Schedule WhatsApp Status (Story)"
             >
-              <span>📱</span>
-              <span>{recipients.some(r => r.phone === 'status@broadcast') ? '✓ Status / Story Added' : '+ WhatsApp Status (Story)'}</span>
-              {userPlanKey !== 'pro' && (
-                <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-500 text-slate-900">
-                  PRO
-                </span>
-              )}
+              <span className="text-sm">📱</span>
+              <span>{attachedStatus || recipients.some(r => r.phone === 'status@broadcast') ? '✓ WhatsApp Status Set' : '🎨 Create WhatsApp Status'}</span>
+              <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-purple-200/80 dark:bg-purple-800/80 text-purple-900 dark:text-purple-100">
+                STORY
+              </span>
             </button>
           </div>
 
@@ -1470,14 +1474,16 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
               value={message}
               onChange={e => setMessage(e.target.value)}
               placeholder={
-                pollData
+                attachedStatus
+                  ? "WhatsApp Status caption is set, or type an extra note..."
+                  : pollData
                   ? "Add an optional message or note for your poll..."
                   : attachedMediaList.length > 0
                   ? "Add an optional caption for your media..."
                   : "Type your message here… (e.g: Happy birthday 🎉)"
               }
               rows={4}
-              required={attachedMediaList.length === 0 && !pollData}
+              required={attachedMediaList.length === 0 && !pollData && !attachedStatus}
               className="w-full px-4 py-2.5 text-sm bg-transparent text-gray-900 dark:text-wa-dtext focus:outline-none resize-y min-h-[80px] custom-scroll"
             />
 
@@ -1721,6 +1727,61 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
               </div>
             )}
 
+            {/* ── WhatsApp Status Preview Card ── */}
+            {attachedStatus && (
+              <div className="mx-3 mb-2.5 p-3 rounded-2xl bg-gradient-to-r from-purple-50/90 via-fuchsia-50/60 to-purple-50/90 dark:from-purple-950/40 dark:via-purple-900/20 dark:to-purple-950/40 border border-purple-200/90 dark:border-purple-800/60 shadow-xs animate-fade-in group">
+                <div className="flex items-center justify-between gap-3">
+                  <div
+                    onClick={() => setShowStatusModal(true)}
+                    className="flex items-center gap-3 flex-1 cursor-pointer min-w-0"
+                    title="Click to edit WhatsApp Status"
+                  >
+                    <div className="relative w-11 h-16 rounded-lg overflow-hidden bg-black border-2 border-purple-400 dark:border-purple-500 shadow-sm shrink-0 flex items-center justify-center">
+                      {attachedStatus.type === 'video' ? (
+                        <video src={attachedStatus.data} className="w-full h-full object-cover" />
+                      ) : (
+                        <img src={attachedStatus.preview || attachedStatus.data} alt="Status Preview" className="w-full h-full object-cover" />
+                      )}
+                      <span className="absolute bottom-0.5 right-0.5 text-[8px] bg-black/70 text-white px-1 rounded font-bold">
+                        9:16
+                      </span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-200/80 dark:bg-purple-900/60 text-purple-900 dark:text-purple-300 flex items-center gap-1">
+                          <span>📱</span> WhatsApp Status (Story)
+                        </span>
+                        <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold">
+                          {attachedStatus.type === 'video' ? '🎥 30s Video' : '📷 9:16 Photo'}
+                        </span>
+                      </div>
+                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate mt-1">
+                        {attachedStatus.caption || <span className="italic text-slate-400 dark:text-wa-dmuted">(No caption)</span>}
+                      </p>
+                      <p className="mt-1 text-[11px] text-purple-600 dark:text-purple-400 font-bold group-hover:underline flex items-center gap-1">
+                        ✏️ Tap to edit status photo, text or doodle
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAttachedStatus(null);
+                      setRecipients(prev => prev.filter(r => r.phone !== 'status@broadcast'));
+                      toast.success('WhatsApp Status removed');
+                    }}
+                    className="p-1.5 text-slate-400 hover:text-red-500 dark:text-wa-dmuted dark:hover:text-red-400 rounded-lg hover:bg-white dark:hover:bg-wa-dsurf transition-colors shrink-0"
+                    title="Remove Status"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Toolbar under textarea */}
             <div className="flex flex-wrap items-center justify-between gap-1.5 px-2.5 sm:px-3 py-2 border-t border-slate-200/60 dark:border-wa-dbdr/50 bg-slate-50/50 dark:bg-wa-dpanel/50 transition-colors">
               <div className="flex items-center flex-wrap gap-1 sm:gap-1.5 min-w-0">
@@ -1927,6 +1988,20 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                       </svg>
                     </button>
 
+                    {/* WhatsApp Status Story button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowStatusModal(true)}
+                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                        attachedStatus || recipients.some(r => r.phone === 'status@broadcast')
+                          ? 'text-purple-600 dark:text-purple-400 bg-purple-100/70 dark:bg-purple-950/60 ring-1 ring-purple-400/40'
+                          : 'text-gray-400 hover:text-purple-500 dark:text-wa-dmuted dark:hover:text-purple-400 hover:bg-gray-200 dark:hover:bg-wa-dsurf'
+                      }`}
+                      title={attachedStatus ? "Edit WhatsApp Status (Story)" : "Create WhatsApp Status (Story)"}
+                    >
+                      <span className="text-sm">📱</span>
+                    </button>
+
                     {/* Smart Name Variable Pills (Starter & Pro) */}
                     <div className="flex items-center gap-1 sm:gap-1.5 ml-0.5 sm:ml-1 border-l border-slate-200 dark:border-wa-dbdr pl-1.5 sm:pl-2 shrink-0">
                       <button
@@ -2048,8 +2123,9 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
         {(() => {
           const scheduledDateObj = scheduledAt ? new Date(scheduledAt.replace(' ', 'T')) : null;
           const isScheduledInFuture = Boolean(scheduledDateObj && !isNaN(scheduledDateObj.getTime()) && scheduledDateObj.getTime() > Date.now());
-          const hasValidRecipient = recipients.length > 0 || Boolean(phone.trim());
-          const hasValidContent = Boolean(message.trim() || attachedMediaList.length > 0 || pollData);
+          const hasValidRecipient = recipients.length > 0 || Boolean(phone.trim()) || Boolean(attachedStatus);
+          const hasValidContent = Boolean(message.trim() || attachedMediaList.length > 0 || pollData || attachedStatus);
+          const isStatusTarget = Boolean(attachedStatus || recipients.some(r => r.phone === 'status@broadcast'));
           const canConnect = isConnected || isReconnecting;
           const isQuotaExhausted = Boolean(quota && !quota.isUnlimited && quota.plan !== 'pro' && typeof quota.remaining === 'number' && quota.remaining <= 0);
 
@@ -2081,11 +2157,13 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
               ) : !canConnect ? (
                 '⚠️ Connect WhatsApp First'
               ) : !hasValidRecipient ? (
-                '📱 Add Recipient Phone Number'
+                '📱 Add Recipient or WhatsApp Status'
               ) : !hasValidContent ? (
-                '✍️ Enter Message, Poll, or Attach Media'
+                '✍️ Enter Message, Poll, Status, or Attach Media'
               ) : (!timeConfirmed && !isScheduledInFuture) ? (
                 '⏰ Pick a Future Date & Time'
+              ) : isStatusTarget ? (
+                '📱 Schedule WhatsApp Status (Story)'
               ) : recipients.length > 1 ? (
                 `📅 Schedule to ${recipients.length} Recipients`
               ) : (
@@ -2156,6 +2234,24 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
           onSave={(newPoll) => {
             setPollData(newPoll);
             toast.success(pollData ? 'Poll updated!' : 'WhatsApp Poll attached!');
+          }}
+        />
+
+        {/* WhatsApp Status / Story Editor Modal */}
+        <StatusEditorModal
+          isOpen={showStatusModal}
+          onClose={() => setShowStatusModal(false)}
+          initialData={attachedStatus}
+          onSave={(statusObj) => {
+            setAttachedStatus(statusObj);
+            setRecipients(prev => {
+              const filtered = prev.filter(r => r.phone !== 'status@broadcast');
+              return [{ phone: 'status@broadcast', name: 'WhatsApp Status (Story)', isStatus: true }, ...filtered];
+            });
+            if (statusObj.caption) {
+              setMessage(statusObj.caption);
+            }
+            toast.success('📱 WhatsApp Status attached! Pick scheduled time.');
           }}
         />
       </form>

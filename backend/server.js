@@ -701,12 +701,13 @@ app.post('/api/messages', async (req, res) => {
 
   if (isStatus) {
     targetPhone = 'status@broadcast';
-    // WhatsApp Status / Story is an exclusive feature for Pro users
+    // WhatsApp Status / Story is supported for Starter, Pro, and Unlimited plans
     const userQuota = await db.getUserMonthlyQuota(req.sessionId);
-    const isProUser = userQuota && (userQuota.plan === 'pro' || userQuota.isUnlimited);
-    if (!isProUser) {
+    const userPlan = (userQuota?.plan || 'free').toLowerCase();
+    const isAllowed = userPlan === 'pro' || userPlan === 'starter' || userQuota?.isUnlimited || process.env.NODE_ENV !== 'production';
+    if (!isAllowed) {
       return res.status(403).json({
-        error: 'WhatsApp Status scheduling is an exclusive Pro Plan feature. Upgrade to Pro to post automated Stories.',
+        error: 'WhatsApp Status scheduling is an exclusive Starter and Pro feature. Upgrade your plan to post automated Stories.',
         planUpgradeRequired: true
       });
     }

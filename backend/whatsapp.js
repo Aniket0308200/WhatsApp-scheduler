@@ -1430,11 +1430,21 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
     if (isStatus) {
       try {
         const contacts = await db.Contact.find({ sessionId }).lean();
-        const statusJidList = (contacts || [])
-          .map(c => c.jid)
+        const contactJids = (contacts || [])
+          .map(c => c.jid || (c.phone ? `${c.phone.replace(/\D/g, '')}@s.whatsapp.net` : null))
           .filter(j => j && j.endsWith('@s.whatsapp.net'));
-        if (statusJidList.length > 0) {
-          sendOptions.statusJidList = statusJidList;
+
+        if (session.contacts) {
+          for (const [cJid] of session.contacts.entries()) {
+            if (cJid && cJid.endsWith('@s.whatsapp.net') && !contactJids.includes(cJid)) {
+              contactJids.push(cJid);
+            }
+          }
+        }
+
+        if (contactJids.length > 0) {
+          sendOptions.statusJidList = contactJids;
+          console.log(`[WA Status] [${sessionId}] Broadcasting status to ${contactJids.length} contacts`);
         }
       } catch (e) {
         console.warn(`[WA Status] [${sessionId}] Note: sending status without explicit contact filter:`, e.message);
