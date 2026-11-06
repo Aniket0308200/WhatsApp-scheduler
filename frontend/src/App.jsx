@@ -411,6 +411,8 @@ export default function App() {
                         refreshMessages();
                         refreshQuota();
                       }}
+                      plan={quota?.plan || 'free'}
+                      onViewQuota={() => setActiveView('quota')}
                     />
                   </div>
                 )

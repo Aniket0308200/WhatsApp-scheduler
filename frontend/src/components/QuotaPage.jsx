@@ -198,6 +198,14 @@ export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authU
               </li>
               <li className="flex items-center gap-1.5">
                 <span className="text-emerald-500 font-bold">✓</span>
+                <span>🎨 <strong>Smart Media Editor</strong> (Draw Shapes, Arrows, Blur, Text & Stickers)</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span className="text-emerald-500 font-bold">✓</span>
+                <span>📊 <strong>Advanced Analytics</strong> (Delivery Rate, Charts & Poll Tracking)</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span className="text-emerald-500 font-bold">✓</span>
                 <span>Smart personalization ({"{Name}"}, {"{FirstName}"})</span>
               </li>
               <li className="flex items-center gap-1.5">

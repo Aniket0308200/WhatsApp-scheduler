@@ -264,6 +264,14 @@ export default function PricingSection({ onGetStarted, onUpgradePlan, currentPla
                 </div>
                 <div className="flex items-start gap-2.5">
                   <span className="text-emerald-500 font-black shrink-0">✓</span>
+                  <span>🎨 <strong>Smart Media Editor</strong> (Draw Shapes, Arrows, Blur, Text & Stickers)</span>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <span className="text-emerald-500 font-black shrink-0">✓</span>
+                  <span>📊 <strong>Advanced Analytics</strong> (Delivery Rate, Charts & Poll Tracking)</span>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <span className="text-emerald-500 font-black shrink-0">✓</span>
                   <span>Priority Delivery Engine with Instant Dispatch</span>
                 </div>
                 <div className="flex items-start gap-2.5">

@@ -15,7 +15,8 @@ export default function MediaGalleryModal({
   onClearCategory = null,
   onAddMore = null,
   readOnly = false,
-  mediaPurged = false
+  mediaPurged = false,
+  onEditItem = null
 }) {
   const [zoomItem, setZoomItem] = useState(null);
 
@@ -175,6 +176,22 @@ export default function MediaGalleryModal({
                       <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-black/60 text-white backdrop-blur-xs">
                         {isImage ? '📷' : isVideo ? '🎥' : isAudio ? '🎵' : isDocument ? '📄' : isGif ? '🎞️' : '🏷️'}
                       </span>
+
+                      {/* Per-item Edit Button for Images */}
+                      {!readOnly && onEditItem && isImage && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditItem(item);
+                          }}
+                          className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-purple-600/90 hover:bg-purple-700 text-white text-[10px] font-bold shadow-md transition-transform hover:scale-105 active:scale-95 flex items-center gap-1 z-10 cursor-pointer"
+                          title="Edit photo with shapes, text & blur"
+                        >
+                          <span>🎨</span>
+                          <span>Edit</span>
+                        </button>
+                      )}
 
                       {/* Per-item Delete Button (in edit mode) */}
                       {!readOnly && onRemoveItem && (

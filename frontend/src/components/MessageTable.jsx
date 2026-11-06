@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { format, parseISO, isValid } from 'date-fns';
 import { cancelMessage, deleteMessage } from '../api';
 import MediaGalleryModal from './MediaGalleryModal';
+import AdvancedAnalytics from './AdvancedAnalytics';
 import { formatUtcToZoned, getUserTimeZone } from '../utils/timezoneHelper';
 
 const STATUS_BADGE = {
@@ -39,7 +40,9 @@ function formatDate(val) {
   }
 }
 
-export default function MessageTable({ messages, loading, onRefresh }) {
+export default function MessageTable({ messages, loading, onRefresh, plan = 'free', onViewQuota }) {
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'analytics'
+  const isPro = plan === 'pro';
   const [filter,   setFilter]   = useState('all');
   const [actionId, setActionId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -123,21 +126,79 @@ export default function MessageTable({ messages, loading, onRefresh }) {
   return (
     <div className="bg-white dark:bg-wa-dpanel rounded-2xl shadow-sm border border-slate-200 dark:border-wa-dbdr overflow-hidden transition-colors duration-200">
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="px-5 py-4 border-b border-slate-200 dark:border-wa-dbdr flex items-center justify-between flex-wrap gap-3 bg-slate-50/50 dark:bg-[#111b21]/30">
-        <div>
-          <h2 className="font-semibold text-gray-800 dark:text-wa-dtext">Scheduled Messages</h2>
-          <p className="text-xs text-gray-400 dark:text-wa-dmuted mt-0.5">{messages.length} total</p>
+      <div className="px-5 py-3.5 border-b border-slate-200 dark:border-wa-dbdr flex items-center justify-between flex-wrap gap-3 bg-slate-50/50 dark:bg-[#111b21]/30">
+        <div className="flex items-center gap-3">
+          {isPro ? (
+            <div className="flex items-center p-1 bg-slate-200/70 dark:bg-wa-dsurf rounded-xl border border-slate-300/60 dark:border-wa-dbdr text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                  viewMode === 'list'
+                    ? 'bg-white dark:bg-wa-dpanel text-slate-900 dark:text-white shadow-xs font-bold'
+                    : 'text-slate-600 dark:text-wa-dmuted hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <span>📋</span>
+                <span>Scheduled Messages</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 dark:bg-wa-dsurf text-slate-600 dark:text-wa-dmuted">
+                  {messages.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('analytics')}
+                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                  viewMode === 'analytics'
+                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-xs font-bold'
+                    : 'text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-white'
+                }`}
+              >
+                <span>📊</span>
+                <span>Advanced Analytics</span>
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-amber-400 text-black">
+                  PRO
+                </span>
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-gray-800 dark:text-wa-dtext">Scheduled Messages</h2>
+                {onViewQuota && (
+                  <button
+                    type="button"
+                    onClick={onViewQuota}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 hover:bg-purple-100 transition-colors cursor-pointer"
+                    title="Upgrade to Pro to unlock Advanced Analytics, Charts & Delivery Rates"
+                  >
+                    <span>📊</span>
+                    <span>Unlock Analytics (Pro)</span>
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 dark:text-wa-dmuted mt-0.5">{messages.length} total messages</p>
+            </div>
+          )}
         </div>
         <button
           onClick={onRefresh}
           disabled={loading}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200/80 dark:border-wa-dbdr text-xs font-semibold text-slate-700 dark:text-wa-dtext hover:text-emerald-600 dark:hover:text-emerald-400 bg-white dark:bg-wa-dsurf hover:bg-slate-50 dark:hover:bg-wa-dsurf/80 shadow-2xs transition-all disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200/80 dark:border-wa-dbdr text-xs font-semibold text-slate-700 dark:text-wa-dtext hover:text-emerald-600 dark:hover:text-emerald-400 bg-white dark:bg-wa-dsurf hover:bg-slate-50 dark:hover:bg-wa-dsurf/80 shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
           title="Refresh scheduled messages"
         >
           <RefreshIcon className="w-4 h-4" spinning={loading} />
           <span>Refresh</span>
         </button>
       </div>
+
+      {viewMode === 'analytics' && isPro ? (
+        <div className="p-4 sm:p-5">
+          <AdvancedAnalytics messages={messages} onRefresh={onRefresh} />
+        </div>
+      ) : (
+        <>
 
       {/* ── Filter tabs ────────────────────────────────────────────────── */}
       <div className="flex overflow-x-auto border-b border-slate-200 dark:border-wa-dbdr px-2 gap-1 pt-2 bg-slate-50/20 dark:bg-transparent">
@@ -468,6 +529,8 @@ export default function MessageTable({ messages, loading, onRefresh }) {
             </button>
           </div>
         </div>
+      )}
+      </>
       )}
 
       {/* ── Media Gallery Modal (ReadOnly mode for history) ─────────────── */}

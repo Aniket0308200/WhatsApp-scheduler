@@ -41,6 +41,8 @@ const PLANS = {
       'Unlimited / 1,000 Messages / month',
       'Unlimited Contacts & Groups at once',
       'All Media (Videos, Documents, PDFs, Audio)',
+      'Smart Media Editor (Draw, Shapes, Arrows, Blur & Text)',
+      'Advanced Analytics Dashboard & Delivery Rates',
       'Priority Message Queue & Instant Dispatch',
       'WhatsApp Poll Scheduling',
       'Smart Timezone Auto-Adjustment',

@@ -14,3 +14,4 @@ This folder contains the complete, battle-tested code for the **WhatsApp Status 
    - Restore `showStatusModal` and `attachedStatus` state hooks.
    - Re-enable the "Create WhatsApp Status" button and preview card.
 3. The backend already supports `status@broadcast` handling in `backend/whatsapp.js` and `backend/server.js`.
+

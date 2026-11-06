@@ -6,6 +6,7 @@ import DateTimePicker from './DateTimePicker';
 import GifStickerPickerModal, { WhatsAppStickerIcon, WhatsAppGifIcon, convertImageFileToWebpSticker } from './GifStickerPickerModal';
 import MediaGalleryModal from './MediaGalleryModal';
 import PollModal from './PollModal';
+import MediaEditorModal from './MediaEditorModal';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
 import { useTheme } from '../ThemeContext';
 import { getUserTimeZone, zonedTimeToUtc } from '../utils/timezoneHelper';
@@ -568,6 +569,52 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
   // ── Poll State & Modal ──
   const [pollData, setPollData] = useState(null); // { question, options, allowMultiple }
   const [showPollModal, setShowPollModal] = useState(false);
+
+  // ── Smart Media Editor State (Pro) ──
+  const [editingMediaItem, setEditingMediaItem] = useState(null);
+
+  const handleOpenMediaEditor = (item) => {
+    if (quota?.plan !== 'pro') {
+      toast((t) => (
+        <div className="flex flex-col gap-2 p-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🎨</span>
+            <p className="text-xs font-bold text-slate-800 dark:text-wa-dtext">
+              Smart Media Editor is a Pro Feature
+            </p>
+          </div>
+          <p className="text-[11px] text-slate-600 dark:text-wa-dmuted">
+            Upgrade to Pro to draw shapes, arrows, blur redaction, stickers and custom styled text on photos!
+          </p>
+          <div className="flex items-center justify-end gap-2 mt-1">
+            <button
+              type="button"
+              onClick={() => toast.dismiss(t.id)}
+              className="px-2 py-1 rounded text-xs text-slate-500 hover:text-slate-700 cursor-pointer"
+            >
+              Later
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                toast.dismiss(t.id);
+                onViewQuota?.();
+              }}
+              className="px-3 py-1 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold shadow-xs cursor-pointer"
+            >
+              Upgrade to Pro
+            </button>
+          </div>
+        </div>
+      ), { duration: 6000 });
+      return;
+    }
+    setEditingMediaItem(item);
+  };
+
+  const handleSaveEditedMedia = (updatedItem) => {
+    setAttachedMediaList(prev => prev.map(m => (m.id === updatedItem.id ? updatedItem : m)));
+  };
 
   // Categorized lists
   const imagesList = attachedMediaList.filter(m => m.type === 'image');
@@ -1469,16 +1516,29 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveMediaItem(attachedMediaList[0].id)}
-                  className="p-1.5 text-gray-400 hover:text-red-500 dark:text-wa-dmuted dark:hover:text-red-400 rounded-lg hover:bg-white dark:hover:bg-wa-dsurf transition-colors shrink-0"
-                  title="Remove attachment"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {attachedMediaList[0].type === 'image' && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenMediaEditor(attachedMediaList[0])}
+                      className="px-2.5 py-1 rounded-lg text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-100/90 dark:bg-purple-950/60 hover:bg-purple-200 dark:hover:bg-purple-900/60 border border-purple-300/80 dark:border-purple-800/60 transition-colors flex items-center gap-1 cursor-pointer"
+                      title="Edit photo with shapes, arrows, blur, stickers & text (Pro)"
+                    >
+                      <span>🎨</span>
+                      <span>Edit</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveMediaItem(attachedMediaList[0].id)}
+                    className="p-1.5 text-gray-400 hover:text-red-500 dark:text-wa-dmuted dark:hover:text-red-400 rounded-lg hover:bg-white dark:hover:bg-wa-dsurf transition-colors shrink-0"
+                    title="Remove attachment"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             )}
 
@@ -2094,6 +2154,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
           }
           onRemoveItem={handleRemoveMediaItem}
           onClearCategory={() => handleClearCategory(activeGalleryFolder)}
+          onEditItem={handleOpenMediaEditor}
           onAddMore={() => {
             if (activeGalleryFolder === 'document') {
               documentInputRef.current?.click();
@@ -2117,6 +2178,18 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
             toast.success(pollData ? 'Poll updated!' : 'WhatsApp Poll attached!');
           }}
         />
+
+        {/* Smart Media & Photo Editor Modal (Pro) */}
+        {editingMediaItem && (
+          <MediaEditorModal
+            isOpen={Boolean(editingMediaItem)}
+            onClose={() => setEditingMediaItem(null)}
+            mediaItem={editingMediaItem}
+            onSave={handleSaveEditedMedia}
+            plan={quota?.plan || 'free'}
+            onUpgrade={onViewQuota}
+          />
+        )}
       </form>
       {showImportModal && (
         <ContactsImportModal
