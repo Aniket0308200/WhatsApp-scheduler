@@ -871,16 +871,16 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
   const handleSelectMention = (contact) => {
     const rawName = contact.name || contact.displayName || contact.pushName || '';
     const cleanName = rawName && !rawName.startsWith('Contact +') ? rawName : contact.phone;
-    const mentionTag = `@${cleanName} `;
-    setCaption((prev) => prev + (prev.endsWith(' ') || !prev ? '' : ' ') + mentionTag);
     const jid = contact.jid || `${String(contact.phone).replace(/\D/g, '')}@s.whatsapp.net`;
     if (!mentionedContacts.some((m) => m.phone === contact.phone)) {
       setMentionedContacts((prev) => [...prev, { name: cleanName, phone: contact.phone, jid }]);
     }
+    // Clean trailing '@' if user triggered picker by typing '@'
+    setCaption((prev) => prev.replace(/@\s*$/, '').trimEnd());
     setShowMentionPicker(false);
     setMentionSearch('');
     if (captionInputRef.current) captionInputRef.current.focus();
-    toast.success(`Mentioned ${cleanName}`);
+    toast.success(`Tagged @${cleanName}`);
   };
 
   const handleRemoveMentionTag = (phone) => {
@@ -1170,12 +1170,12 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
   const modalContent = (
     /* Outer Modal Backdrop - Full viewport OLED dark blur without any top margin or gap */
     <div
-      className="fixed inset-0 top-0 left-0 right-0 bottom-0 z-[120] flex items-center justify-center bg-black/75 backdrop-blur-md p-2 sm:p-4 m-0 mt-0 select-none animate-fade-in"
+      className="fixed inset-0 top-0 left-0 right-0 bottom-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-md p-2 sm:p-4 m-0 mt-0 select-none animate-fade-in"
       style={{ top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh', margin: 0 }}
     >
       
       {/* ── PHONE SHELL CONTAINER (Original sleek phone dimensions & rounded corners) ──── */}
-      <div className="relative w-full max-w-[390px] h-full sm:h-[94vh] max-h-[820px] bg-[#0b141a] sm:rounded-[32px] border-0 sm:border border-neutral-800 shadow-2xl overflow-hidden flex flex-col justify-between m-0">
+      <div className="relative w-full max-w-[390px] h-full sm:h-[94vh] max-h-[820px] bg-[#0b141a] sm:rounded-[32px] border border-neutral-800 shadow-2xl overflow-hidden flex flex-col justify-between m-0">
         
         {/* ── TOP HEADER / TOOLBAR (Dark WhatsApp Theme) ─────────────────── */}
         <div className="relative z-30 flex items-center justify-between px-3.5 py-3 bg-[#111b21]/95 border-b border-neutral-800/80 text-white">
@@ -2617,7 +2617,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                     setShowMentionPicker(true);
                   }
                 }}
-                placeholder="Add a caption... (use @ to mention)"
+                placeholder="Add a caption..."
                 className="w-full bg-transparent text-white placeholder-neutral-500 text-xs sm:text-sm focus:outline-none"
               />
             </div>

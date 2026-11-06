@@ -386,6 +386,7 @@ const ScheduledMessageSchema = new mongoose.Schema({
     options: { type: [String], default: [] },
     allowMultiple: { type: Boolean, default: false }
   },
+  mentions: { type: [String], default: [] },
   mediaList: {
     type: [{
       type: { type: String, default: 'image' },
@@ -588,7 +589,7 @@ function toSqliteUtc(dateInput) {
 
 // ─── Message Query Functions ──────────────────────────────────────────────────
 
-async function insertMessage(sessionId, phone, message, scheduledAt, recipientName = null, mediaType = null, mediaData = null, mediaName = null, mediaList = [], pollData = null) {
+async function insertMessage(sessionId, phone, message, scheduledAt, recipientName = null, mediaType = null, mediaData = null, mediaName = null, mediaList = [], pollData = null, mentions = []) {
   const schedDate = new Date(scheduledAt);
   const msg = new ScheduledMessage({
     sessionId,
@@ -599,6 +600,7 @@ async function insertMessage(sessionId, phone, message, scheduledAt, recipientNa
     mediaData: mediaData || null,
     mediaName: mediaName || null,
     mediaList: Array.isArray(mediaList) ? mediaList : [],
+    mentions: Array.isArray(mentions) ? mentions : [],
     pollData: pollData && pollData.question ? {
       question: String(pollData.question).trim(),
       options: Array.isArray(pollData.options) ? pollData.options.map(o => String(o).trim()).filter(Boolean) : [],
@@ -700,6 +702,7 @@ async function getPendingDueMessages() {
     mediaData: m.mediaData || null,
     mediaName: m.mediaName || null,
     mediaList: m.mediaList || [],
+    mentions: m.mentions || [],
     pollData: m.pollData || null,
     scheduled_at: toSqliteUtc(m.scheduledAt),
     status: m.status,

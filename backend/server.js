@@ -667,7 +667,7 @@ app.get('/api/messages', async (req, res) => {
  * Body: { phone, message, scheduledAt, recipientName? }
  */
 app.post('/api/messages', async (req, res) => {
-  const { phone, message, scheduledAt, recipientName, mediaType, mediaData, mediaName, mediaList, pollData } = req.body;
+  const { phone, message, scheduledAt, recipientName, mediaType, mediaData, mediaName, mediaList, pollData, mentions } = req.body;
 
   const status = whatsapp.getStatus(req.sessionId);
   const profile = whatsapp.getConnectedProfile(req.sessionId);
@@ -701,16 +701,6 @@ app.post('/api/messages', async (req, res) => {
 
   if (isStatus) {
     targetPhone = 'status@broadcast';
-    // WhatsApp Status / Story is supported for Starter, Pro, and Unlimited plans
-    const userQuota = await db.getUserMonthlyQuota(req.sessionId);
-    const userPlan = (userQuota?.plan || 'free').toLowerCase();
-    const isAllowed = userPlan === 'pro' || userPlan === 'starter' || userQuota?.isUnlimited || process.env.NODE_ENV !== 'production';
-    if (!isAllowed) {
-      return res.status(403).json({
-        error: 'WhatsApp Status scheduling is an exclusive Starter and Pro feature. Upgrade your plan to post automated Stories.',
-        planUpgradeRequired: true
-      });
-    }
   } else if (isGroup) {
     if (!/^\d+@g\.us$/.test(phone)) {
       return res.status(400).json({ error: 'Invalid group JID.' });
@@ -751,8 +741,8 @@ app.post('/api/messages', async (req, res) => {
       });
     }
 
-    // Media & Sticker is an exclusive feature for Starter & Pro plans
-    if (hasMedia) {
+    // Media & Sticker is an exclusive feature for Starter & Pro plans (Status stories exempt)
+    if (hasMedia && !isStatus) {
       const userPlan = (quota?.plan || 'free').toLowerCase();
       if (userPlan === 'free') {
         return res.status(403).json({
@@ -814,7 +804,8 @@ app.post('/api/messages', async (req, res) => {
       finalMediaData,
       finalMediaName,
       finalMediaList,
-      hasPoll ? pollData : null
+      hasPoll ? pollData : null,
+      Array.isArray(mentions) ? mentions : []
     );
 
     res.status(201).json({
