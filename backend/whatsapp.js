@@ -1459,51 +1459,97 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
 
     if (mentionJids.length > 0 && messagePayload) {
       messagePayload.mentions = mentionJids;
+      messagePayload.contextInfo = messagePayload.contextInfo || {};
+      messagePayload.contextInfo.mentionedJid = mentionJids;
     }
 
     let sendOptions = {};
     if (isStatus) {
       sendOptions.broadcast = true;
       try {
+        const myJid = session.sock.user?.id || session.sock.authState?.creds?.me?.id || '';
+        const ownPn = myJid ? myJid.split('@')[0].split(':')[0].replace(/\D/g, '') : (session.connectedProfile?.phone ? session.connectedProfile.phone.replace(/\D/g, '') : null);
+        const ownNormalizedJid = ownPn ? `${ownPn}@s.whatsapp.net` : null;
+
         const contactJidSet = new Set();
 
-        // 1. Own primary WhatsApp phone JID (ESSENTIAL: companion socket syncs story to user's phone)
-        const ownPn = session.sock.user?.id ? session.sock.user.id.split('@')[0].split(':')[0].replace(/\D/g, '') : null;
-        if (ownPn && ownPn.length >= 7) {
-          contactJidSet.add(`${ownPn}@s.whatsapp.net`);
-        }
-
-        // 2. Mentioned contacts (guaranteed delivery and mention notification)
+        // 1. Explicitly mentioned contacts (guaranteed priority delivery & notification)
         mentionJids.forEach(mj => {
           if (mj && typeof mj === 'string') {
             const clean = mj.split('@')[0].split(':')[0].replace(/\D/g, '');
-            if (clean && clean.length >= 7) contactJidSet.add(`${clean}@s.whatsapp.net`);
+            if (clean && clean !== ownPn && clean.length >= 7) {
+              contactJidSet.add(`${clean}@s.whatsapp.net`);
+            }
           }
         });
 
-        // 3. Keep statusJidList fast & responsive (max 10 recipients to prevent WhatsApp USync & pre-key timeout)
-        try {
-          const contacts = await db.Contact.find({ sessionId }).limit(10).lean();
-          (contacts || []).forEach(c => {
-            if (contactJidSet.size < 12) {
-              const raw = c.jid || (c.phone ? `${c.phone.replace(/\D/g, '')}@s.whatsapp.net` : null);
-              if (raw) {
-                const clean = raw.split('@')[0].split(':')[0].replace(/\D/g, '');
-                if (clean && clean.length >= 7) contactJidSet.add(`${clean}@s.whatsapp.net`);
+        // 2. Load contacts from in-memory contactCache (synced from WhatsApp)
+        if (session.contactCache && typeof session.contactCache === 'object') {
+          for (const cJid of Object.keys(session.contactCache)) {
+            if (cJid && cJid.endsWith('@s.whatsapp.net') && !cJid.includes('@g.us') && !cJid.includes('broadcast')) {
+              const clean = cJid.split('@')[0].split(':')[0].replace(/\D/g, '');
+              if (clean && clean !== ownPn && clean.length >= 7) {
+                contactJidSet.add(`${clean}@s.whatsapp.net`);
+                if (contactJidSet.size >= 40) break;
               }
             }
-          });
-        } catch (_) {}
+          }
+        }
+
+        // 3. Fallback to MongoDB Contact documents if contactCache has few contacts
+        if (contactJidSet.size < 40) {
+          try {
+            const contacts = await db.Contact.find({ sessionId, type: 'personal' }).limit(40).lean();
+            (contacts || []).forEach(c => {
+              const raw = c.jid || (c.phone ? `${c.phone.replace(/\D/g, '')}@s.whatsapp.net` : null);
+              if (raw && raw.endsWith('@s.whatsapp.net')) {
+                const clean = raw.split('@')[0].split(':')[0].replace(/\D/g, '');
+                if (clean && clean !== ownPn && clean.length >= 7) {
+                  contactJidSet.add(`${clean}@s.whatsapp.net`);
+                }
+              }
+            });
+          } catch (_) {}
+        }
+
+        // 4. Fallback to recent message recipients from DB
+        if (contactJidSet.size < 20) {
+          try {
+            const recentMsgs = await db.ScheduledMessage.find({ sessionId }).select('encryptedNumber').limit(50).lean();
+            for (const m of (recentMsgs || [])) {
+              try {
+                const num = db.decrypt(m.encryptedNumber);
+                if (num && !num.includes('@g.us') && !num.includes('broadcast')) {
+                  const clean = num.replace(/\D/g, '');
+                  if (clean && clean !== ownPn && clean.length >= 7) {
+                    contactJidSet.add(`${clean}@s.whatsapp.net`);
+                  }
+                }
+              } catch (_) {}
+            }
+          } catch (_) {}
+        }
+
+        // CRITICAL: SENDER'S OWN NUMBER MUST NEVER BE IN statusJidList!
+        // Adding the sender's own number to status broadcast creates a self-recipient loop that triggers WhatsApp server ack error=479!
+        if (ownNormalizedJid) {
+          contactJidSet.delete(ownNormalizedJid);
+        }
 
         const contactJids = Array.from(contactJidSet);
         if (contactJids.length > 0) {
           sendOptions.statusJidList = contactJids;
-          console.log(`[WA Status] [${sessionId}] Broadcasting status to ${contactJids.length} recipients (Own JID: ${ownPn ? '+' + ownPn : 'none'}, Mentions: ${mentionJids.length})`);
+          sendOptions.allStatusJidList = contactJids;
+          messagePayload.statusJidList = contactJids;
+          if (mentionJids.length > 0) {
+            sendOptions.mentions = mentionJids;
+          }
+          console.log(`[WA Status] [${sessionId}] Broadcasting status to ${contactJids.length} contacts (Excluded Self: +${ownPn}, Mentions: ${mentionJids.length})`);
         } else {
           console.warn(`[WA Status] [${sessionId}] Warning: contactJids is empty for status broadcast!`);
         }
       } catch (e) {
-        console.warn(`[WA Status] [${sessionId}] Note: sending status without explicit contact filter:`, e.message);
+        console.warn(`[WA Status] [${sessionId}] Note: error building status contact list:`, e.message);
       }
     }
 
