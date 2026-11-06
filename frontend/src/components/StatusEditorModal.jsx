@@ -59,6 +59,176 @@ const ASPECT_RATIOS = [
   { id: '3:4', label: '3:4 Photo', ratio: 3 / 4 },
 ];
 
+// ─── 10 Text Box Shapes / Labels ─────────────────────────────────────────────
+const BOX_SHAPES = [
+  { id: 'pill', name: 'Pill', icon: '💊', desc: 'Classic Rounded' },
+  { id: 'rounded', name: 'Rounded', icon: '🔲', desc: 'Smooth Card' },
+  { id: 'sharp', name: 'Square', icon: '⏹️', desc: 'Crisp Rectangle' },
+  { id: 'oval', name: 'Oval', icon: '🥚', desc: 'Stadium' },
+  { id: 'tag', name: 'Tag / Label', icon: '🏷️', desc: 'Pointed Tag' },
+  { id: 'badge', name: 'Badge', icon: '⬢', desc: 'Hexagon Badge' },
+  { id: 'bubble', name: 'Speech Bubble', icon: '💬', desc: 'Chat Bubble' },
+  { id: 'ticket', name: 'Ticket', icon: '🎟️', desc: 'Coupon Ticket' },
+  { id: 'banner', name: 'Ribbon', icon: '🎗️', desc: 'Banner Ribbon' },
+  { id: 'starburst', name: 'Starburst', icon: '💥', desc: 'Comic Burst' },
+];
+
+const getBoxShapeStyles = (shapeId = 'pill', padX = 14, padY = 6) => {
+  const base = {
+    padding: `${padY}px ${padX}px`,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    position: 'relative',
+  };
+
+  switch (shapeId) {
+    case 'pill':
+      return { ...base, borderRadius: '9999px' };
+    case 'rounded':
+      return { ...base, borderRadius: '16px' };
+    case 'sharp':
+      return { ...base, borderRadius: '4px' };
+    case 'oval':
+      return { ...base, borderRadius: '50% / 100%' };
+    case 'tag':
+      return {
+        ...base,
+        padding: `${padY}px ${padX + 8}px ${padY}px ${padX + 16}px`,
+        clipPath: 'polygon(16px 0%, 100% 0%, 100% 100%, 16px 100%, 0% 50%)',
+      };
+    case 'badge':
+      return {
+        ...base,
+        padding: `${padY}px ${padX + 14}px`,
+        clipPath: 'polygon(14px 0%, calc(100% - 14px) 0%, 100% 50%, calc(100% - 14px) 100%, 14px 100%, 0% 50%)',
+      };
+    case 'bubble':
+      return {
+        ...base,
+        padding: `${padY}px ${padX}px ${padY + 8}px ${padX}px`,
+        clipPath: 'polygon(0% 0%, 100% 0%, 100% 78%, 24px 78%, 12px 100%, 15px 78%, 0% 78%)',
+      };
+    case 'ticket':
+      return {
+        ...base,
+        padding: `${padY}px ${padX + 10}px`,
+        clipPath: 'polygon(0% 0%, 100% 0%, 100% 32%, 93% 50%, 100% 68%, 100% 100%, 0% 100%, 0% 68%, 7% 50%, 0% 32%)',
+      };
+    case 'banner':
+      return {
+        ...base,
+        padding: `${padY}px ${padX + 14}px`,
+        clipPath: 'polygon(0% 0%, 100% 0%, calc(100% - 14px) 50%, 100% 100%, 0% 100%, 14px 50%)',
+      };
+    case 'starburst':
+      return {
+        ...base,
+        padding: `${padY + 6}px ${padX + 14}px`,
+        clipPath: 'polygon(50% 0%, 65% 15%, 85% 5%, 85% 28%, 100% 38%, 90% 58%, 100% 75%, 80% 82%, 75% 100%, 55% 90%, 40% 100%, 30% 85%, 10% 90%, 15% 70%, 0% 60%, 12% 42%, 0% 25%, 20% 20%, 25% 0%, 42% 12%)',
+      };
+    default:
+      return { ...base, borderRadius: '9999px' };
+  }
+};
+
+const drawBoxShapeOnCanvas = (ctx, shapeId, x, y, w, h) => {
+  ctx.beginPath();
+  switch (shapeId) {
+    case 'pill':
+      ctx.roundRect(x, y, w, h, Math.min(w, h) / 2);
+      break;
+    case 'rounded':
+      ctx.roundRect(x, y, w, h, Math.min(24, Math.min(w, h) / 3));
+      break;
+    case 'sharp':
+      ctx.rect(x, y, w, h);
+      break;
+    case 'oval':
+      ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+      break;
+    case 'tag': {
+      const cut = Math.min(32, w * 0.15);
+      ctx.moveTo(x + cut, y);
+      ctx.lineTo(x + w, y);
+      ctx.lineTo(x + w, y + h);
+      ctx.lineTo(x + cut, y + h);
+      ctx.lineTo(x, y + h / 2);
+      ctx.closePath();
+      break;
+    }
+    case 'badge': {
+      const cut = Math.min(28, w * 0.12);
+      ctx.moveTo(x + cut, y);
+      ctx.lineTo(x + w - cut, y);
+      ctx.lineTo(x + w, y + h / 2);
+      ctx.lineTo(x + w - cut, y + h);
+      ctx.lineTo(x + cut, y + h);
+      ctx.lineTo(x, y + h / 2);
+      ctx.closePath();
+      break;
+    }
+    case 'bubble': {
+      const r = Math.min(20, h * 0.25);
+      const bodyH = h * 0.8;
+      ctx.roundRect(x, y, w, bodyH, r);
+      ctx.moveTo(x + 20, y + bodyH);
+      ctx.lineTo(x + 10, y + h);
+      ctx.lineTo(x + 35, y + bodyH);
+      ctx.closePath();
+      break;
+    }
+    case 'ticket': {
+      const notchR = Math.min(14, h * 0.18);
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + w, y);
+      ctx.lineTo(x + w, y + h / 2 - notchR);
+      ctx.arc(x + w, y + h / 2, notchR, -Math.PI / 2, Math.PI / 2, true);
+      ctx.lineTo(x + w, y + h);
+      ctx.lineTo(x, y + h);
+      ctx.lineTo(x, y + h / 2 + notchR);
+      ctx.arc(x, y + h / 2, notchR, Math.PI / 2, -Math.PI / 2, true);
+      ctx.closePath();
+      break;
+    }
+    case 'banner': {
+      const cut = Math.min(28, w * 0.12);
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + w, y);
+      ctx.lineTo(x + w - cut, y + h / 2);
+      ctx.lineTo(x + w, y + h);
+      ctx.lineTo(x, y + h);
+      ctx.lineTo(x + cut, y + h / 2);
+      ctx.closePath();
+      break;
+    }
+    case 'starburst': {
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      const rxOuter = w / 2;
+      const ryOuter = h / 2;
+      const rxInner = rxOuter * 0.78;
+      const ryInner = ryOuter * 0.78;
+      const points = 16;
+      for (let i = 0; i < points * 2; i++) {
+        const angle = (i * Math.PI) / points;
+        const rx = i % 2 === 0 ? rxOuter : rxInner;
+        const ry = i % 2 === 0 ? ryOuter : ryInner;
+        const px = cx + Math.cos(angle) * rx;
+        const py = cy + Math.sin(angle) * ry;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      break;
+    }
+    default:
+      ctx.roundRect(x, y, w, h, 20);
+      break;
+  }
+};
+
 export default function StatusEditorModal({ isOpen, onClose, onSave, initialData }) {
   // Media State
   const [mediaType, setMediaType] = useState('image'); // 'image' | 'video'
@@ -97,6 +267,10 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
   const [bgDegree, setBgDegree] = useState(135);
   const [selectedFont, setSelectedFont] = useState(STATUS_FONTS[0]);
   const [textSize, setTextSize] = useState(56);
+  const [boxShape, setBoxShape] = useState('pill'); // 'pill'|'rounded'|'sharp'|'oval'|'tag'|'badge'|'bubble'|'ticket'|'banner'|'starburst'
+  const [boxPaddingX, setBoxPaddingX] = useState(14);
+  const [boxPaddingY, setBoxPaddingY] = useState(6);
+  const [resizingPadding, setResizingPadding] = useState(null); // { id, corner: 'tl'|'tr'|'bl'|'br', startX, startY, origPadX, origPadY }
 
   // Stickers / Emojis / GIFs State
   const [stickers, setStickers] = useState([]); // { id, type: 'emoji'|'image', content, size, x, y }
@@ -458,7 +632,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
 
   const handleEndDraw = () => setIsDrawing(false);
 
-  // ─── Advanced Text Handlers (Add, Edit, Gradients) ───────────────────────────
+  // ─── Advanced Text Handlers (Add, Edit, Gradients, Shapes, Padding) ─────────
   const handleSaveText = () => {
     if (!newTextInput.trim()) {
       setActiveTool(null);
@@ -485,6 +659,9 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                 bgDegree,
                 font: selectedFont,
                 size: textSize,
+                boxShape,
+                paddingX: boxPaddingX,
+                paddingY: boxPaddingY,
               }
             : t
         )
@@ -506,6 +683,9 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
         bgDegree,
         font: selectedFont,
         size: 56,
+        boxShape,
+        paddingX: boxPaddingX,
+        paddingY: boxPaddingY,
         x: 50,
         y: 45 + (textElements.length % 4) * 8,
       };
@@ -534,7 +714,79 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
     setBgDegree(t.bgDegree ?? 135);
     setSelectedFont(t.font || STATUS_FONTS[0]);
     setTextSize(t.size || 56);
+    setBoxShape(t.boxShape || 'pill');
+    setBoxPaddingX(t.paddingX ?? 14);
+    setBoxPaddingY(t.paddingY ?? 6);
     setActiveTool('text');
+  };
+
+  const updateTextPadding = (id, deltaX, deltaY) => {
+    setTextElements((prev) =>
+      prev.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              paddingX: Math.max(4, Math.min(60, (t.paddingX ?? 14) + deltaX)),
+              paddingY: Math.max(2, Math.min(45, (t.paddingY ?? 6) + deltaY)),
+            }
+          : t
+      )
+    );
+  };
+
+  // Corner resize handles for dynamic box padding
+  const handlePaddingResizeStart = (e, id, corner, curPadX, curPadY) => {
+    if (e.cancelable) e.preventDefault();
+    e.stopPropagation();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    setResizingPadding({
+      id,
+      corner,
+      startX: clientX,
+      startY: clientY,
+      origPadX: curPadX,
+      origPadY: curPadY,
+    });
+  };
+
+  const handlePaddingResizeMove = (e) => {
+    if (!resizingPadding) return;
+    if (e.cancelable) e.preventDefault();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    const deltaX = Math.round((clientX - resizingPadding.startX) / 2.5);
+    const deltaY = Math.round((clientY - resizingPadding.startY) / 2.5);
+
+    let factorX = 1;
+    let factorY = 1;
+    if (resizingPadding.corner === 'tl') {
+      factorX = -1;
+      factorY = -1;
+    } else if (resizingPadding.corner === 'tr') {
+      factorX = 1;
+      factorY = -1;
+    } else if (resizingPadding.corner === 'bl') {
+      factorX = -1;
+      factorY = 1;
+    } else if (resizingPadding.corner === 'br') {
+      factorX = 1;
+      factorY = 1;
+    }
+
+    const newPadX = Math.max(4, Math.min(60, resizingPadding.origPadX + deltaX * factorX));
+    const newPadY = Math.max(2, Math.min(45, resizingPadding.origPadY + deltaY * factorY));
+
+    setTextElements((prev) =>
+      prev.map((t) =>
+        t.id === resizingPadding.id ? { ...t, paddingX: newPadX, paddingY: newPadY } : t
+      )
+    );
+  };
+
+  const handlePaddingResizeEnd = () => {
+    setResizingPadding(null);
   };
 
   const handleDeleteText = (id) => {
@@ -847,18 +1099,17 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
 
         const metrics = ctx.measureText(t.text);
         const textW = metrics.width;
-        const padX = Math.round(fontPx * 0.45);
-        const padY = Math.round(fontPx * 0.28);
+        const padX = Math.round((t.paddingX ?? 14) * 3.2);
+        const padY = Math.round((t.paddingY ?? 6) * 3.2);
         const pillH = fontPx + padY * 2;
         const pillW = textW + padX * 2;
         const rectX = posX - pillW / 2;
         const rectY = posY - pillH / 2;
 
-        // Draw Background
+        // Draw Background Shape (Supports all 10 custom box shapes)
         if (t.bgMode === 'solid') {
           ctx.fillStyle = t.bgColor || '#000000';
-          ctx.beginPath();
-          ctx.roundRect(rectX, rectY, pillW, pillH, 22);
+          drawBoxShapeOnCanvas(ctx, t.boxShape || 'pill', rectX, rectY, pillW, pillH);
           ctx.fill();
         } else if (t.bgMode === 'gradient') {
           const grad = createAngledGradient(
@@ -872,8 +1123,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
             t.bgGrad2 || '#DD2476'
           );
           ctx.fillStyle = grad;
-          ctx.beginPath();
-          ctx.roundRect(rectX, rectY, pillW, pillH, 22);
+          drawBoxShapeOnCanvas(ctx, t.boxShape || 'pill', rectX, rectY, pillW, pillH);
           ctx.fill();
         }
 
@@ -1168,11 +1418,12 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                 </button>
               </div>
 
-              {/* Live Preview Pill & Text Input */}
+              {/* Live Preview Box & Text Input */}
               <div className="flex flex-col gap-2 my-2">
                 <div
-                  className="p-3 rounded-xl border border-neutral-700 flex items-center justify-center min-h-[60px] text-center transition-all overflow-hidden"
+                  className="rounded-xl border border-neutral-700 flex items-center justify-center min-h-[60px] text-center transition-all overflow-hidden mx-auto"
                   style={{
+                    ...getBoxShapeStyles(boxShape, boxPaddingX, boxPaddingY),
                     backgroundColor: textBgMode === 'solid' ? textBgColor : undefined,
                     backgroundImage:
                       textBgMode === 'gradient'
@@ -1181,7 +1432,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                   }}
                 >
                   <span
-                    className="text-lg font-bold select-none whitespace-pre-wrap break-words max-w-full"
+                    className="text-lg font-bold select-none whitespace-pre break-words max-w-full"
                     style={{
                       fontFamily: selectedFont.family,
                       color: textColorMode === 'solid' ? textColor : undefined,
@@ -1485,6 +1736,82 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                   </div>
                 )}
               </div>
+
+              {/* 10 Box Shapes & Labels */}
+              {textBgMode !== 'none' && (
+                <div className="mt-3 pt-2 border-t border-neutral-800">
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-neutral-400 mb-1.5">
+                    <span>Box Shape & Label (10 Types)</span>
+                    <span className="text-wa-teal font-mono capitalize">{BOX_SHAPES.find((s) => s.id === boxShape)?.name || 'Pill'}</span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1.5 py-1">
+                    {BOX_SHAPES.map((shape) => (
+                      <button
+                        key={shape.id}
+                        type="button"
+                        onClick={() => setBoxShape(shape.id)}
+                        className={`px-1.5 py-1.5 rounded-lg text-center transition-all border flex flex-col items-center justify-center gap-0.5 ${
+                          boxShape === shape.id
+                            ? 'border-wa-teal bg-wa-teal/20 text-white ring-1 ring-wa-teal font-bold'
+                            : 'border-neutral-800 bg-neutral-800/80 text-neutral-300 hover:bg-neutral-700'
+                        }`}
+                        title={shape.desc}
+                      >
+                        <span className="text-sm leading-none">{shape.icon}</span>
+                        <span className="text-[9px] truncate max-w-full">{shape.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Box Padding Slider & Presets */}
+              {textBgMode !== 'none' && (
+                <div className="mt-3 pt-2 border-t border-neutral-800">
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-neutral-400 mb-1">
+                    <span>Box Padding (Corner Size)</span>
+                    <span className="text-wa-teal font-mono text-[10px] font-bold">{boxPaddingX}px × {boxPaddingY}px</span>
+                  </div>
+                  <div className="flex items-center gap-2 bg-neutral-800/80 p-1.5 rounded-lg text-[11px]">
+                    <span className="text-neutral-400 text-[10px] whitespace-nowrap">Pad:</span>
+                    <input
+                      type="range"
+                      min="4"
+                      max="44"
+                      step="2"
+                      value={boxPaddingX}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setBoxPaddingX(val);
+                        setBoxPaddingY(Math.max(2, Math.round(val * 0.45)));
+                      }}
+                      className="w-full accent-wa-teal h-1 cursor-pointer"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1 overflow-x-auto py-1 custom-scroll">
+                    {[
+                      { label: 'Tight', x: 8, y: 4 },
+                      { label: 'Normal', x: 14, y: 6 },
+                      { label: 'Spacious', x: 22, y: 10 },
+                      { label: 'Extra', x: 32, y: 14 },
+                    ].map((p) => (
+                      <button
+                        key={p.label}
+                        type="button"
+                        onClick={() => {
+                          setBoxPaddingX(p.x);
+                          setBoxPaddingY(p.y);
+                        }}
+                        className={`px-2 py-0.5 rounded text-[9px] font-semibold transition-colors ${
+                          boxPaddingX === p.x ? 'bg-wa-teal text-white font-bold' : 'bg-neutral-800 text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Bottom Actions */}
@@ -1624,10 +1951,22 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
         {/* ── 9:16 PHONE VIEWPORT CANVAS ──────────────────────────────────── */}
         <div
           ref={viewportRef}
-          onMouseMove={handleDragMove}
-          onTouchMove={handleDragMove}
-          onMouseUp={handleDragEnd}
-          onTouchEnd={handleDragEnd}
+          onMouseMove={(e) => {
+            handleDragMove(e);
+            handlePaddingResizeMove(e);
+          }}
+          onTouchMove={(e) => {
+            handleDragMove(e);
+            handlePaddingResizeMove(e);
+          }}
+          onMouseUp={() => {
+            handleDragEnd();
+            handlePaddingResizeEnd();
+          }}
+          onTouchEnd={() => {
+            handleDragEnd();
+            handlePaddingResizeEnd();
+          }}
           onClick={() => {
             if (activeTool !== 'draw' && activeTool !== 'crop') {
               setSelectedItemId(null);
@@ -1725,7 +2064,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                 />
               )}
 
-              {/* Draggable Text Overlays (Double-click to edit, Strictly size-locked while dragging) */}
+              {/* Draggable Text Overlays (Double-click to edit, 10 Custom Shapes, Resizable Corners, No Right Wrap) */}
               {textElements.map((t) => {
                 const isSelected = selectedItemId === t.id;
                 const fontPx = Math.round((t.size || 56) * 0.3);
@@ -1743,26 +2082,33 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                     }}
                     onMouseDown={(e) => handleDragStart(e, 'text', t.id, t.x, t.y)}
                     onTouchStart={(e) => handleDragStart(e, 'text', t.id, t.x, t.y)}
-                    className={`absolute z-20 cursor-move group select-none ${
-                      isSelected ? 'ring-2 ring-wa-teal ring-offset-2 ring-offset-black rounded-xl' : ''
+                    className={`absolute z-20 cursor-move group select-none shrink-0 ${
+                      isSelected ? 'ring-2 ring-wa-teal ring-offset-2 ring-offset-black rounded-lg' : ''
                     }`}
                     style={{
                       left: `${t.x}%`,
                       top: `${t.y}%`,
                       transform: 'translate(-50%, -50%)',
+                      width: 'max-content',
+                      maxWidth: 'none',
+                      minWidth: 'max-content',
                     }}
-                    title="Double-click to edit text • Drag to move"
+                    title="Double-click to edit text • Drag to move • Drag corners to adjust padding"
                   >
                     <div
-                      className="rounded-xl font-bold text-center whitespace-pre-wrap select-none"
+                      className="font-bold text-center select-none shrink-0 transition-all"
                       style={{
+                        ...getBoxShapeStyles(t.boxShape || 'pill', t.paddingX ?? 14, t.paddingY ?? 6),
                         backgroundColor: t.bgMode === 'solid' ? t.bgColor : undefined,
                         backgroundImage:
                           t.bgMode === 'gradient'
                             ? `linear-gradient(${t.bgDegree ?? 135}deg, ${t.bgGrad1 || '#FF512F'}, ${t.bgGrad2 || '#DD2476'})`
                             : undefined,
                         boxShadow: t.bgMode !== 'none' ? '0 4px 14px rgba(0,0,0,0.5)' : undefined,
-                        padding: '6px 14px',
+                        width: 'max-content',
+                        maxWidth: 'none',
+                        minWidth: 'max-content',
+                        whiteSpace: 'pre',
                       }}
                     >
                       <span
@@ -1780,16 +2126,49 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                           textShadow: t.bgMode === 'none' && t.textColorMode === 'solid' ? '0 2px 4px rgba(0,0,0,0.8)' : undefined,
                           display: 'inline-block',
                           lineHeight: 1.2,
+                          whiteSpace: 'pre',
+                          wordBreak: 'keep-all',
                         }}
                       >
                         {t.text}
                       </span>
                     </div>
 
-                    {/* Quick Item Controls (Edit, Resize & Delete) */}
+                    {/* 4 Corner Resize Points for Dynamic Box Padding */}
                     {isSelected && (
-                      <div className="absolute -top-7 inset-x-0 flex items-center justify-between pointer-events-auto">
-                        <div className="flex items-center gap-1 bg-[#111b21] rounded-lg p-0.5 border border-neutral-700 shadow-lg">
+                      <>
+                        <div
+                          onMouseDown={(e) => handlePaddingResizeStart(e, t.id, 'tl', t.paddingX ?? 14, t.paddingY ?? 6)}
+                          onTouchStart={(e) => handlePaddingResizeStart(e, t.id, 'tl', t.paddingX ?? 14, t.paddingY ?? 6)}
+                          className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 rounded-full bg-wa-teal border-2 border-white shadow-md cursor-nwse-resize z-30 transition-transform hover:scale-125 pointer-events-auto"
+                          title="Drag corner to adjust box padding"
+                        />
+                        <div
+                          onMouseDown={(e) => handlePaddingResizeStart(e, t.id, 'tr', t.paddingX ?? 14, t.paddingY ?? 6)}
+                          onTouchStart={(e) => handlePaddingResizeStart(e, t.id, 'tr', t.paddingX ?? 14, t.paddingY ?? 6)}
+                          className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-wa-teal border-2 border-white shadow-md cursor-nesw-resize z-30 transition-transform hover:scale-125 pointer-events-auto"
+                          title="Drag corner to adjust box padding"
+                        />
+                        <div
+                          onMouseDown={(e) => handlePaddingResizeStart(e, t.id, 'bl', t.paddingX ?? 14, t.paddingY ?? 6)}
+                          onTouchStart={(e) => handlePaddingResizeStart(e, t.id, 'bl', t.paddingX ?? 14, t.paddingY ?? 6)}
+                          className="absolute -bottom-1.5 -left-1.5 w-3.5 h-3.5 rounded-full bg-wa-teal border-2 border-white shadow-md cursor-nesw-resize z-30 transition-transform hover:scale-125 pointer-events-auto"
+                          title="Drag corner to adjust box padding"
+                        />
+                        <div
+                          onMouseDown={(e) => handlePaddingResizeStart(e, t.id, 'br', t.paddingX ?? 14, t.paddingY ?? 6)}
+                          onTouchStart={(e) => handlePaddingResizeStart(e, t.id, 'br', t.paddingX ?? 14, t.paddingY ?? 6)}
+                          className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-wa-teal border-2 border-white shadow-md cursor-nwse-resize z-30 transition-transform hover:scale-125 pointer-events-auto"
+                          title="Drag corner to adjust box padding"
+                        />
+                      </>
+                    )}
+
+                    {/* Quick Item Controls (Edit, Font Size, Padding & Delete) */}
+                    {isSelected && (
+                      <div className="absolute -top-8 inset-x-0 flex items-center justify-between pointer-events-auto">
+                        <div className="flex items-center gap-1 bg-[#111b21] rounded-lg p-0.5 border border-neutral-700 shadow-lg text-white">
+                          <span className="text-[9px] text-neutral-400 pl-1 font-mono">Font:</span>
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1797,7 +2176,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                               updateItemSize(t.id, 'text', -6);
                             }}
                             className="w-5 h-5 rounded bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold flex items-center justify-center"
-                            title="Smaller"
+                            title="Smaller font"
                           >
                             -
                           </button>
@@ -1808,18 +2187,43 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                               updateItemSize(t.id, 'text', +6);
                             }}
                             className="w-5 h-5 rounded bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold flex items-center justify-center"
-                            title="Larger"
+                            title="Larger font"
                           >
                             +
                           </button>
+
+                          <span className="text-[9px] text-neutral-400 pl-1 border-l border-neutral-700 font-mono">Pad:</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateTextPadding(t.id, -2, -1);
+                            }}
+                            className="w-5 h-5 rounded bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold flex items-center justify-center"
+                            title="Decrease box padding"
+                          >
+                            -
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateTextPadding(t.id, +2, +1);
+                            }}
+                            className="w-5 h-5 rounded bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold flex items-center justify-center"
+                            title="Increase box padding"
+                          >
+                            +
+                          </button>
+
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleEditText(t);
                             }}
-                            className="px-1.5 h-5 rounded bg-wa-teal hover:bg-teal-600 text-white text-[10px] font-bold flex items-center justify-center"
-                            title="Edit text"
+                            className="px-1.5 h-5 rounded bg-wa-teal hover:bg-teal-600 text-white text-[10px] font-bold flex items-center justify-center ml-0.5"
+                            title="Edit text, font & shapes"
                           >
                             ✏️
                           </button>
