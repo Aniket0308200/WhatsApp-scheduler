@@ -82,7 +82,7 @@ export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authU
                 </span>
               )}
             </div>
-            <div className="text-2xl font-black text-slate-900 dark:text-white my-2">$0</div>
+            <div className="text-2xl font-black text-slate-900 dark:text-white my-2">₹0</div>
             <ul className="text-xs space-y-2 text-slate-600 dark:text-wa-dmuted mb-4">
               <li className="flex items-center gap-1.5">
                 <span className="text-emerald-500 font-bold">✓</span>
@@ -128,7 +128,7 @@ export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authU
                 </span>
               )}
             </div>
-            <div className="text-2xl font-black text-slate-900 dark:text-white my-2">₹199 <span className="text-xs font-normal text-slate-500">/ mo ($2)</span></div>
+            <div className="text-2xl font-black text-slate-900 dark:text-white my-2">₹199 <span className="text-xs font-normal text-slate-500">/ month</span></div>
             <ul className="text-xs space-y-2 text-slate-600 dark:text-wa-dmuted mb-4">
               <li className="flex items-center gap-1.5">
                 <span className="text-emerald-500 font-bold">✓</span>
@@ -186,7 +186,7 @@ export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authU
                 </span>
               )}
             </div>
-            <div className="text-2xl font-black text-slate-900 dark:text-white my-2">$5 <span className="text-xs font-normal text-slate-500">/ mo</span></div>
+            <div className="text-2xl font-black text-slate-900 dark:text-white my-2">₹499 <span className="text-xs font-normal text-slate-500">/ month</span></div>
             <ul className="text-xs space-y-2 text-slate-600 dark:text-wa-dmuted mb-4">
               <li className="flex items-center gap-1.5">
                 <span className="text-emerald-500 font-bold">✓</span>
@@ -194,7 +194,7 @@ export default function QuotaPage({ quota, onRefresh, loading, onNavigate, authU
               </li>
               <li className="flex items-center gap-1.5">
                 <span className="text-emerald-500 font-bold">✓</span>
-                <span><strong>WhatsApp Status &amp; Stories</strong> scheduling</span>
+                <span><strong>Priority Delivery Engine</strong> with instant dispatch</span>
               </li>
               <li className="flex items-center gap-1.5">
                 <span className="text-emerald-500 font-bold">✓</span>

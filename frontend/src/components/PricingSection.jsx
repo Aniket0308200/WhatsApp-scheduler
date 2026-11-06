@@ -69,7 +69,7 @@ export default function PricingSection({ onGetStarted, onUpgradePlan, currentPla
               {/* Price */}
               <div className="my-6">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-extrabold text-slate-900 dark:text-white">$0</span>
+                  <span className="text-4xl font-extrabold text-slate-900 dark:text-white">₹0</span>
                   <span className="text-sm font-semibold text-slate-500 dark:text-wa-dmuted">/ month</span>
                 </div>
                 <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-semibold">
@@ -154,9 +154,6 @@ export default function PricingSection({ onGetStarted, onUpgradePlan, currentPla
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-4xl font-extrabold text-slate-900 dark:text-white">
                     ₹199
-                  </span>
-                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
-                    ($2 USD)
                   </span>
                   <span className="text-sm font-semibold text-slate-500 dark:text-wa-dmuted">/ month</span>
                 </div>
@@ -244,9 +241,6 @@ export default function PricingSection({ onGetStarted, onUpgradePlan, currentPla
                   <span className="text-4xl font-extrabold text-slate-900 dark:text-white">
                     ₹499
                   </span>
-                  <span className="text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md">
-                    ($5 USD)
-                  </span>
                   <span className="text-sm font-semibold text-slate-500 dark:text-wa-dmuted">/ month</span>
                 </div>
                 <p className="text-[11px] text-purple-600 dark:text-purple-400 mt-1 font-semibold">
@@ -270,7 +264,7 @@ export default function PricingSection({ onGetStarted, onUpgradePlan, currentPla
                 </div>
                 <div className="flex items-start gap-2.5">
                   <span className="text-emerald-500 font-black shrink-0">✓</span>
-                  <span>Auto WhatsApp Status Scheduling</span>
+                  <span>Priority Delivery Engine with Instant Dispatch</span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <span className="text-emerald-500 font-black shrink-0">✓</span>

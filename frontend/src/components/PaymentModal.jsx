@@ -41,7 +41,7 @@ const PLANS = {
       'Unlimited / 1,000 Messages / month',
       'Unlimited Contacts & Groups at once',
       'All Media (Videos, Documents, PDFs, Audio)',
-      'WhatsApp Status & Story Scheduling',
+      'Priority Message Queue & Instant Dispatch',
       'WhatsApp Poll Scheduling',
       'Smart Timezone Auto-Adjustment',
       'Google Contacts Sync (Multi-Account)',
@@ -836,9 +836,6 @@ export default function PaymentModal({
                     >
                       <option value="INR">
                         INR (₹) — Exact ₹{activePlanInfo.amount}
-                      </option>
-                      <option value="USD" disabled>
-                        USD ($) — Coming Soon (Stripe / International)
                       </option>
                     </select>
                   </div>

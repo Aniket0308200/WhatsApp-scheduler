@@ -6,7 +6,6 @@ import DateTimePicker from './DateTimePicker';
 import GifStickerPickerModal, { WhatsAppStickerIcon, WhatsAppGifIcon, convertImageFileToWebpSticker } from './GifStickerPickerModal';
 import MediaGalleryModal from './MediaGalleryModal';
 import PollModal from './PollModal';
-import StatusEditorModal from './StatusEditorModal';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
 import { useTheme } from '../ThemeContext';
 import { getUserTimeZone, zonedTimeToUtc } from '../utils/timezoneHelper';
@@ -570,10 +569,6 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
   const [pollData, setPollData] = useState(null); // { question, options, allowMultiple }
   const [showPollModal, setShowPollModal] = useState(false);
 
-  // ── WhatsApp Status State & Modal ──
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [attachedStatus, setAttachedStatus] = useState(null); // { type, data, caption, preview, trimStart, trimEnd }
-
   // Categorized lists
   const imagesList = attachedMediaList.filter(m => m.type === 'image');
   const videosList = attachedMediaList.filter(m => m.type === 'video');
@@ -1047,33 +1042,29 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       return;
     }
 
-    let finalRecipients = [];
-    if (attachedStatus) {
-      finalRecipients = [{ phone: 'status@broadcast', name: 'WhatsApp Status (Story)', isStatus: true }];
-    } else {
-      finalRecipients = [...recipients];
-      if (phone.trim()) {
-        const fullPhone = getFullPhone(countryCode, phone);
-        if (fullPhone && fullPhone.length >= 7) {
-          const isGroup = phone.trim().endsWith('@g.us');
-          const alreadyAdded = finalRecipients.some(r => r.phone === fullPhone);
-          if (!alreadyAdded) {
-            const personalC = finalRecipients.filter(r => !r.isGroup).length;
-            const groupC = finalRecipients.filter(r => r.isGroup).length;
-            if ((isGroup && groupC < MAX_GROUPS) || (!isGroup && personalC < MAX_PERSONAL)) {
-              finalRecipients = [...finalRecipients, { phone: fullPhone, name: contactName, isGroup }];
-            }
+    // If there's text in the input, try to add it as a chip first
+    let finalRecipients = [...recipients];
+    if (phone.trim()) {
+      const fullPhone = getFullPhone(countryCode, phone);
+      if (fullPhone && fullPhone.length >= 7) {
+        const isGroup = phone.trim().endsWith('@g.us');
+        const alreadyAdded = finalRecipients.some(r => r.phone === fullPhone);
+        if (!alreadyAdded) {
+          const personalC = finalRecipients.filter(r => !r.isGroup).length;
+          const groupC = finalRecipients.filter(r => r.isGroup).length;
+          if ((isGroup && groupC < MAX_GROUPS) || (!isGroup && personalC < MAX_PERSONAL)) {
+            finalRecipients = [...finalRecipients, { phone: fullPhone, name: contactName, isGroup }];
           }
         }
       }
     }
 
     if (finalRecipients.length === 0) {
-      toast.error('Add at least one recipient or create a Status.');
+      toast.error('Add at least one recipient.');
       return;
     }
-    if (!message.trim() && attachedMediaList.length === 0 && !pollData && !attachedStatus) {
-      toast.error('Please enter a message, attach media, create a poll, or set a status.');
+    if (!message.trim() && attachedMediaList.length === 0 && !pollData) {
+      toast.error('Please enter a message, attach media, or create a poll.');
       return;
     }
 
@@ -1092,35 +1083,17 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
     try {
       for (const recipient of finalRecipients) {
         try {
-          if (recipient.phone === 'status@broadcast' && attachedStatus) {
-            await scheduleMessage({
-              phone: 'status@broadcast',
-              message: attachedStatus.caption || message.trim(),
-              scheduledAt: utcISO,
-              recipientName: 'WhatsApp Status (Story)',
-              mediaType: attachedStatus.type || 'image',
-              mediaData: attachedStatus.data,
-              mediaName: attachedStatus.type === 'video' ? 'status_video.mp4' : 'status_photo.jpg',
-              mentions: attachedStatus.mentions || [],
-              mediaList: [{
-                type: attachedStatus.type || 'image',
-                data: attachedStatus.data,
-                name: attachedStatus.type === 'video' ? 'status_video.mp4' : 'status_photo.jpg'
-              }]
-            });
-          } else {
-            await scheduleMessage({
-              phone: recipient.phone,
-              message: message.trim(),
-              scheduledAt: utcISO,
-              recipientName: recipient.name,
-              mediaType: attachedMediaList.length === 1 ? attachedMediaList[0].type : attachedMediaList.length > 1 ? 'multiple' : (pollData ? 'poll' : null),
-              mediaData: attachedMediaList.length === 1 ? attachedMediaList[0].data : null,
-              mediaName: attachedMediaList.length === 1 ? attachedMediaList[0].name : attachedMediaList.length > 1 ? `${attachedMediaList.length} items` : null,
-              mediaList: attachedMediaList,
-              pollData: pollData || null
-            });
-          }
+          await scheduleMessage({
+            phone: recipient.phone,
+            message: message.trim(),
+            scheduledAt: utcISO,
+            recipientName: recipient.name,
+            mediaType: attachedMediaList.length === 1 ? attachedMediaList[0].type : attachedMediaList.length > 1 ? 'multiple' : (pollData ? 'poll' : null),
+            mediaData: attachedMediaList.length === 1 ? attachedMediaList[0].data : null,
+            mediaName: attachedMediaList.length === 1 ? attachedMediaList[0].name : attachedMediaList.length > 1 ? `${attachedMediaList.length} items` : null,
+            mediaList: attachedMediaList,
+            pollData: pollData || null
+          });
           successCount++;
         } catch (err) {
           failCount++;
@@ -1141,7 +1114,6 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       setPhone('');
       setMessage('');
       setPollData(null);
-      setAttachedStatus(null);
       handleRemoveAllMedia();
       setScheduledAt(getDefaultTime());
       setTimeConfirmed(false);
@@ -1285,238 +1257,161 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                 Search or type a number, then press <kbd className="px-1 py-0.5 rounded bg-slate-100 dark:bg-wa-dsurf text-[10px] font-mono border border-slate-200 dark:border-wa-dbdr">Enter</kbd> or select from suggestions.
               </p>
             </div>
-
-            {/* Quick Button: Create WhatsApp Status / Story */}
-            <button
-              type="button"
-              onClick={() => {
-                setShowStatusModal(true);
-              }}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95 ${
-                attachedStatus || recipients.some(r => r.phone === 'status@broadcast')
-                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white ring-2 ring-purple-400 shadow-purple-500/30'
-                  : 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/40'
-              }`}
-              title="Create & Schedule WhatsApp Status (Story)"
-            >
-              <span className="text-sm">📱</span>
-              <span>{attachedStatus || recipients.some(r => r.phone === 'status@broadcast') ? '✓ WhatsApp Status Set' : '🎨 Create WhatsApp Status'}</span>
-              <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-purple-200/80 dark:bg-purple-800/80 text-purple-900 dark:text-purple-100">
-                STORY
-              </span>
-            </button>
           </div>
 
-          {/* Recipient area: Locked WhatsApp Story Card when attachedStatus is active, else standard Search/Input */}
-          {attachedStatus ? (
-            <div className="relative overflow-hidden rounded-xl border border-purple-500/40 bg-gradient-to-r from-purple-950/40 via-purple-900/20 to-[#111b21] p-3 sm:p-3.5 backdrop-blur-md shadow-md animate-fade-in">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-white text-lg shrink-0 shadow-md ring-2 ring-purple-400/30">
-                    📱
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-sm text-white">WhatsApp Status (My Story)</span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/30 text-purple-300 border border-purple-400/40 tracking-wider uppercase">
-                        Locked
-                      </span>
-                    </div>
-                    <p className="text-xs text-purple-200/80 truncate mt-0.5">
-                      Auto-broadcasts to your story from your connected WhatsApp number
-                    </p>
-                  </div>
-                </div>
+          {/* Input row: country picker + search box — always clean, no chips inside */}
+          <div className="flex gap-1.5 items-center border border-slate-200 dark:border-wa-dbdr rounded-xl bg-white dark:bg-wa-dsurf focus-within:ring-2 focus-within:ring-wa-teal/40 focus-within:border-wa-teal transition-all px-2.5 py-1.5 min-h-[48px]">
+            <CountryPicker value={countryCode} onChange={setCountryCode} disabled={phone && phone.endsWith('@g.us')} />
+            <div className="flex-1 relative" ref={formRef}>
+              <input
+                id="scheduler-recipient-input"
+                name="recipient"
+                type="text"
+                value={phone}
+                onFocus={() => setShowSuggestions(true)}
+                onChange={e => {
+                  setPhone(e.target.value);
+                  setShowSuggestions(true);
+                }}
+                onKeyDown={e => {
+                  if ((e.key === 'Enter' || e.key === ',') && phone.trim()) {
+                    e.preventDefault();
+                    tryAddCurrentInputAsChip();
+                  }
+                  // Backspace on empty input removes last chip
+                  if (e.key === 'Backspace' && !phone && recipients.length > 0) {
+                    setRecipients(prev => prev.slice(0, -1));
+                  }
+                }}
+                placeholder={isMobile ? 'Search name or number…' : 'Search name or type number…'}
+                className="w-full bg-transparent text-sm text-gray-900 dark:text-wa-dtext focus:outline-none py-1 pl-1"
+              />
+              {phone && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPhone('');
+                    setContactName(null);
+                    setContactExists(false);
+                  }}
+                  className={`absolute top-1/2 -translate-y-1/2 btn-close text-xs p-1 ${fetchingName ? 'right-7' : 'right-0'}`}
+                  title="Clear"
+                >
+                  ✕
+                </button>
+              )}
+              {fetchingName && (
+                <span className="absolute right-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-wa-teal border-t-transparent rounded-full animate-spin" />
+              )}
 
-                <div className="flex items-center gap-1.5 shrink-0">
+              {/* Suggestions dropdown */}
+              {showSuggestions && suggestions.length > 0 && (
+                <ul className="absolute left-0 right-0 mt-1 bg-white dark:bg-wa-dpanel border border-gray-200 dark:border-wa-dbdr rounded-xl shadow-xl max-h-52 overflow-y-auto z-50 divide-y divide-gray-100 dark:divide-wa-dbdr/50 custom-scroll">
+                  {suggestions.map((c) => {
+                    const isGroup = c.isGroup || c.is_group || (c.phone && c.phone.endsWith('@g.us')) || (c.jid && c.jid.endsWith('@g.us'));
+                    const alreadyAdded = recipients.some(r => r.phone === (isGroup ? c.phone : c.phone.replace(/\D/g, '')));
+                    return (
+                      <li key={c.jid || c.phone || c.name}>
+                        <button
+                          type="button"
+                          onClick={() => !alreadyAdded && handleSelectSuggestion(c)}
+                          disabled={alreadyAdded}
+                          className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between transition-colors ${
+                            alreadyAdded ? 'opacity-50 cursor-not-allowed bg-gray-50 dark:bg-wa-dsurf/30' : 'hover:bg-teal-50 dark:hover:bg-wa-dsurf'
+                          }`}
+                        >
+                          <span className="flex flex-col">
+                            <span className="font-semibold text-gray-800 dark:text-wa-dtext flex items-center gap-1.5">
+                              {isGroup ? '👥 ' : '👤 '}{c.name || (isGroup ? c.phone : `+${c.phone}`)}
+                            </span>
+                            <span className="text-xs text-gray-400 dark:text-wa-dmuted font-mono">
+                              {isGroup ? 'Group' : `+${c.phone}`}
+                            </span>
+                          </span>
+                          {alreadyAdded && <span className="text-[10px] text-emerald-500 font-bold">Added ✓</span>}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            {/* Add button when there's text in input */}
+            {phone.trim() && (
+              <button
+                type="button"
+                onClick={tryAddCurrentInputAsChip}
+                className="flex-shrink-0 px-2.5 py-1.5 text-xs font-bold rounded-lg bg-wa-teal/10 text-wa-teal dark:text-wa-green border border-wa-teal/20 hover:bg-wa-teal/20 transition-colors"
+                title="Add recipient"
+              >
+                + Add
+              </button>
+            )}
+          </div>
+
+          {/* Selected recipients chips — shown below the search box */}
+          {recipients.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {recipients.map(r => (
+                <span
+                  key={r.phone}
+                  className={`inline-flex items-center gap-2 pl-3 pr-2 py-1 rounded-full text-xs font-medium border shadow-2xs transition-all ${
+                    r.isGroup
+                      ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 border-purple-200/80 dark:border-purple-800/60'
+                      : 'bg-white dark:bg-wa-dpanel text-slate-800 dark:text-slate-100 border-slate-300 dark:border-wa-dbdr'
+                  }`}
+                >
+                  <span className="text-[11px] opacity-75">{r.isGroup ? '👥' : '👤'}</span>
+                  <span className="max-w-[150px] truncate font-semibold">
+                    {r.name || (r.isGroup ? r.phone : `+${r.phone}`)}
+                  </span>
                   <button
                     type="button"
-                    onClick={() => setShowStatusModal(true)}
-                    className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/40 transition-colors"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAttachedStatus(null);
-                      setRecipients([]);
-                    }}
-                    className="p-1.5 text-xs rounded-lg text-neutral-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                    title="Remove Status"
+                    onClick={() => removeRecipientChip(r.phone)}
+                    className="w-4 h-4 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/80 dark:hover:bg-slate-700 transition-colors flex-shrink-0 text-[10px]"
+                    title="Remove"
                   >
                     ✕
                   </button>
-                </div>
-              </div>
-
-              <div className="mt-2.5 pt-2 border-t border-purple-500/20 flex items-center justify-between text-[11px] text-purple-300/80">
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
-                  <span>Status Story · Broadcasts to all your WhatsApp contacts &amp; viewers</span>
                 </span>
-                <span className="font-mono text-[10px] text-purple-400/70">status@broadcast</span>
-              </div>
+              ))}
             </div>
-          ) : (
-            <>
-              {/* Input row: country picker + search box — always clean, no chips inside */}
-              <div className="flex gap-1.5 items-center border border-slate-200 dark:border-wa-dbdr rounded-xl bg-white dark:bg-wa-dsurf focus-within:ring-2 focus-within:ring-wa-teal/40 focus-within:border-wa-teal transition-all px-2.5 py-1.5 min-h-[48px]">
-                <CountryPicker value={countryCode} onChange={setCountryCode} disabled={phone && phone.endsWith('@g.us')} />
-                <div className="flex-1 relative" ref={formRef}>
-                  <input
-                    id="scheduler-recipient-input"
-                    name="recipient"
-                    type="text"
-                    value={phone}
-                    onFocus={() => setShowSuggestions(true)}
-                    onChange={e => {
-                      setPhone(e.target.value);
-                      setShowSuggestions(true);
-                    }}
-                    onKeyDown={e => {
-                      if ((e.key === 'Enter' || e.key === ',') && phone.trim()) {
-                        e.preventDefault();
-                        tryAddCurrentInputAsChip();
-                      }
-                      // Backspace on empty input removes last chip
-                      if (e.key === 'Backspace' && !phone && recipients.length > 0) {
-                        setRecipients(prev => prev.slice(0, -1));
-                      }
-                    }}
-                    placeholder={isMobile ? 'Search name or number…' : 'Search name or type number…'}
-                    className="w-full bg-transparent text-sm text-gray-900 dark:text-wa-dtext focus:outline-none py-1 pl-1"
-                  />
-                  {phone && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPhone('');
-                        setContactName(null);
-                        setContactExists(false);
-                      }}
-                      className={`absolute top-1/2 -translate-y-1/2 btn-close text-xs p-1 ${fetchingName ? 'right-7' : 'right-0'}`}
-                      title="Clear"
-                    >
-                      ✕
-                    </button>
-                  )}
-                  {fetchingName && (
-                    <span className="absolute right-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-wa-teal border-t-transparent rounded-full animate-spin" />
-                  )}
-
-                  {/* Suggestions dropdown */}
-                  {showSuggestions && suggestions.length > 0 && (
-                    <ul className="absolute left-0 right-0 mt-1 bg-white dark:bg-wa-dpanel border border-gray-200 dark:border-wa-dbdr rounded-xl shadow-xl max-h-52 overflow-y-auto z-50 divide-y divide-gray-100 dark:divide-wa-dbdr/50 custom-scroll">
-                      {suggestions.map((c) => {
-                        const isGroup = c.isGroup || c.is_group || (c.phone && c.phone.endsWith('@g.us')) || (c.jid && c.jid.endsWith('@g.us'));
-                        const alreadyAdded = recipients.some(r => r.phone === (isGroup ? c.phone : c.phone.replace(/\D/g, '')));
-                        return (
-                          <li key={c.jid || c.phone || c.name}>
-                            <button
-                              type="button"
-                              onClick={() => !alreadyAdded && handleSelectSuggestion(c)}
-                              disabled={alreadyAdded}
-                              className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between transition-colors ${
-                                alreadyAdded ? 'opacity-50 cursor-not-allowed bg-gray-50 dark:bg-wa-dsurf/30' : 'hover:bg-teal-50 dark:hover:bg-wa-dsurf'
-                              }`}
-                            >
-                              <span className="flex flex-col">
-                                <span className="font-semibold text-gray-800 dark:text-wa-dtext flex items-center gap-1.5">
-                                  {isGroup ? '👥 ' : '👤 '}{c.name || (isGroup ? c.phone : `+${c.phone}`)}
-                                </span>
-                                <span className="text-xs text-gray-400 dark:text-wa-dmuted font-mono">
-                                  {isGroup ? 'Group' : `+${c.phone}`}
-                                </span>
-                              </span>
-                              {alreadyAdded && <span className="text-[10px] text-emerald-500 font-bold">Added ✓</span>}
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
-
-                {/* Add button when there's text in input */}
-                {phone.trim() && (
-                  <button
-                    type="button"
-                    onClick={tryAddCurrentInputAsChip}
-                    className="flex-shrink-0 px-2.5 py-1.5 text-xs font-bold rounded-lg bg-wa-teal/10 text-wa-teal dark:text-wa-green border border-wa-teal/20 hover:bg-wa-teal/20 transition-colors"
-                    title="Add recipient"
-                  >
-                    + Add
-                  </button>
-                )}
-              </div>
-
-              {/* Selected recipients chips — shown below the search box */}
-              {recipients.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {recipients.map(r => (
-                    <span
-                      key={r.phone}
-                      className={`inline-flex items-center gap-2 pl-3 pr-2 py-1 rounded-full text-xs font-medium border shadow-2xs transition-all ${
-                        r.phone === 'status@broadcast'
-                          ? 'bg-purple-100 dark:bg-purple-950/70 text-purple-900 dark:text-purple-200 border-purple-300 dark:border-purple-700'
-                          : r.isGroup
-                          ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 border-purple-200/80 dark:border-purple-800/60'
-                          : 'bg-white dark:bg-wa-dpanel text-slate-800 dark:text-slate-100 border-slate-300 dark:border-wa-dbdr'
-                      }`}
-                    >
-                      <span className="text-[11px] opacity-75">{r.phone === 'status@broadcast' ? '📱' : r.isGroup ? '👥' : '👤'}</span>
-                      <span className="max-w-[150px] truncate font-semibold">
-                        {r.phone === 'status@broadcast' ? 'WhatsApp Status' : (r.name || (r.isGroup ? r.phone : `+${r.phone}`))}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeRecipientChip(r.phone)}
-                        className="w-4 h-4 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/80 dark:hover:bg-slate-700 transition-colors flex-shrink-0 text-[10px]"
-                        title="Remove"
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* Quota bar for recipients */}
-              <div className="mt-2 flex items-center gap-3 flex-wrap">
-                <span className="text-[11px] text-gray-400 dark:text-wa-dmuted flex items-center gap-1">
-                  <span className={`font-bold ${personalCount >= MAX_PERSONAL ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`}>{personalCount}/{MAX_PERSONAL}</span> contacts
-                </span>
-                <span className="text-gray-200 dark:text-wa-dbdr">·</span>
-                <span className="text-[11px] text-gray-400 dark:text-wa-dmuted flex items-center gap-1">
-                  <span className={`font-bold ${groupCount >= MAX_GROUPS ? 'text-rose-500' : 'text-purple-600 dark:text-purple-400'}`}>{groupCount}/{MAX_GROUPS}</span> groups
-                </span>
-                {recipients.length > 0 && (
-                  <>
-                    <span className="text-gray-200 dark:text-wa-dbdr">·</span>
-                    <span className="text-[11px] font-semibold text-slate-600 dark:text-wa-dtext">{recipients.length} recipient{recipients.length !== 1 ? 's' : ''} added</span>
-                    <button
-                      type="button"
-                      onClick={() => setRecipients([])}
-                      className="text-[11px] text-rose-500 hover:text-rose-700 font-semibold transition-colors"
-                    >
-                      Clear all
-                    </button>
-                  </>
-                )}
-                {/* Resolved contact name hint */}
-                {contactExists && phone && (
-                  <span className="text-xs bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-medium flex items-center gap-1 border border-green-200/50 dark:border-green-900/30">
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"/>
-                    </svg>
-                    {contactName || `+${getFullPhone(countryCode, phone)}`}
-                    {!contactName && ' ✓ Valid'}
-                  </span>
-                )}
-              </div>
-            </>
           )}
+
+          {/* Quota bar for recipients */}
+          <div className="mt-2 flex items-center gap-3 flex-wrap">
+            <span className="text-[11px] text-gray-400 dark:text-wa-dmuted flex items-center gap-1">
+              <span className={`font-bold ${personalCount >= MAX_PERSONAL ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`}>{personalCount}/{MAX_PERSONAL}</span> contacts
+            </span>
+            <span className="text-gray-200 dark:text-wa-dbdr">·</span>
+            <span className="text-[11px] text-gray-400 dark:text-wa-dmuted flex items-center gap-1">
+              <span className={`font-bold ${groupCount >= MAX_GROUPS ? 'text-rose-500' : 'text-purple-600 dark:text-purple-400'}`}>{groupCount}/{MAX_GROUPS}</span> groups
+            </span>
+            {recipients.length > 0 && (
+              <>
+                <span className="text-gray-200 dark:text-wa-dbdr">·</span>
+                <span className="text-[11px] font-semibold text-slate-600 dark:text-wa-dtext">{recipients.length} recipient{recipients.length !== 1 ? 's' : ''} added</span>
+                <button
+                  type="button"
+                  onClick={() => setRecipients([])}
+                  className="text-[11px] text-rose-500 hover:text-rose-700 font-semibold transition-colors"
+                >
+                  Clear all
+                </button>
+              </>
+            )}
+            {/* Resolved contact name hint */}
+            {contactExists && phone && (
+              <span className="text-xs bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-medium flex items-center gap-1 border border-green-200/50 dark:border-green-900/30">
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"/>
+                </svg>
+                {contactName || `+${getFullPhone(countryCode, phone)}`}
+                {!contactName && ' ✓ Valid'}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* ── Message ───────────────────────────────────────────────────── */}
@@ -1532,16 +1427,14 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
               value={message}
               onChange={e => setMessage(e.target.value)}
               placeholder={
-                attachedStatus
-                  ? "WhatsApp Status caption is set, or type an extra note..."
-                  : pollData
+                pollData
                   ? "Add an optional message or note for your poll..."
                   : attachedMediaList.length > 0
                   ? "Add an optional caption for your media..."
                   : "Type your message here… (e.g: Happy birthday 🎉)"
               }
               rows={4}
-              required={attachedMediaList.length === 0 && !pollData && !attachedStatus}
+              required={attachedMediaList.length === 0 && !pollData}
               className="w-full px-4 py-2.5 text-sm bg-transparent text-gray-900 dark:text-wa-dtext focus:outline-none resize-y min-h-[80px] custom-scroll"
             />
 
@@ -1785,61 +1678,6 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
               </div>
             )}
 
-            {/* ── WhatsApp Status Preview Card ── */}
-            {attachedStatus && (
-              <div className="mx-3 mb-2.5 p-3 rounded-2xl bg-gradient-to-r from-purple-50/90 via-fuchsia-50/60 to-purple-50/90 dark:from-purple-950/40 dark:via-purple-900/20 dark:to-purple-950/40 border border-purple-200/90 dark:border-purple-800/60 shadow-xs animate-fade-in group">
-                <div className="flex items-center justify-between gap-3">
-                  <div
-                    onClick={() => setShowStatusModal(true)}
-                    className="flex items-center gap-3 flex-1 cursor-pointer min-w-0"
-                    title="Click to edit WhatsApp Status"
-                  >
-                    <div className="relative w-11 h-16 rounded-lg overflow-hidden bg-black border-2 border-purple-400 dark:border-purple-500 shadow-sm shrink-0 flex items-center justify-center">
-                      {attachedStatus.type === 'video' ? (
-                        <video src={attachedStatus.data} className="w-full h-full object-cover" />
-                      ) : (
-                        <img src={attachedStatus.preview || attachedStatus.data} alt="Status Preview" className="w-full h-full object-cover" />
-                      )}
-                      <span className="absolute bottom-0.5 right-0.5 text-[8px] bg-black/70 text-white px-1 rounded font-bold">
-                        9:16
-                      </span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-200/80 dark:bg-purple-900/60 text-purple-900 dark:text-purple-300 flex items-center gap-1">
-                          <span>📱</span> WhatsApp Status (Story)
-                        </span>
-                        <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold">
-                          {attachedStatus.type === 'video' ? '🎥 30s Video' : '📷 9:16 Photo'}
-                        </span>
-                      </div>
-                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate mt-1">
-                        {attachedStatus.caption || <span className="italic text-slate-400 dark:text-wa-dmuted">(No caption)</span>}
-                      </p>
-                      <p className="mt-1 text-[11px] text-purple-600 dark:text-purple-400 font-bold group-hover:underline flex items-center gap-1">
-                        ✏️ Tap to edit status photo, text or doodle
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setAttachedStatus(null);
-                      setRecipients(prev => prev.filter(r => r.phone !== 'status@broadcast'));
-                      toast.success('WhatsApp Status removed');
-                    }}
-                    className="p-1.5 text-slate-400 hover:text-red-500 dark:text-wa-dmuted dark:hover:text-red-400 rounded-lg hover:bg-white dark:hover:bg-wa-dsurf transition-colors shrink-0"
-                    title="Remove Status"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* Toolbar under textarea */}
             <div className="flex flex-wrap items-center justify-between gap-1.5 px-2.5 sm:px-3 py-2 border-t border-slate-200/60 dark:border-wa-dbdr/50 bg-slate-50/50 dark:bg-wa-dpanel/50 transition-colors">
               <div className="flex items-center flex-wrap gap-1 sm:gap-1.5 min-w-0">
@@ -2046,20 +1884,6 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                       </svg>
                     </button>
 
-                    {/* WhatsApp Status Story button */}
-                    <button
-                      type="button"
-                      onClick={() => setShowStatusModal(true)}
-                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                        attachedStatus || recipients.some(r => r.phone === 'status@broadcast')
-                          ? 'text-purple-600 dark:text-purple-400 bg-purple-100/70 dark:bg-purple-950/60 ring-1 ring-purple-400/40'
-                          : 'text-gray-400 hover:text-purple-500 dark:text-wa-dmuted dark:hover:text-purple-400 hover:bg-gray-200 dark:hover:bg-wa-dsurf'
-                      }`}
-                      title={attachedStatus ? "Edit WhatsApp Status (Story)" : "Create WhatsApp Status (Story)"}
-                    >
-                      <span className="text-sm">📱</span>
-                    </button>
-
                     {/* Smart Name Variable Pills (Starter & Pro) */}
                     <div className="flex items-center gap-1 sm:gap-1.5 ml-0.5 sm:ml-1 border-l border-slate-200 dark:border-wa-dbdr pl-1.5 sm:pl-2 shrink-0">
                       <button
@@ -2183,9 +2007,8 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
         {(() => {
           const scheduledDateObj = scheduledAt ? new Date(scheduledAt.replace(' ', 'T')) : null;
           const isScheduledInFuture = Boolean(scheduledDateObj && !isNaN(scheduledDateObj.getTime()) && scheduledDateObj.getTime() > Date.now());
-          const hasValidRecipient = recipients.length > 0 || Boolean(phone.trim()) || Boolean(attachedStatus);
-          const hasValidContent = Boolean(message.trim() || attachedMediaList.length > 0 || pollData || attachedStatus);
-          const isStatusTarget = Boolean(attachedStatus || recipients.some(r => r.phone === 'status@broadcast'));
+          const hasValidRecipient = recipients.length > 0 || Boolean(phone.trim());
+          const hasValidContent = Boolean(message.trim() || attachedMediaList.length > 0 || pollData);
           const canConnect = isConnected || isReconnecting;
           const isQuotaExhausted = Boolean(quota && !quota.isUnlimited && quota.plan !== 'pro' && typeof quota.remaining === 'number' && quota.remaining <= 0);
 
@@ -2217,13 +2040,11 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
               ) : !canConnect ? (
                 '⚠️ Connect WhatsApp First'
               ) : !hasValidRecipient ? (
-                '📱 Add Recipient or WhatsApp Status'
+                '📱 Add at Least One Recipient'
               ) : !hasValidContent ? (
-                '✍️ Enter Message, Poll, Status, or Attach Media'
+                '✍️ Enter Message, Poll, or Attach Media'
               ) : (!timeConfirmed && !isScheduledInFuture) ? (
                 '⏰ Pick a Future Date & Time'
-              ) : isStatusTarget ? (
-                '📱 Schedule WhatsApp Status (Story)'
               ) : recipients.length > 1 ? (
                 `📅 Schedule to ${recipients.length} Recipients`
               ) : (
@@ -2294,24 +2115,6 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
           onSave={(newPoll) => {
             setPollData(newPoll);
             toast.success(pollData ? 'Poll updated!' : 'WhatsApp Poll attached!');
-          }}
-        />
-
-        {/* WhatsApp Status / Story Editor Modal */}
-        <StatusEditorModal
-          isOpen={showStatusModal}
-          onClose={() => setShowStatusModal(false)}
-          initialData={attachedStatus}
-          onSave={(statusObj) => {
-            setAttachedStatus(statusObj);
-            setRecipients([{ phone: 'status@broadcast', name: 'WhatsApp Status (Story)', isStatus: true }]);
-            setPhone('');
-            setContactName(null);
-            setContactExists(false);
-            if (statusObj.caption) {
-              setMessage(statusObj.caption);
-            }
-            toast.success('📱 WhatsApp Status attached! Recipient locked to your Story.');
           }}
         />
       </form>
