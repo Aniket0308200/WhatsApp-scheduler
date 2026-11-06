@@ -9,6 +9,7 @@ import PollModal from './PollModal';
 import StatusEditorModal from './StatusEditorModal';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
 import { useTheme } from '../ThemeContext';
+import { getUserTimeZone, zonedTimeToUtc } from '../utils/timezoneHelper';
 
 // ─── Complete country-code list ───────────────────────────────────────────────
 // ─── Complete country-code list ───────────────────────────────────────────────
@@ -316,6 +317,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
   // ─────────────────────────────────────────────────────────────────────────
   const [message,       setMessage]       = useState('');
   const [scheduledAt,   setScheduledAt]   = useState(getDefaultTime);
+  const [selectedTimeZone, setSelectedTimeZone] = useState(getUserTimeZone);
   const [timeConfirmed, setTimeConfirmed] = useState(true);  // Initialized to true for default 30s-ahead time
   const [loading,       setLoading]       = useState(false);
   const [isMobile,      setIsMobile]      = useState(() => typeof window !== 'undefined' && window.innerWidth < 640);
@@ -1081,7 +1083,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       return;
     }
 
-    const utcISO = new Date(scheduledAt).toISOString();
+    const utcISO = zonedTimeToUtc(scheduledAt, selectedTimeZone).toISOString();
     setLoading(true);
     let successCount = 0;
     let failCount = 0;
@@ -2106,6 +2108,8 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
             min={minTime}
             timeConfirmed={timeConfirmed}
             setTimeConfirmed={setTimeConfirmed}
+            timeZone={selectedTimeZone}
+            onTimeZoneChange={setSelectedTimeZone}
           />
         </div>
 

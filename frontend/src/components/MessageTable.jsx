@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { format, parseISO, isValid } from 'date-fns';
 import { cancelMessage, deleteMessage } from '../api';
 import MediaGalleryModal from './MediaGalleryModal';
+import { formatUtcToZoned, getUserTimeZone } from '../utils/timezoneHelper';
 
 const STATUS_BADGE = {
   pending:   { label: '⏳ Pending',     cls: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-900/40' },
@@ -31,10 +32,8 @@ const FILTERS = ['all', 'pending', 'sent', 'delivered', 'read', 'failed', 'cance
 function formatDate(val) {
   if (!val) return '—';
   try {
-    const normalized = val.includes('T') ? val : val.replace(' ', 'T') + 'Z';
-    const d = new Date(normalized);
-    if (isNaN(d.getTime())) return val;
-    return d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    const tz = getUserTimeZone();
+    return formatUtcToZoned(val, tz);
   } catch {
     return val;
   }
