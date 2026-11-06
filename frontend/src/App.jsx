@@ -421,29 +421,29 @@ export default function App() {
           </Routes>
         </main>
 
-        <footer className="w-full text-center text-xs py-5 mt-auto border-t border-black/20 dark:border-wa-dbdr bg-wa-dark dark:bg-wa-dpanel transition-colors duration-200 z-10">
-          <div className="container mx-auto px-4 max-w-5xl flex flex-col md:flex-row items-center justify-between gap-4 text-emerald-100 dark:text-wa-dmuted font-medium">
-            <div className="flex flex-col items-center md:items-start gap-1">
+        <footer className="w-full text-center text-xs py-4 sm:py-5 mt-auto border-t border-black/20 dark:border-wa-dbdr bg-wa-dark dark:bg-wa-dpanel transition-colors duration-200 z-10">
+          <div className="w-full max-w-[1650px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col lg:flex-row items-center justify-between gap-3 lg:gap-5 text-emerald-100 dark:text-wa-dmuted font-medium">
+            <div className="flex items-center gap-1 shrink-0 whitespace-nowrap">
               <span className="text-slate-100 dark:text-wa-dtext">© {new Date().getFullYear()} WA Scheduler. All rights reserved.</span>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-emerald-200/90 dark:text-wa-dmuted text-[11px] font-semibold">
-              <button onClick={() => handleNavigate('landing')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Home</button>
+            <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-emerald-200/90 dark:text-wa-dmuted text-[11px] font-semibold whitespace-nowrap shrink-0">
+              <button onClick={() => handleNavigate('landing')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none cursor-pointer">Home</button>
               <span className="opacity-40">|</span>
-              <button onClick={() => handleNavigate('landing', 'features')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Features</button>
+              <button onClick={() => handleNavigate('landing', 'features')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none cursor-pointer">Features</button>
               <span className="opacity-40">|</span>
-              <button onClick={() => handleNavigate('landing', 'pricing')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Pricing</button>
+              <button onClick={() => handleNavigate('landing', 'pricing')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none cursor-pointer">Pricing</button>
               <span className="opacity-40">|</span>
-              <button onClick={() => handleNavigate('landing', 'contact')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Contact Us</button>
+              <button onClick={() => handleNavigate('landing', 'contact')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none cursor-pointer">Contact Us</button>
               <span className="opacity-40">|</span>
               <Link to="/privacy-policy" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Privacy Policy</Link>
               <span className="opacity-40">|</span>
               <Link to="/terms-of-service" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Terms of Service</Link>
             </div>
 
-            <div className="flex items-center gap-1.5 text-[11px] bg-white/10 dark:bg-wa-dsurf px-3 py-1.5 rounded-full border border-white/10 dark:border-wa-dbdr/50">
+            <div className="flex items-center gap-1.5 text-[11px] bg-white/10 dark:bg-wa-dsurf px-3 py-1.5 rounded-full border border-white/10 dark:border-wa-dbdr/50 shrink-0 whitespace-nowrap">
               <span className="text-emerald-300">🔒</span>
-              <span className="text-slate-100 dark:text-wa-dtext">Local Encryption & End-to-End Secure Delivery</span>
+              <span className="text-slate-100 dark:text-wa-dtext">Local Encryption &amp; End-to-End Secure Delivery</span>
             </div>
           </div>
         </footer>
