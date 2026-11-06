@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
 import { WhatsAppGifIcon } from './GifStickerPickerModal';
@@ -916,12 +917,15 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
 
   if (!isOpen) return null;
 
-  return (
-    /* Outer Modal Backdrop - Pure Dark OLED Glassmorphism without top margin/gap */
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 backdrop-blur-md p-0 m-0 animate-fade-in select-none">
+  const modalContent = (
+    /* Outer Modal Backdrop - Full viewport OLED dark blur without any top margin or gap */
+    <div
+      className="fixed inset-0 top-0 left-0 right-0 bottom-0 z-[120] flex items-center justify-center bg-black/75 backdrop-blur-md p-2 sm:p-4 m-0 mt-0 select-none animate-fade-in"
+      style={{ top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh', margin: 0 }}
+    >
       
-      {/* ── PHONE SHELL CONTAINER (Pure WhatsApp Dark Mode) ──────────────── */}
-      <div className="relative w-full max-w-[420px] h-full sm:h-screen max-h-screen bg-[#0b141a] sm:rounded-2xl border-0 sm:border border-neutral-800 shadow-2xl overflow-hidden flex flex-col justify-between m-0 p-0">
+      {/* ── PHONE SHELL CONTAINER (Original sleek phone dimensions & rounded corners) ──── */}
+      <div className="relative w-full max-w-[390px] h-full sm:h-[94vh] max-h-[820px] bg-[#0b141a] sm:rounded-[32px] border-0 sm:border border-neutral-800 shadow-2xl overflow-hidden flex flex-col justify-between m-0">
         
         {/* ── TOP HEADER / TOOLBAR (Dark WhatsApp Theme) ─────────────────── */}
         <div className="relative z-30 flex items-center justify-between px-3.5 py-3 bg-[#111b21]/95 border-b border-neutral-800/80 text-white">
@@ -2244,4 +2248,6 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 }
