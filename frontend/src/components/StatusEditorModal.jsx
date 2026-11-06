@@ -81,17 +81,19 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
   const [isDrawing, setIsDrawing] = useState(false);
 
   // Advanced Text Overlays State
-  const [textElements, setTextElements] = useState([]); // { id, text, textColorMode, color, textGrad1, textGrad2, bgMode, bgColor, bgGrad1, bgGrad2, font, size, x, y }
+  const [textElements, setTextElements] = useState([]); // { id, text, textColorMode, color, textGrad1, textGrad2, textDegree, bgMode, bgColor, bgGrad1, bgGrad2, bgDegree, font, size, x, y }
   const [editingTextId, setEditingTextId] = useState(null);
   const [newTextInput, setNewTextInput] = useState('');
   const [textColorMode, setTextColorMode] = useState('solid'); // 'solid' | 'gradient'
   const [textColor, setTextColor] = useState('#FFFFFF');
   const [textGrad1, setTextGrad1] = useState('#FF512F');
   const [textGrad2, setTextGrad2] = useState('#DD2476');
+  const [textDegree, setTextDegree] = useState(135);
   const [textBgMode, setTextBgMode] = useState('solid'); // 'none' | 'solid' | 'gradient'
   const [textBgColor, setTextBgColor] = useState('#000000');
   const [bgGrad1, setBgGrad1] = useState('#FF512F');
   const [bgGrad2, setBgGrad2] = useState('#DD2476');
+  const [bgDegree, setBgDegree] = useState(135);
   const [selectedFont, setSelectedFont] = useState(STATUS_FONTS[0]);
   const [textSize, setTextSize] = useState(56);
 
@@ -474,10 +476,12 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                 color: textColor,
                 textGrad1,
                 textGrad2,
+                textDegree,
                 bgMode: textBgMode,
                 bgColor: textBgColor,
                 bgGrad1,
                 bgGrad2,
+                bgDegree,
                 font: selectedFont,
                 size: textSize,
               }
@@ -493,10 +497,12 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
         color: textColor,
         textGrad1,
         textGrad2,
+        textDegree,
         bgMode: textBgMode,
         bgColor: textBgColor,
         bgGrad1,
         bgGrad2,
+        bgDegree,
         font: selectedFont,
         size: 56,
         x: 50,
@@ -519,10 +525,12 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
     setTextColor(t.color || '#FFFFFF');
     setTextGrad1(t.textGrad1 || '#FF512F');
     setTextGrad2(t.textGrad2 || '#DD2476');
+    setTextDegree(t.textDegree ?? 135);
     setTextBgMode(t.bgMode || 'solid');
     setTextBgColor(t.bgColor || '#000000');
     setBgGrad1(t.bgGrad1 || '#FF512F');
     setBgGrad2(t.bgGrad2 || '#DD2476');
+    setBgDegree(t.bgDegree ?? 135);
     setSelectedFont(t.font || STATUS_FONTS[0]);
     setTextSize(t.size || 56);
     setActiveTool('text');
@@ -693,6 +701,27 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
   };
 
   // ─── Final Bake & Save Status ───────────────────────────────────────────────
+  // Helper to bake CSS angled linear gradients onto HTML5 Canvas
+  const createAngledGradient = (ctx, x, y, width, height, angleDeg, color1, color2) => {
+    const rad = ((Number(angleDeg ?? 135)) * Math.PI) / 180;
+    const cx = x + width / 2;
+    const cy = y + height / 2;
+    const dx = Math.sin(rad);
+    const dy = -Math.cos(rad);
+    const halfW = width / 2;
+    const halfH = height / 2;
+    const dist = Math.abs(halfW * dx) + Math.abs(halfH * dy);
+    const x1 = cx - dx * dist;
+    const y1 = cy - dy * dist;
+    const x2 = cx + dx * dist;
+    const y2 = cy + dy * dist;
+
+    const grad = ctx.createLinearGradient(x1, y1, x2, y2);
+    grad.addColorStop(0, color1);
+    grad.addColorStop(1, color2);
+    return grad;
+  };
+
   const handleDone = async () => {
     if (!mediaSrc) {
       toast.error('Please select a photo or video for your status.');
@@ -831,9 +860,16 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
           ctx.roundRect(rectX, rectY, pillW, pillH, 22);
           ctx.fill();
         } else if (t.bgMode === 'gradient') {
-          const grad = ctx.createLinearGradient(rectX, rectY, rectX + pillW, rectY + pillH);
-          grad.addColorStop(0, t.bgGrad1 || '#FF512F');
-          grad.addColorStop(1, t.bgGrad2 || '#DD2476');
+          const grad = createAngledGradient(
+            ctx,
+            rectX,
+            rectY,
+            pillW,
+            pillH,
+            t.bgDegree ?? 135,
+            t.bgGrad1 || '#FF512F',
+            t.bgGrad2 || '#DD2476'
+          );
           ctx.fillStyle = grad;
           ctx.beginPath();
           ctx.roundRect(rectX, rectY, pillW, pillH, 22);
@@ -842,9 +878,16 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
 
         // Draw Text (Solid or Gradient)
         if (t.textColorMode === 'gradient') {
-          const textGrad = ctx.createLinearGradient(rectX, rectY, rectX + pillW, rectY + pillH);
-          textGrad.addColorStop(0, t.textGrad1 || '#FF512F');
-          textGrad.addColorStop(1, t.textGrad2 || '#DD2476');
+          const textGrad = createAngledGradient(
+            ctx,
+            rectX,
+            rectY,
+            pillW,
+            pillH,
+            t.textDegree ?? 135,
+            t.textGrad1 || '#FF512F',
+            t.textGrad2 || '#DD2476'
+          );
           ctx.fillStyle = textGrad;
         } else {
           ctx.fillStyle = t.color || '#FFFFFF';
@@ -875,10 +918,10 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
 
   return (
     /* Outer Modal Backdrop - Pure Dark OLED Glassmorphism without top margin/gap */
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 backdrop-blur-md mt-0 p-0 sm:p-2 animate-fade-in select-none">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 backdrop-blur-md p-0 m-0 animate-fade-in select-none">
       
       {/* ── PHONE SHELL CONTAINER (Pure WhatsApp Dark Mode) ──────────────── */}
-      <div className="relative w-full max-w-[390px] h-full sm:h-[94vh] max-h-[820px] bg-[#0b141a] sm:rounded-[32px] border-0 sm:border border-neutral-800 shadow-2xl overflow-hidden flex flex-col justify-between m-0 mt-0">
+      <div className="relative w-full max-w-[420px] h-full sm:h-screen max-h-screen bg-[#0b141a] sm:rounded-2xl border-0 sm:border border-neutral-800 shadow-2xl overflow-hidden flex flex-col justify-between m-0 p-0">
         
         {/* ── TOP HEADER / TOOLBAR (Dark WhatsApp Theme) ─────────────────── */}
         <div className="relative z-30 flex items-center justify-between px-3.5 py-3 bg-[#111b21]/95 border-b border-neutral-800/80 text-white">
@@ -1121,17 +1164,37 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                 </button>
               </div>
 
-              {/* Text Input with Live Preview styling */}
-              <div
-                className="p-3 rounded-xl border border-neutral-700 my-2 flex items-center justify-center min-h-[64px]"
-                style={{
-                  backgroundColor: textBgMode === 'solid' ? textBgColor : undefined,
-                  backgroundImage:
-                    textBgMode === 'gradient'
-                      ? `linear-gradient(135deg, ${bgGrad1}, ${bgGrad2})`
-                      : undefined,
-                }}
-              >
+              {/* Live Preview Pill & Text Input */}
+              <div className="flex flex-col gap-2 my-2">
+                <div
+                  className="p-3 rounded-xl border border-neutral-700 flex items-center justify-center min-h-[60px] text-center transition-all overflow-hidden"
+                  style={{
+                    backgroundColor: textBgMode === 'solid' ? textBgColor : undefined,
+                    backgroundImage:
+                      textBgMode === 'gradient'
+                        ? `linear-gradient(${bgDegree}deg, ${bgGrad1}, ${bgGrad2})`
+                        : undefined,
+                  }}
+                >
+                  <span
+                    className="text-lg font-bold select-none whitespace-pre-wrap break-words max-w-full"
+                    style={{
+                      fontFamily: selectedFont.family,
+                      color: textColorMode === 'solid' ? textColor : undefined,
+                      backgroundImage:
+                        textColorMode === 'gradient'
+                          ? `linear-gradient(${textDegree}deg, ${textGrad1}, ${textGrad2})`
+                          : undefined,
+                      WebkitBackgroundClip: textColorMode === 'gradient' ? 'text' : undefined,
+                      backgroundClip: textColorMode === 'gradient' ? 'text' : undefined,
+                      WebkitTextFillColor: textColorMode === 'gradient' ? 'transparent' : undefined,
+                      display: 'inline-block',
+                    }}
+                  >
+                    {newTextInput || 'Type your status text...'}
+                  </span>
+                </div>
+
                 <input
                   type="text"
                   autoFocus
@@ -1139,17 +1202,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                   onChange={(e) => setNewTextInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSaveText()}
                   placeholder="Type your status text..."
-                  className="w-full text-center text-lg font-bold bg-transparent focus:outline-none"
-                  style={{
-                    fontFamily: selectedFont.family,
-                    color: textColorMode === 'solid' ? textColor : undefined,
-                    backgroundImage:
-                      textColorMode === 'gradient'
-                        ? `linear-gradient(135deg, ${textGrad1}, ${textGrad2})`
-                        : undefined,
-                    WebkitBackgroundClip: textColorMode === 'gradient' ? 'text' : undefined,
-                    WebkitTextFillColor: textColorMode === 'gradient' ? 'transparent' : undefined,
-                  }}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-800/90 border border-neutral-700 text-white text-sm font-medium focus:outline-none focus:border-wa-teal focus:ring-1 focus:ring-wa-teal transition-all"
                 />
               </div>
 
@@ -1263,8 +1316,37 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                       </label>
                       <div
                         className="w-8 h-4 rounded ml-auto shadow-inner border border-neutral-700"
-                        style={{ background: `linear-gradient(135deg, ${textGrad1}, ${textGrad2})` }}
+                        style={{ background: `linear-gradient(${textDegree}deg, ${textGrad1}, ${textGrad2})` }}
                       />
+                    </div>
+
+                    {/* Text Gradient Degree (Angle) Slider & Chips */}
+                    <div className="flex items-center gap-2 bg-neutral-800/80 p-1.5 rounded-lg text-[11px]">
+                      <span className="text-neutral-400 text-[10px] whitespace-nowrap">Degree:</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="360"
+                        step="5"
+                        value={textDegree}
+                        onChange={(e) => setTextDegree(Number(e.target.value))}
+                        className="w-full accent-wa-teal h-1 cursor-pointer"
+                      />
+                      <span className="text-wa-teal font-mono text-[10px] w-8 text-right font-bold">{textDegree}°</span>
+                    </div>
+                    <div className="flex items-center gap-1 overflow-x-auto py-0.5 custom-scroll">
+                      {[0, 45, 90, 135, 180, 270].map((deg) => (
+                        <button
+                          key={deg}
+                          type="button"
+                          onClick={() => setTextDegree(deg)}
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-mono transition-colors ${
+                            textDegree === deg ? 'bg-wa-teal text-white font-bold' : 'bg-neutral-800 text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          {deg}°
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -1364,8 +1446,37 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                       </label>
                       <div
                         className="w-8 h-4 rounded ml-auto shadow-inner border border-neutral-700"
-                        style={{ background: `linear-gradient(135deg, ${bgGrad1}, ${bgGrad2})` }}
+                        style={{ background: `linear-gradient(${bgDegree}deg, ${bgGrad1}, ${bgGrad2})` }}
                       />
+                    </div>
+
+                    {/* Background Gradient Degree (Angle) Slider & Chips */}
+                    <div className="flex items-center gap-2 bg-neutral-800/80 p-1.5 rounded-lg text-[11px]">
+                      <span className="text-neutral-400 text-[10px] whitespace-nowrap">Degree:</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="360"
+                        step="5"
+                        value={bgDegree}
+                        onChange={(e) => setBgDegree(Number(e.target.value))}
+                        className="w-full accent-wa-teal h-1 cursor-pointer"
+                      />
+                      <span className="text-wa-teal font-mono text-[10px] w-8 text-right font-bold">{bgDegree}°</span>
+                    </div>
+                    <div className="flex items-center gap-1 overflow-x-auto py-0.5 custom-scroll">
+                      {[0, 45, 90, 135, 180, 270].map((deg) => (
+                        <button
+                          key={deg}
+                          type="button"
+                          onClick={() => setBgDegree(deg)}
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-mono transition-colors ${
+                            bgDegree === deg ? 'bg-wa-teal text-white font-bold' : 'bg-neutral-800 text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          {deg}°
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -1639,27 +1750,36 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                     title="Double-click to edit text • Drag to move"
                   >
                     <div
-                      className="px-3 py-1.5 rounded-xl font-bold text-center whitespace-pre-wrap select-none"
+                      className="rounded-xl font-bold text-center whitespace-pre-wrap select-none"
                       style={{
-                        fontFamily: t.font?.family || 'sans-serif',
-                        fontSize: `${fontPx}px`,
-                        color: t.textColorMode === 'solid' ? t.color : undefined,
-                        backgroundImage:
-                          t.textColorMode === 'gradient'
-                            ? `linear-gradient(135deg, ${t.textGrad1 || '#FF512F'}, ${t.textGrad2 || '#DD2476'})`
-                            : undefined,
-                        WebkitBackgroundClip: t.textColorMode === 'gradient' ? 'text' : undefined,
-                        WebkitTextFillColor: t.textColorMode === 'gradient' ? 'transparent' : undefined,
                         backgroundColor: t.bgMode === 'solid' ? t.bgColor : undefined,
-                        background:
+                        backgroundImage:
                           t.bgMode === 'gradient'
-                            ? `linear-gradient(135deg, ${t.bgGrad1 || '#FF512F'}, ${t.bgGrad2 || '#DD2476'})`
+                            ? `linear-gradient(${t.bgDegree ?? 135}deg, ${t.bgGrad1 || '#FF512F'}, ${t.bgGrad2 || '#DD2476'})`
                             : undefined,
                         boxShadow: t.bgMode !== 'none' ? '0 4px 14px rgba(0,0,0,0.5)' : undefined,
-                        textShadow: t.bgMode === 'none' ? '0 2px 4px rgba(0,0,0,0.8)' : undefined,
+                        padding: '6px 14px',
                       }}
                     >
-                      {t.text}
+                      <span
+                        style={{
+                          fontFamily: t.font?.family || 'sans-serif',
+                          fontSize: `${fontPx}px`,
+                          color: t.textColorMode === 'solid' ? (t.color || '#FFFFFF') : undefined,
+                          backgroundImage:
+                            t.textColorMode === 'gradient'
+                              ? `linear-gradient(${t.textDegree ?? 135}deg, ${t.textGrad1 || '#FF512F'}, ${t.textGrad2 || '#DD2476'})`
+                              : undefined,
+                          WebkitBackgroundClip: t.textColorMode === 'gradient' ? 'text' : undefined,
+                          backgroundClip: t.textColorMode === 'gradient' ? 'text' : undefined,
+                          WebkitTextFillColor: t.textColorMode === 'gradient' ? 'transparent' : undefined,
+                          textShadow: t.bgMode === 'none' && t.textColorMode === 'solid' ? '0 2px 4px rgba(0,0,0,0.8)' : undefined,
+                          display: 'inline-block',
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {t.text}
+                      </span>
                     </div>
 
                     {/* Quick Item Controls (Edit, Resize & Delete) */}
@@ -1721,6 +1841,7 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
               {/* Draggable Stickers, Emojis & GIFs (Strictly moves X/Y, no resize while dragging) */}
               {stickers.map((s) => {
                 const isSelected = selectedItemId === s.id;
+                const itemSize = s.size || 52;
                 return (
                   <div
                     key={s.id}
@@ -1731,18 +1852,33 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                     }}
                     onMouseDown={(e) => handleDragStart(e, 'sticker', s.id, s.x, s.y)}
                     onTouchStart={(e) => handleDragStart(e, 'sticker', s.id, s.x, s.y)}
-                    className={`absolute z-20 cursor-move group select-none leading-none touch-none ${
+                    className={`absolute z-20 cursor-move group select-none leading-none touch-none shrink-0 ${
                       isSelected ? 'ring-2 ring-wa-teal ring-offset-2 ring-offset-black rounded-xl' : ''
                     }`}
                     style={{
                       left: `${s.x}%`,
                       top: `${s.y}%`,
                       transform: 'translate(-50%, -50%)',
+                      width: `${itemSize}px`,
+                      height: `${itemSize}px`,
+                      minWidth: `${itemSize}px`,
+                      minHeight: `${itemSize}px`,
+                      maxWidth: 'none',
+                      maxHeight: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
                     title="Click to select & resize • Drag to move"
                   >
                     {s.type === 'emoji' ? (
-                      <span style={{ fontSize: `${s.size}px` }} className="select-none pointer-events-none">
+                      <span
+                        style={{
+                          fontSize: `${itemSize}px`,
+                          lineHeight: 1,
+                        }}
+                        className="select-none pointer-events-none shrink-0 inline-block whitespace-nowrap leading-none"
+                      >
                         {s.content}
                       </span>
                     ) : (
@@ -1750,8 +1886,15 @@ export default function StatusEditorModal({ isOpen, onClose, onSave, initialData
                         src={s.content}
                         alt="sticker"
                         draggable={false}
-                        className="object-contain pointer-events-none rounded-lg select-none"
-                        style={{ width: `${s.size}px`, height: `${s.size}px` }}
+                        className="object-contain pointer-events-none rounded-lg select-none shrink-0 max-w-none max-h-none"
+                        style={{
+                          width: `${itemSize}px`,
+                          height: `${itemSize}px`,
+                          minWidth: `${itemSize}px`,
+                          minHeight: `${itemSize}px`,
+                          maxWidth: 'none',
+                          maxHeight: 'none',
+                        }}
                       />
                     )}
 
