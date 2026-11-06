@@ -96,7 +96,7 @@ async function processAllDueMessages() {
                 msg.mentions || []
               );
               const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error(`Media item #${i + 1} (${item.type}) timed out after 30s`)), 30_000)
+                setTimeout(() => reject(new Error(`Media item #${i + 1} (${item.type}) timed out after 120s`)), 120_000)
               );
 
               lastResult = await Promise.race([sendPromise, timeoutPromise]);
@@ -119,7 +119,7 @@ async function processAllDueMessages() {
               msg.mentions || []
             );
             const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('WhatsApp message delivery timed out after 30s')), 30_000)
+              setTimeout(() => reject(new Error('WhatsApp message delivery timed out after 120s')), 120_000)
             );
 
             lastResult = await Promise.race([sendPromise, timeoutPromise]);

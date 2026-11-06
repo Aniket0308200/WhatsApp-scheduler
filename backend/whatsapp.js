@@ -1467,13 +1467,13 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
       try {
         const contactJidSet = new Set();
 
-        // 1. Own primary WhatsApp phone JID (ESSENTIAL: without this, companion socket won't sync story to user's phone)
+        // 1. Own primary WhatsApp phone JID (ESSENTIAL: companion socket syncs story to user's phone)
         const ownPn = session.sock.user?.id ? session.sock.user.id.split('@')[0].split(':')[0].replace(/\D/g, '') : null;
         if (ownPn && ownPn.length >= 7) {
           contactJidSet.add(`${ownPn}@s.whatsapp.net`);
         }
 
-        // 2. Mentioned contacts
+        // 2. Mentioned contacts (guaranteed delivery and mention notification)
         mentionJids.forEach(mj => {
           if (mj && typeof mj === 'string') {
             const clean = mj.split('@')[0].split(':')[0].replace(/\D/g, '');
@@ -1481,53 +1481,24 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
           }
         });
 
-        // 3. Contacts in MongoDB for this session
-        const contacts = await db.Contact.find({ sessionId }).lean();
-        (contacts || []).forEach(c => {
-          const raw = c.jid || (c.phone ? `${c.phone.replace(/\D/g, '')}@s.whatsapp.net` : null);
-          if (raw) {
-            const clean = raw.split('@')[0].split(':')[0].replace(/\D/g, '');
-            if (clean && clean.length >= 7) contactJidSet.add(`${clean}@s.whatsapp.net`);
-          }
-        });
-
-        // 4. In-memory contactCache
-        if (session.contactCache && typeof session.contactCache === 'object') {
-          for (const key of Object.keys(session.contactCache)) {
-            const clean = key.split('@')[0].split(':')[0].replace(/\D/g, '');
-            if (clean && clean.length >= 7) contactJidSet.add(`${clean}@s.whatsapp.net`);
-          }
-        }
-
-        // 5. In-memory contactsBuffer
-        if (session.contactsBuffer && session.contactsBuffer.size > 0) {
-          for (const [key] of session.contactsBuffer.entries()) {
-            const clean = key.split('@')[0].split(':')[0].replace(/\D/g, '');
-            if (clean && clean.length >= 7) contactJidSet.add(`${clean}@s.whatsapp.net`);
-          }
-        }
-
-        // 6. Recent message recipients from DB
+        // 3. Keep statusJidList fast & responsive (max 10 recipients to prevent WhatsApp USync & pre-key timeout)
         try {
-          const recentMsgs = await db.ScheduledMessage.find({
-            sessionId,
-            encryptedNumber: { $exists: true }
-          }).select('encryptedNumber').limit(200).lean();
-          for (const m of (recentMsgs || [])) {
-            try {
-              const num = db.decrypt(m.encryptedNumber);
-              if (num && !num.includes('@g.us') && !num.includes('broadcast')) {
-                const clean = num.replace(/\D/g, '');
+          const contacts = await db.Contact.find({ sessionId }).limit(10).lean();
+          (contacts || []).forEach(c => {
+            if (contactJidSet.size < 12) {
+              const raw = c.jid || (c.phone ? `${c.phone.replace(/\D/g, '')}@s.whatsapp.net` : null);
+              if (raw) {
+                const clean = raw.split('@')[0].split(':')[0].replace(/\D/g, '');
                 if (clean && clean.length >= 7) contactJidSet.add(`${clean}@s.whatsapp.net`);
               }
-            } catch (_) {}
-          }
+            }
+          });
         } catch (_) {}
 
         const contactJids = Array.from(contactJidSet);
         if (contactJids.length > 0) {
           sendOptions.statusJidList = contactJids;
-          console.log(`[WA Status] [${sessionId}] Broadcasting status to ${contactJids.length} contacts (Own JID: ${ownPn ? '+' + ownPn : 'none'}, Mentions: ${mentionJids.length})`);
+          console.log(`[WA Status] [${sessionId}] Broadcasting status to ${contactJids.length} recipients (Own JID: ${ownPn ? '+' + ownPn : 'none'}, Mentions: ${mentionJids.length})`);
         } else {
           console.warn(`[WA Status] [${sessionId}] Warning: contactJids is empty for status broadcast!`);
         }
