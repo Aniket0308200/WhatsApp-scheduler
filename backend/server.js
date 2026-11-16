@@ -724,9 +724,17 @@ app.post('/api/messages', async (req, res) => {
     return res.status(400).json({ error: 'Invalid scheduledAt datetime.' });
   }
 
-  const schedDate = new Date(scheduledAt);
-  if (schedDate <= new Date()) {
-    return res.status(400).json({ error: 'Scheduled time must be in the future.' });
+  let schedDate = new Date(scheduledAt);
+  const now = new Date();
+  // Grace window: If scheduled time is within 5 minutes in the past or right now,
+  // treat it as immediate delivery (send right now) instead of failing with 400!
+  if (schedDate <= now) {
+    const diffMs = now.getTime() - schedDate.getTime();
+    if (diffMs <= 5 * 60 * 1000) {
+      schedDate = now; // Immediate delivery
+    } else {
+      return res.status(400).json({ error: 'Scheduled time must be in the future (or current time for immediate delivery).' });
+    }
   }
 
   try {
@@ -820,6 +828,17 @@ app.post('/api/messages', async (req, res) => {
       scheduled_at:   db.toSqliteUtc(schedDate),
       status:         'pending',
     });
+
+    // High-performance trigger: If the message is due now (or within 5 seconds),
+    // kick off the scheduler immediately on next event loop tick instead of waiting!
+    if (schedDate <= new Date(Date.now() + 5000)) {
+      setImmediate(() => {
+        try {
+          const { processAllDueMessages } = require('./scheduler');
+          processAllDueMessages().catch(e => console.warn('[Scheduler] Immediate tick error:', e.message));
+        } catch (_) {}
+      });
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

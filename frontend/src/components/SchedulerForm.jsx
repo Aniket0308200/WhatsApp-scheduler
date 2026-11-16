@@ -287,12 +287,12 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
   };
 
   const getMinTime = () => {
-    const d = addSeconds(new Date(), 30);
+    const d = new Date();
     return format(d, "yyyy-MM-dd'T'HH:mm:ss");
   };
 
   const getDefaultTime = () => {
-    const d = addSeconds(new Date(), 30);
+    const d = addSeconds(new Date(), 10);
     return format(d, "yyyy-MM-dd'T'HH:mm:ss");
   };
 
@@ -1062,11 +1062,11 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
     return () => clearTimeout(nameTimer.current);
   }, [countryCode, phone, lookupContact]);
 
-  // Update time and auto-confirm if valid future time
+  // Update time and auto-confirm if valid future time (or current minute)
   const handleDateChange = (val) => {
     setScheduledAt(val);
     const d = new Date(val ? val.replace(' ', 'T') : '');
-    if (!isNaN(d.getTime()) && d.getTime() > Date.now() + 5000) {
+    if (!isNaN(d.getTime()) && d.getTime() > Date.now() - 60000) {
       setTimeConfirmed(true);
     } else {
       setTimeConfirmed(false);
@@ -1077,9 +1077,9 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
     e.preventDefault();
 
     const parsedScheduled = new Date(scheduledAt ? scheduledAt.replace(' ', 'T') : '');
-    const isFuture = !isNaN(parsedScheduled.getTime()) && parsedScheduled.getTime() > Date.now();
+    const isFuture = !isNaN(parsedScheduled.getTime()) && parsedScheduled.getTime() > Date.now() - 60000;
     if (!timeConfirmed && !isFuture) {
-      toast.error('Please pick a future date & time.');
+      toast.error('Please pick a valid date & time.');
       return;
     }
 

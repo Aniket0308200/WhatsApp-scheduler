@@ -71,6 +71,22 @@ const RECONNECT_MAX_DELAY_MS  = 15_000; // Cap to 15s instead of 60s so recovery
 
 // ─── Helper Functions ────────────────────────────────────────────────────────
 
+/** Helper to query AuthSession document with fallback across namespaces (prod_, dev_, bare) */
+async function findAuthSessionDoc(sessionId, key) {
+  if (!sessionId) return null;
+  const isProd = process.env.NODE_ENV === 'production';
+  const primaryNs = isProd ? `prod_${sessionId}` : `dev_${sessionId}`;
+  let doc = await db.AuthSession.findOne({ sessionId: primaryNs, key }).lean();
+  if (!doc) {
+    const altNs = isProd ? `dev_${sessionId}` : `prod_${sessionId}`;
+    doc = await db.AuthSession.findOne({ sessionId: altNs, key }).lean();
+  }
+  if (!doc) {
+    doc = await db.AuthSession.findOne({ sessionId, key }).lean();
+  }
+  return doc;
+}
+
 /** Returns true if a session is currently initialized in memory. */
 function hasSession(sessionId) {
   return sessions.has(sessionId);
@@ -80,9 +96,7 @@ function hasSession(sessionId) {
 async function hasSavedCredentials(sessionId) {
   if (!sessionId) return false;
   try {
-    const isProd = process.env.NODE_ENV === 'production';
-    const nsSessionId = isProd ? `prod_${sessionId}` : `dev_${sessionId}`;
-    const doc = await db.AuthSession.findOne({ sessionId: nsSessionId, key: 'creds' }).lean();
+    const doc = await findAuthSessionDoc(sessionId, 'creds');
     if (!doc || !doc.value) return false;
     const creds = JSON.parse(doc.value, BufferJSON.reviver);
     return Boolean(creds && (creds.me?.id || creds.registered));
@@ -110,7 +124,7 @@ async function useMongoDBAuthState(sessionId) {
 
   const readData = async (key) => {
     try {
-      const doc = await db.AuthSession.findOne({ sessionId: nsSessionId, key }).lean();
+      const doc = await findAuthSessionDoc(sessionId, key);
       if (!doc) return null;
       return JSON.parse(doc.value, BufferJSON.reviver);
     } catch (err) {
@@ -160,15 +174,36 @@ async function useMongoDBAuthState(sessionId) {
           return data;
         },
         set: async (data) => {
-          const tasks = [];
+          const bulkOps = [];
           for (const category in data) {
             for (const id in data[category]) {
               const value = data[category][id];
               const key = `${category}:${id}`;
-              tasks.push(writeData(key, value));
+              if (value === null || value === undefined) {
+                bulkOps.push({
+                  deleteOne: {
+                    filter: { sessionId: nsSessionId, key }
+                  }
+                });
+              } else {
+                const jsonStr = JSON.stringify(value, BufferJSON.replacer);
+                bulkOps.push({
+                  updateOne: {
+                    filter: { sessionId: nsSessionId, key },
+                    update: { $set: { value: jsonStr } },
+                    upsert: true
+                  }
+                });
+              }
             }
           }
-          await Promise.all(tasks);
+          if (bulkOps.length > 0) {
+            try {
+              await db.AuthSession.bulkWrite(bulkOps, { ordered: false });
+            } catch (err) {
+              console.error(`[Auth] [${sessionId}] bulkWrite keys error:`, err.message);
+            }
+          }
         }
       }
     },
@@ -181,9 +216,7 @@ async function useMongoDBAuthState(sessionId) {
 /** Check if session has saved credentials and extract the phone number from them. */
 async function getPhoneFromSession(sessionId) {
   try {
-    const isProd = process.env.NODE_ENV === 'production';
-    const nsSessionId = isProd ? `prod_${sessionId}` : `dev_${sessionId}`;
-    const doc = await db.AuthSession.findOne({ sessionId: nsSessionId, key: 'creds' }).lean();
+    const doc = await findAuthSessionDoc(sessionId, 'creds');
     if (doc) {
       const creds = JSON.parse(doc.value, BufferJSON.reviver);
       if (creds?.me?.id) {
@@ -727,7 +760,7 @@ async function _performInitWhatsApp(sessionId) {
       if (doc) {
         if (doc.rawMessage) {
           try {
-            const raw = JSON.parse(doc.rawMessage);
+            const raw = JSON.parse(doc.rawMessage, BufferJSON.reviver);
             if (raw && typeof raw === 'object') {
               if (raw.messageContextInfo?.messageSecret && typeof raw.messageContextInfo.messageSecret === 'string') {
                 raw.messageContextInfo.messageSecret = Buffer.from(raw.messageContextInfo.messageSecret, 'base64');
@@ -1399,12 +1432,23 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
         };
       } else if (mediaType === 'gif') {
         const gifBuffer = await formatGifBuffer(buffer);
-        messagePayload = {
-          video: gifBuffer,
-          gifPlayback: true,
-          caption: text || '',
-          mimetype: 'video/mp4'
-        };
+        const isMp4 = gifBuffer.length > 8 && gifBuffer.indexOf(Buffer.from('ftyp')) >= 4 && gifBuffer.indexOf(Buffer.from('ftyp')) <= 16;
+        if (isMp4) {
+          messagePayload = {
+            video: gifBuffer,
+            gifPlayback: true,
+            caption: text || '',
+            mimetype: 'video/mp4'
+          };
+        } else {
+          // If ffmpeg could not convert to MP4 video, deliver cleanly as GIF document
+          messagePayload = {
+            document: gifBuffer,
+            mimetype: 'image/gif',
+            fileName: mediaName || 'animation.gif',
+            caption: text || ''
+          };
+        }
       } else if (mediaType === 'document' || mediaType === 'pdf') {
         let docMime = detectedMime || 'application/pdf';
         if (mediaName && mediaName.toLowerCase().endsWith('.pdf')) docMime = 'application/pdf';
@@ -1851,9 +1895,19 @@ setInterval(async () => {
   }
 }, 10 * 60 * 1000);
 
+function cacheMessage(sessionId, waId, message) {
+  if (!sessionId || !waId || !message) return;
+  const session = sessions.get(sessionId);
+  if (session) {
+    if (!session.messageCache) session.messageCache = new Map();
+    session.messageCache.set(waId, message);
+  }
+}
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
+  cacheMessage,
   hasSession,
   shouldReinitialize,
   initWhatsApp,

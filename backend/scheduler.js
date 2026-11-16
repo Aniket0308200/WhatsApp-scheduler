@@ -7,6 +7,7 @@
 
 const db       = require('./db');
 const whatsapp = require('./whatsapp');
+const { BufferJSON } = require('@whiskeysockets/baileys');
 
 let isRunning = false;
 let lastRunStart = 0;
@@ -101,6 +102,10 @@ async function processAllDueMessages() {
 
               lastResult = await Promise.race([sendPromise, timeoutPromise]);
 
+              if (lastResult?.id && lastResult?.message) {
+                whatsapp.cacheMessage(sessionId, lastResult.id, lastResult.message);
+              }
+
               // Small delay between items to ensure order & avoid socket congestion
               if (i < msg.mediaList.length - 1) {
                 await new Promise(r => setTimeout(r, 800));
@@ -123,10 +128,14 @@ async function processAllDueMessages() {
             );
 
             lastResult = await Promise.race([sendPromise, timeoutPromise]);
+
+            if (lastResult?.id && lastResult?.message) {
+              whatsapp.cacheMessage(sessionId, lastResult.id, lastResult.message);
+            }
           }
 
           const waId = lastResult?.id || lastResult?.key?.id || null;
-          const rawMsg = lastResult?.message ? JSON.stringify(lastResult.message) : null;
+          const rawMsg = lastResult?.message ? JSON.stringify(lastResult.message, BufferJSON.replacer) : null;
           // Atomically mark as sent and store WhatsApp message id and full raw message payload
           await db.ScheduledMessage.updateOne(
             { _id: msg.id },

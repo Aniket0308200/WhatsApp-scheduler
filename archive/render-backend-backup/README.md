@@ -41,3 +41,4 @@ Agar kabhi bhi wapas Render use karna ho:
    npm run build
    ```
 3. `dist/` folder ko Hostinger par re-upload kar dein.
+
