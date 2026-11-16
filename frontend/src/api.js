@@ -11,7 +11,7 @@ if (!sessionId) {
 // edited in this workspace always talk to each other. Deployments can override
 // this with VITE_API_BASE_URL.
 export const BASE_URL = import.meta.env.VITE_API_BASE_URL ||
-  (import.meta.env.DEV ? '/api' : 'https://whatsapp-scheduler-backend-ubkz.onrender.com');
+  (import.meta.env.DEV ? '/api' : 'https://api.wascheduler.site');
 const API_BASE_URL = BASE_URL.endsWith('/api') ? BASE_URL : `${BASE_URL}/api`;
 
 export const api = axios.create({

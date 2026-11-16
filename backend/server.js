@@ -68,7 +68,7 @@ app.get('/api/health', (req, res) => {
 const isRenderOrProd = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER) || Boolean(process.env.RENDER_EXTERNAL_URL);
 if (isRenderOrProd) {
   const selfPingUrl = process.env.SELF_PING_URL || 
-    (process.env.RENDER_EXTERNAL_URL ? `${process.env.RENDER_EXTERNAL_URL}/api/health` : 'https://whatsapp-scheduler-backend-ubkz.onrender.com/api/health');
+    (process.env.RENDER_EXTERNAL_URL ? `${process.env.RENDER_EXTERNAL_URL}/api/health` : 'https://api.wascheduler.site/api/health');
   
   setInterval(async () => {
     try {

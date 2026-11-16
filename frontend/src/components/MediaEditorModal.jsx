@@ -52,19 +52,19 @@ const BOX_SHAPES = [
   { id: 'starburst', name: 'Starburst', icon: '💥', desc: 'Comic Burst' },
 ];
 
-// ─── Interactive Standalone Shapes (Selectable, Resizable, Movable) ──────────
+// ─── Interactive Standalone Shapes (Draw with Mouse Drag) ───────────────────
 const SHAPE_PRESETS = [
-  { id: 'arrow', label: 'Arrow', icon: '↗️', desc: 'Directional Arrow' },
-  { id: 'rect', label: 'Box', icon: '⏹️', desc: 'Rectangle Box' },
-  { id: 'rounded', label: 'Rounded Box', icon: '🔲', desc: 'Rounded Card' },
-  { id: 'circle', label: 'Circle / Oval', icon: '⭕', desc: 'Circle or Ellipse' },
-  { id: 'line', label: 'Straight Line', icon: '📏', desc: 'Horizontal Line' },
-  { id: 'star', label: 'Star', icon: '⭐', desc: '5-Point Star' },
-  { id: 'tag', label: 'Tag Badge', icon: '🏷️', desc: 'Pointed Label' },
-  { id: 'bubble', label: 'Speech Bubble', icon: '💬', desc: 'Callout Bubble' },
+  { id: 'arrow', label: 'Arrow', icon: '↗️', desc: 'Drag mouse to draw pointing arrow' },
+  { id: 'rect', label: 'Box / Rect', icon: '⏹️', desc: 'Drag mouse to draw rectangle box' },
+  { id: 'rounded', label: 'Rounded Box', icon: '🔲', desc: 'Drag mouse to draw rounded box' },
+  { id: 'circle', label: 'Circle / Oval', icon: '⭕', desc: 'Drag mouse to draw circle' },
+  { id: 'line', label: 'Straight Line', icon: '📏', desc: 'Drag mouse to draw line' },
+  { id: 'star', label: 'Star', icon: '⭐', desc: 'Drag mouse to draw star' },
+  { id: 'tag', label: 'Tag Badge', icon: '🏷️', desc: 'Drag mouse to draw tag label' },
+  { id: 'bubble', label: 'Speech Bubble', icon: '💬', desc: 'Drag mouse to draw speech bubble' },
 ];
 
-// ─── CSS Box Shape Generator ────────────────────────────────────────────────
+// ─── CSS Box Shape Generator for Text ────────────────────────────────────────
 const getBoxShapeStyles = (shapeId = 'pill', padX = 14, padY = 6) => {
   const base = {
     padding: `${padY}px ${padX}px`,
@@ -125,7 +125,7 @@ const getBoxShapeStyles = (shapeId = 'pill', padX = 14, padY = 6) => {
   }
 };
 
-// ─── Canvas Box Shape Drawer ────────────────────────────────────────────────
+// ─── Canvas Box Shape Drawer for Baking ──────────────────────────────────────
 const drawBoxShapeOnCanvas = (ctx, shapeId, x, y, w, h) => {
   ctx.beginPath();
   switch (shapeId) {
@@ -198,6 +198,12 @@ export default function MediaEditorModal({
   // Active Tool Mode: null | 'shapes' | 'draw' | 'text' | 'sticker' | 'blur'
   const [activeTool, setActiveTool] = useState(null);
 
+  // Active Shape Tool to draw with mouse: null | 'arrow' | 'rect' | 'rounded' | 'circle' | 'line' | 'star' | 'tag' | 'bubble'
+  const [activeShapeTool, setActiveShapeTool] = useState(null);
+  const [isDrawingShape, setIsDrawingShape] = useState(false);
+  const [shapeDragStart, setShapeDragStart] = useState(null);
+  const [shapeDragCurrent, setShapeDragCurrent] = useState(null);
+
   // 1. Shapes State (Interactive Selectable Layers)
   const [shapes, setShapes] = useState([]);
 
@@ -206,15 +212,15 @@ export default function MediaEditorModal({
 
   // 3. Stickers & Emojis State
   const [stickers, setStickers] = useState([]);
-  const [stickerPickerTab, setStickerPickerTab] = useState('emoji'); // 'emoji' | 'giphy' | 'trending'
+  const [stickerPickerTab, setStickerPickerTab] = useState('emoji'); // 'emoji' | 'giphy'
   const [giphySearch, setGiphySearch] = useState('');
   const [giphyResults, setGiphyResults] = useState([]);
   const [loadingGiphy, setLoadingGiphy] = useState(false);
 
-  // Selection & Dragging
+  // Selection & Interactive Drag/Resize/Rotate
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [selectedItemType, setSelectedItemType] = useState(null); // 'shape' | 'text' | 'sticker'
-  const [draggingItem, setDraggingItem] = useState(null);
+  const [interaction, setInteraction] = useState(null);
 
   // 4. Freehand Pen & Blur Drawing on Base Canvas
   const [penColor, setPenColor] = useState('#25D366');
@@ -310,7 +316,7 @@ export default function MediaEditorModal({
       }
     });
 
-    // 3. Live temporary stroke while drawing
+    // 3. Live temporary stroke while drawing freehand or blur
     if (currentStroke) {
       ctx.lineWidth = currentStroke.width || 6;
       ctx.strokeStyle = currentStroke.color || '#25D366';
@@ -358,213 +364,277 @@ export default function MediaEditorModal({
     };
   };
 
-  // Freehand Pen / Blur mouse events
-  const handleCanvasMouseDown = (e) => {
-    if (activeTool !== 'draw' && activeTool !== 'blur') return;
-    const coords = getCanvasCoords(e);
-    setIsDrawing(true);
-
-    if (activeTool === 'draw') {
-      setCurrentStroke({
-        tool: 'brush',
-        color: penColor,
-        width: penWidth,
-        points: [coords],
-      });
-    } else if (activeTool === 'blur') {
-      setCurrentStroke({
-        tool: 'blur',
-        width: penWidth,
-        start: coords,
-        end: coords,
-      });
-    }
-  };
-
-  const handleCanvasMouseMove = (e) => {
-    if (!isDrawing || !currentStroke) return;
-    const coords = getCanvasCoords(e);
-
-    if (currentStroke.tool === 'brush') {
-      setCurrentStroke((prev) => ({
-        ...prev,
-        points: [...prev.points, coords],
-      }));
-    } else if (currentStroke.tool === 'blur') {
-      setCurrentStroke((prev) => ({
-        ...prev,
-        end: coords,
-      }));
-    }
-  };
-
-  const handleCanvasMouseUp = () => {
-    if (!isDrawing || !currentStroke) return;
-    setIsDrawing(false);
-    setStrokes((prev) => [...prev, currentStroke]);
-    setCurrentStroke(null);
-  };
-
-  // ─── ADD INTERACTIVE SHAPES ────────────────────────────────────────────────
-  const handleAddShape = (shapeType) => {
-    const newShape = {
-      id: Date.now().toString(),
-      type: shapeType, // 'arrow' | 'rect' | 'rounded' | 'circle' | 'line' | 'star' | 'tag' | 'bubble'
-      x: 50,
-      y: 50,
-      width: shapeType === 'line' ? 180 : shapeType === 'arrow' ? 160 : 130,
-      height: shapeType === 'line' ? 8 : shapeType === 'arrow' ? 44 : 90,
-      strokeColor: '#25D366',
-      bgColor: shapeType === 'rect' || shapeType === 'rounded' || shapeType === 'circle' ? 'transparent' : '#25D366',
-      fill: false,
-      strokeWidth: 4,
-      rotation: 0,
-    };
-    setShapes((prev) => [...prev, newShape]);
-    setSelectedItemId(newShape.id);
-    setSelectedItemType('shape');
-    setActiveTool(null);
-    toast.success(`Added ${shapeType.toUpperCase()} shape`);
-  };
-
-  // ─── ADD TEXT ─────────────────────────────────────────────────────────────
-  const handleAddText = () => {
-    const newText = {
-      id: Date.now().toString(),
-      text: 'Sample Text',
-      font: STATUS_FONTS[0],
-      color: '#FFFFFF',
-      bgColor: '#000000',
-      boxShape: 'pill',
-      paddingX: 16,
-      paddingY: 8,
-      size: 38,
-      x: 50,
-      y: 50,
-    };
-    setTextElements((prev) => [...prev, newText]);
-    setSelectedItemId(newText.id);
-    setSelectedItemType('text');
-    setActiveTool('text');
-  };
-
-  // ─── ADD STICKER / EMOJI ──────────────────────────────────────────────────
-  const handleAddEmoji = (emojiObj) => {
-    const emoji = emojiObj.emoji;
-    if (!emoji) return;
-    const newSticker = {
-      id: Date.now().toString(),
-      type: 'emoji',
-      content: emoji,
-      x: 45 + (stickers.length % 4) * 8,
-      y: 50,
-      size: 54,
-    };
-    setStickers((prev) => [...prev, newSticker]);
-    setSelectedItemId(newSticker.id);
-    setSelectedItemType('sticker');
-    toast.success('Emoji attached!');
-  };
-
-  const handleAddGiphyMedia = (item) => {
-    const imgUrl = item.images?.fixed_height?.url || item.images?.original?.url;
-    if (!imgUrl) return;
-    const newSticker = {
-      id: Date.now().toString(),
-      type: 'image',
-      content: imgUrl,
-      x: 45 + (stickers.length % 4) * 8,
-      y: 50,
-      size: 100,
-    };
-    setStickers((prev) => [...prev, newSticker]);
-    setSelectedItemId(newSticker.id);
-    setSelectedItemType('sticker');
-    toast.success('Sticker attached!');
-  };
-
-  // ─── DRAGGING & SELECTION HANDLERS ─────────────────────────────────────────
-  const handleDragStart = (e, type, id, currentX, currentY) => {
-    if (activeTool === 'draw' || activeTool === 'blur') return;
-    if (e.cancelable) e.preventDefault();
-    e.stopPropagation();
-    setSelectedItemId(id);
-    setSelectedItemType(type);
-
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    setDraggingItem({
-      type,
-      id,
-      startX: clientX,
-      startY: clientY,
-      origX: currentX,
-      origY: currentY,
-    });
-  };
-
-  const handleDragMove = (e) => {
-    if (!draggingItem || !viewportRef.current) return;
-    if (e.cancelable) e.preventDefault();
+  // Convert client mouse/touch to Viewport Percentage Coordinates
+  const getViewportPercentCoords = (e) => {
+    if (!viewportRef.current) return { x: 50, y: 50, clientX: 0, clientY: 0 };
     const rect = viewportRef.current.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-    const deltaX = ((clientX - draggingItem.startX) / rect.width) * 100;
-    const deltaY = ((clientY - draggingItem.startY) / rect.height) * 100;
+    return {
+      x: ((clientX - rect.left) / rect.width) * 100,
+      y: ((clientY - rect.top) / rect.height) * 100,
+      clientX,
+      clientY,
+      rect,
+    };
+  };
 
-    const newX = Math.max(5, Math.min(95, draggingItem.origX + deltaX));
-    const newY = Math.max(5, Math.min(95, draggingItem.origY + deltaY));
+  // ─── SHAPE DRAWING VIA MOUSE DRAG ──────────────────────────────────────────
+  const handleViewportMouseDown = (e) => {
+    // If drawing with pen or blur
+    if (activeTool === 'draw' || activeTool === 'blur') {
+      const coords = getCanvasCoords(e);
+      setIsDrawing(true);
+      if (activeTool === 'draw') {
+        setCurrentStroke({
+          tool: 'brush',
+          color: penColor,
+          width: penWidth,
+          points: [coords],
+        });
+      } else if (activeTool === 'blur') {
+        setCurrentStroke({
+          tool: 'blur',
+          width: penWidth,
+          start: coords,
+          end: coords,
+        });
+      }
+      return;
+    }
 
-    if (draggingItem.type === 'shape') {
-      setShapes((prev) =>
-        prev.map((s) => (s.id === draggingItem.id ? { ...s, x: newX, y: newY } : s))
-      );
-    } else if (draggingItem.type === 'text') {
-      setTextElements((prev) =>
-        prev.map((t) => (t.id === draggingItem.id ? { ...t, x: newX, y: newY } : t))
-      );
-    } else if (draggingItem.type === 'sticker') {
-      setStickers((prev) =>
-        prev.map((s) => (s.id === draggingItem.id ? { ...s, x: newX, y: newY } : s))
-      );
+    // If an active shape tool is armed, start drawing shape with mouse
+    if (activeShapeTool) {
+      const p = getViewportPercentCoords(e);
+      setIsDrawingShape(true);
+      setShapeDragStart({ x: p.x, y: p.y, clientX: p.clientX, clientY: p.clientY });
+      setShapeDragCurrent({ x: p.x, y: p.y, clientX: p.clientX, clientY: p.clientY });
     }
   };
 
-  const handleDragEnd = () => {
-    setDraggingItem(null);
-  };
+  const handleViewportMouseMove = (e) => {
+    // Freehand pen or blur drawing
+    if (isDrawing) {
+      const coords = getCanvasCoords(e);
+      if (currentStroke?.tool === 'brush') {
+        setCurrentStroke((prev) => ({
+          ...prev,
+          points: [...prev.points, coords],
+        }));
+      } else if (currentStroke?.tool === 'blur') {
+        setCurrentStroke((prev) => ({
+          ...prev,
+          end: coords,
+        }));
+      }
+      return;
+    }
 
-  // ─── RESIZE / SIZE STEPPERS ───────────────────────────────────────────────
-  const handleUpdateItemSize = (id, type, delta) => {
-    if (type === 'shape') {
-      setShapes((prev) =>
-        prev.map((s) =>
-          s.id === id
-            ? {
-                ...s,
-                width: Math.max(30, Math.min(400, s.width + delta * 1.5)),
-                height: Math.max(10, Math.min(400, s.height + delta)),
-              }
-            : s
-        )
-      );
-    } else if (type === 'text') {
-      setTextElements((prev) =>
-        prev.map((t) =>
-          t.id === id ? { ...t, size: Math.max(18, Math.min(120, (t.size || 38) + delta)) } : t
-        )
-      );
-    } else if (type === 'sticker') {
-      setStickers((prev) =>
-        prev.map((s) =>
-          s.id === id ? { ...s, size: Math.max(24, Math.min(260, (s.size || 54) + delta)) } : s
-        )
-      );
+    // Drawing shape with mouse drag
+    if (isDrawingShape && shapeDragStart) {
+      const p = getViewportPercentCoords(e);
+      setShapeDragCurrent({ x: p.x, y: p.y, clientX: p.clientX, clientY: p.clientY });
+      return;
+    }
+
+    // Interactive Move, Resize, or Rotate of selected element
+    if (interaction && viewportRef.current) {
+      if (e.cancelable) e.preventDefault();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const rect = viewportRef.current.getBoundingClientRect();
+
+      if (interaction.mode === 'move') {
+        const deltaX = ((clientX - interaction.startX) / rect.width) * 100;
+        const deltaY = ((clientY - interaction.startY) / rect.height) * 100;
+        const newX = Math.max(3, Math.min(97, interaction.origX + deltaX));
+        const newY = Math.max(3, Math.min(97, interaction.origY + deltaY));
+
+        if (interaction.type === 'shape') {
+          setShapes((prev) => prev.map((s) => (s.id === interaction.id ? { ...s, x: newX, y: newY } : s)));
+        } else if (interaction.type === 'text') {
+          setTextElements((prev) => prev.map((t) => (t.id === interaction.id ? { ...t, x: newX, y: newY } : t)));
+        } else if (interaction.type === 'sticker') {
+          setStickers((prev) => prev.map((s) => (s.id === interaction.id ? { ...s, x: newX, y: newY } : s)));
+        }
+      } else if (interaction.mode === 'resize') {
+        // 4-corner interactive resize
+        const deltaX = clientX - interaction.startX;
+        const deltaY = clientY - interaction.startY;
+        const handle = interaction.handle;
+
+        let scaleDeltaX = 0;
+        let scaleDeltaY = 0;
+
+        if (handle === 'br') {
+          scaleDeltaX = deltaX * 1.5;
+          scaleDeltaY = deltaY * 1.5;
+        } else if (handle === 'tl') {
+          scaleDeltaX = -deltaX * 1.5;
+          scaleDeltaY = -deltaY * 1.5;
+        } else if (handle === 'tr') {
+          scaleDeltaX = deltaX * 1.5;
+          scaleDeltaY = -deltaY * 1.5;
+        } else if (handle === 'bl') {
+          scaleDeltaX = -deltaX * 1.5;
+          scaleDeltaY = deltaY * 1.5;
+        }
+
+        if (interaction.type === 'shape') {
+          const newW = Math.max(30, Math.min(600, interaction.origW + scaleDeltaX));
+          const newH = Math.max(12, Math.min(600, interaction.origH + scaleDeltaY));
+          setShapes((prev) =>
+            prev.map((s) => (s.id === interaction.id ? { ...s, width: Math.round(newW), height: Math.round(newH) } : s))
+          );
+        } else if (interaction.type === 'text') {
+          const delta = Math.max(scaleDeltaX, scaleDeltaY);
+          const newSize = Math.max(18, Math.min(140, interaction.origSize + delta * 0.4));
+          setTextElements((prev) =>
+            prev.map((t) => (t.id === interaction.id ? { ...t, size: Math.round(newSize) } : t))
+          );
+        } else if (interaction.type === 'sticker') {
+          const delta = Math.max(scaleDeltaX, scaleDeltaY);
+          const newSize = Math.max(24, Math.min(300, interaction.origSize + delta * 0.6));
+          setStickers((prev) =>
+            prev.map((s) => (s.id === interaction.id ? { ...s, size: Math.round(newSize) } : s))
+          );
+        }
+      } else if (interaction.mode === 'rotate') {
+        // Calculate angle from element center to mouse position
+        const angleRad = Math.atan2(clientY - interaction.centerY, clientX - interaction.centerX);
+        let deg = Math.round((angleRad * 180) / Math.PI + 90);
+        if (deg < 0) deg += 360;
+
+        if (interaction.type === 'shape') {
+          setShapes((prev) => prev.map((s) => (s.id === interaction.id ? { ...s, rotation: deg } : s)));
+        } else if (interaction.type === 'text') {
+          setTextElements((prev) => prev.map((t) => (t.id === interaction.id ? { ...t, rotation: deg } : t)));
+        } else if (interaction.type === 'sticker') {
+          setStickers((prev) => prev.map((s) => (s.id === interaction.id ? { ...s, rotation: deg } : s)));
+        }
+      }
     }
   };
 
-  // ─── DELETE SELECTED ITEM ─────────────────────────────────────────────────
+  const handleViewportMouseUp = () => {
+    // End freehand pen or blur drawing
+    if (isDrawing) {
+      setIsDrawing(false);
+      if (currentStroke) setStrokes((prev) => [...prev, currentStroke]);
+      setCurrentStroke(null);
+      return;
+    }
+
+    // End mouse-drawn shape
+    if (isDrawingShape && shapeDragStart && shapeDragCurrent) {
+      setIsDrawingShape(false);
+      const deltaX = Math.abs(shapeDragCurrent.clientX - shapeDragStart.clientX);
+      const deltaY = Math.abs(shapeDragCurrent.clientY - shapeDragStart.clientY);
+
+      // If dragged more than 10px, create the shape with the user's exact drawn dimensions
+      if (deltaX > 10 || deltaY > 10) {
+        const centerX = (shapeDragStart.x + shapeDragCurrent.x) / 2;
+        const centerY = (shapeDragStart.y + shapeDragCurrent.y) / 2;
+        const width = Math.max(35, Math.round(deltaX * 1.2));
+        const height = Math.max(16, Math.round(deltaY * 1.2));
+
+        const newShape = {
+          id: Date.now().toString(),
+          type: activeShapeTool,
+          x: centerX,
+          y: centerY,
+          width,
+          height,
+          strokeColor: '#25D366',
+          bgColor: activeShapeTool === 'rect' || activeShapeTool === 'rounded' || activeShapeTool === 'circle' ? 'transparent' : '#25D366',
+          fill: false,
+          strokeWidth: 4,
+          rotation: 0,
+        };
+
+        setShapes((prev) => [...prev, newShape]);
+        setSelectedItemId(newShape.id);
+        setSelectedItemType('shape');
+        setActiveShapeTool(null);
+        toast.success(`Drawn ${newShape.type.toUpperCase()}! Drag corner points to resize, rotate, or move.`);
+      }
+
+      setShapeDragStart(null);
+      setShapeDragCurrent(null);
+      return;
+    }
+
+    // End Move, Resize or Rotate interaction
+    if (interaction) {
+      setInteraction(null);
+    }
+  };
+
+  // ─── START MOVE INTERACTION ────────────────────────────────────────────────
+  const startMove = (e, type, item) => {
+    if (activeTool === 'draw' || activeTool === 'blur' || activeShapeTool) return;
+    if (e.cancelable) e.preventDefault();
+    e.stopPropagation();
+
+    setSelectedItemId(item.id);
+    setSelectedItemType(type);
+
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    setInteraction({
+      mode: 'move',
+      type,
+      id: item.id,
+      startX: clientX,
+      startY: clientY,
+      origX: item.x,
+      origY: item.y,
+    });
+  };
+
+  // ─── START RESIZE INTERACTION (CORNER HANDLES) ─────────────────────────────
+  const startResize = (e, type, item, handle) => {
+    if (e.cancelable) e.preventDefault();
+    e.stopPropagation();
+
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    setInteraction({
+      mode: 'resize',
+      type,
+      id: item.id,
+      handle,
+      startX: clientX,
+      startY: clientY,
+      origW: item.width || item.size || 60,
+      origH: item.height || item.size || 60,
+      origSize: item.size || 40,
+    });
+  };
+
+  // ─── START ROTATE INTERACTION ──────────────────────────────────────────────
+  const startRotate = (e, type, item, elementDom) => {
+    if (e.cancelable) e.preventDefault();
+    e.stopPropagation();
+
+    const rect = elementDom ? elementDom.getBoundingClientRect() : { left: 0, top: 0, width: 0, height: 0 };
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    setInteraction({
+      mode: 'rotate',
+      type,
+      id: item.id,
+      centerX,
+      centerY,
+      origRotation: item.rotation || 0,
+    });
+  };
+
+  // ─── DELETE ITEM ──────────────────────────────────────────────────────────
   const handleDeleteItem = (id, type) => {
     if (type === 'shape') {
       setShapes((prev) => prev.filter((s) => s.id !== id));
@@ -577,12 +647,73 @@ export default function MediaEditorModal({
       setSelectedItemId(null);
       setSelectedItemType(null);
     }
+    toast.success('Deleted');
+  };
+
+  // ─── ADD TEXT ─────────────────────────────────────────────────────────────
+  const handleAddText = () => {
+    const newText = {
+      id: Date.now().toString(),
+      text: 'Type your message',
+      font: STATUS_FONTS[0],
+      color: '#FFFFFF',
+      bgColor: '#000000',
+      boxShape: 'pill',
+      paddingX: 16,
+      paddingY: 8,
+      size: 38,
+      x: 50,
+      y: 50,
+      rotation: 0,
+    };
+    setTextElements((prev) => [...prev, newText]);
+    setSelectedItemId(newText.id);
+    setSelectedItemType('text');
+    setActiveTool('text');
+    toast.success('Text added! Drag corner points to resize, rotate, or move.');
+  };
+
+  // ─── ADD STICKER / EMOJI ──────────────────────────────────────────────────
+  const handleAddEmoji = (emojiObj) => {
+    const emoji = emojiObj.emoji;
+    if (!emoji) return;
+    const newSticker = {
+      id: Date.now().toString(),
+      type: 'emoji',
+      content: emoji,
+      x: 45 + (stickers.length % 4) * 8,
+      y: 50,
+      size: 60,
+      rotation: 0,
+    };
+    setStickers((prev) => [...prev, newSticker]);
+    setSelectedItemId(newSticker.id);
+    setSelectedItemType('sticker');
+    toast.success('Emoji added! Drag corner points to resize or rotate.');
+  };
+
+  const handleAddGiphyMedia = (item) => {
+    const imgUrl = item.images?.fixed_height?.url || item.images?.original?.url;
+    if (!imgUrl) return;
+    const newSticker = {
+      id: Date.now().toString(),
+      type: 'image',
+      content: imgUrl,
+      x: 45 + (stickers.length % 4) * 8,
+      y: 50,
+      size: 110,
+      rotation: 0,
+    };
+    setStickers((prev) => [...prev, newSticker]);
+    setSelectedItemId(newSticker.id);
+    setSelectedItemType('sticker');
+    toast.success('Sticker added! Drag corner points to resize or rotate.');
   };
 
   // ─── FINAL BAKE & SAVE ────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!imageElementRef.current) return;
-    const toastId = toast.loading('Applying edits & rendering photo...');
+    const toastId = toast.loading('Rendering edited image...');
 
     try {
       const bakeCanvas = document.createElement('canvas');
@@ -591,7 +722,7 @@ export default function MediaEditorModal({
       bakeCanvas.height = baseCanvas.height;
       const ctx = bakeCanvas.getContext('2d');
 
-      // 1. Draw base photo + freehand pen strokes
+      // 1. Draw base photo + freehand strokes
       ctx.drawImage(baseCanvas, 0, 0);
 
       // Scale factor relative to viewport
@@ -633,7 +764,6 @@ export default function MediaEditorModal({
           ctx.lineTo(w / 2, 0);
           ctx.stroke();
         } else if (s.type === 'arrow') {
-          // Draw Directional Arrow
           const fromX = -w / 2;
           const toX = w / 2;
           const headLen = Math.max(16, ctx.lineWidth * 3.5);
@@ -678,7 +808,6 @@ export default function MediaEditorModal({
           if (s.fill && s.bgColor !== 'transparent') ctx.fill();
           ctx.stroke();
         } else {
-          // Default Shape (tag / bubble)
           drawBoxShapeOnCanvas(ctx, s.type, -w / 2, -h / 2, w, h);
           if (s.fill && s.bgColor !== 'transparent') ctx.fill();
           ctx.stroke();
@@ -691,14 +820,18 @@ export default function MediaEditorModal({
       for (const s of stickers) {
         const posX = (s.x / 100) * bakeCanvas.width;
         const posY = (s.y / 100) * bakeCanvas.height;
-        const renderSize = (s.size || 54) * scale * 0.7;
+        const renderSize = (s.size || 60) * scale * 0.7;
+
+        ctx.save();
+        ctx.translate(posX, posY);
+        if (s.rotation) ctx.rotate((s.rotation * Math.PI) / 180);
 
         if (s.type === 'emoji') {
           const fontPx = Math.round(renderSize * 0.85);
           ctx.font = `${fontPx}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(s.content, posX, posY);
+          ctx.fillText(s.content, 0, 0);
         } else if (s.type === 'image') {
           try {
             const stickerImg = new Image();
@@ -708,9 +841,11 @@ export default function MediaEditorModal({
               stickerImg.onload = res;
               stickerImg.onerror = rej;
             });
-            ctx.drawImage(stickerImg, posX - renderSize / 2, posY - renderSize / 2, renderSize, renderSize);
+            ctx.drawImage(stickerImg, -renderSize / 2, -renderSize / 2, renderSize, renderSize);
           } catch {}
         }
+
+        ctx.restore();
       }
 
       // 4. Draw Text Overlays
@@ -719,6 +854,10 @@ export default function MediaEditorModal({
         const posY = (t.y / 100) * bakeCanvas.height;
         const fontPx = Math.round((t.size || 38) * scale * 0.7);
         const fontFamily = t.font?.family || 'sans-serif';
+
+        ctx.save();
+        ctx.translate(posX, posY);
+        if (t.rotation) ctx.rotate((t.rotation * Math.PI) / 180);
 
         ctx.font = `bold ${fontPx}px ${fontFamily}`;
         ctx.textAlign = 'center';
@@ -730,8 +869,8 @@ export default function MediaEditorModal({
         const padY = Math.round((t.paddingY ?? 8) * scale * 0.7);
         const pillH = fontPx + padY * 2;
         const pillW = textW + padX * 2;
-        const rectX = posX - pillW / 2;
-        const rectY = posY - pillH / 2;
+        const rectX = -pillW / 2;
+        const rectY = -pillH / 2;
 
         // Draw Box Background
         if (t.bgColor && t.bgColor !== 'transparent') {
@@ -742,7 +881,9 @@ export default function MediaEditorModal({
 
         // Draw Text
         ctx.fillStyle = t.color || '#FFFFFF';
-        ctx.fillText(t.text, posX, posY);
+        ctx.fillText(t.text, 0, 0);
+
+        ctx.restore();
       });
 
       const finalDataUrl = bakeCanvas.toDataURL('image/jpeg', 0.95);
@@ -754,7 +895,7 @@ export default function MediaEditorModal({
         isEdited: true,
       });
 
-      toast.success('🎨 Image updated with edits!', { id: toastId });
+      toast.success('🎨 Edits applied successfully!', { id: toastId });
       onClose();
     } catch (err) {
       toast.error('Failed to save edited media: ' + err.message, { id: toastId });
@@ -765,16 +906,83 @@ export default function MediaEditorModal({
   const selectedText = textElements.find((t) => t.id === selectedItemId);
   const selectedSticker = stickers.find((s) => s.id === selectedItemId);
 
+  // Helper rendering transform bounding box handles for any element
+  const renderTransformHandles = (type, item, width, height) => {
+    if (selectedItemId !== item.id) return null;
+
+    return (
+      <>
+        {/* Selection Border */}
+        <div className="absolute inset-0 border-2 border-purple-500 rounded pointer-events-none" />
+
+        {/* 1. Top-Left Corner Resize Handle */}
+        <div
+          onMouseDown={(e) => startResize(e, type, item, 'tl')}
+          onTouchStart={(e) => startResize(e, type, item, 'tl')}
+          className="absolute -top-2.5 -left-2.5 w-5 h-5 rounded-full bg-white border-2 border-purple-600 shadow-md cursor-nwse-resize z-40 hover:scale-125 transition-transform"
+          title="Drag to resize"
+        />
+
+        {/* 2. Top-Right Corner Resize Handle */}
+        <div
+          onMouseDown={(e) => startResize(e, type, item, 'tr')}
+          onTouchStart={(e) => startResize(e, type, item, 'tr')}
+          className="absolute -top-2.5 -right-2.5 w-5 h-5 rounded-full bg-white border-2 border-purple-600 shadow-md cursor-nesw-resize z-40 hover:scale-125 transition-transform"
+          title="Drag to resize"
+        />
+
+        {/* 3. Bottom-Left Corner Resize Handle */}
+        <div
+          onMouseDown={(e) => startResize(e, type, item, 'bl')}
+          onTouchStart={(e) => startResize(e, type, item, 'bl')}
+          className="absolute -bottom-2.5 -left-2.5 w-5 h-5 rounded-full bg-white border-2 border-purple-600 shadow-md cursor-nesw-resize z-40 hover:scale-125 transition-transform"
+          title="Drag to resize"
+        />
+
+        {/* 4. Bottom-Right Corner Resize Handle */}
+        <div
+          onMouseDown={(e) => startResize(e, type, item, 'br')}
+          onTouchStart={(e) => startResize(e, type, item, 'br')}
+          className="absolute -bottom-2.5 -right-2.5 w-5 h-5 rounded-full bg-white border-2 border-purple-600 shadow-md cursor-nwse-resize z-40 hover:scale-125 transition-transform"
+          title="Drag to resize"
+        />
+
+        {/* 5. Rotate Stem & Handle */}
+        <div className="absolute left-1/2 -top-6 -translate-x-1/2 w-0.5 h-6 bg-purple-500 pointer-events-none" />
+        <div
+          onMouseDown={(e) => startRotate(e, type, item, e.currentTarget.parentElement)}
+          onTouchStart={(e) => startRotate(e, type, item, e.currentTarget.parentElement)}
+          className="absolute left-1/2 -top-9 -translate-x-1/2 w-6 h-6 rounded-full bg-purple-600 hover:bg-purple-500 text-white border-2 border-white shadow-lg flex items-center justify-center text-[10px] cursor-grab active:cursor-grabbing z-40 hover:scale-110 transition-transform"
+          title="Drag to rotate"
+        >
+          🔄
+        </div>
+
+        {/* 6. Delete Cross (✕) Button */}
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDeleteItem(item.id, type);
+          }}
+          className="absolute -top-3.5 -right-9 w-6 h-6 rounded-full bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center text-xs font-bold shadow-md cursor-pointer hover:scale-110 active:scale-95 z-40"
+          title="Delete"
+        >
+          ✕
+        </div>
+      </>
+    );
+  };
+
   return createPortal(
     <div
       className="fixed inset-0 z-[9999] bg-black/92 backdrop-blur-md flex flex-col justify-between text-white select-none animate-fade-in"
-      onMouseMove={handleDragMove}
-      onTouchMove={handleDragMove}
-      onMouseUp={handleDragEnd}
-      onTouchEnd={handleDragEnd}
+      onMouseMove={handleViewportMouseMove}
+      onTouchMove={handleViewportMouseMove}
+      onMouseUp={handleViewportMouseUp}
+      onTouchEnd={handleViewportMouseUp}
       onClick={() => {
         // Deselect if clicked on backdrop
-        if (selectedItemId && !draggingItem) {
+        if (selectedItemId && !interaction && !isDrawingShape) {
           setSelectedItemId(null);
           setSelectedItemType(null);
         }
@@ -782,7 +990,7 @@ export default function MediaEditorModal({
     >
       {/* ── Top Bar ── */}
       <div
-        className="flex items-center justify-between px-4 py-3 bg-black/70 border-b border-white/10 z-30"
+        className="flex items-center justify-between px-4 py-2.5 bg-black/75 border-b border-white/10 z-30"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2">
@@ -810,7 +1018,10 @@ export default function MediaEditorModal({
           {/* Shapes Picker Toggle */}
           <button
             type="button"
-            onClick={() => setActiveTool(activeTool === 'shapes' ? null : 'shapes')}
+            onClick={() => {
+              setActiveTool(activeTool === 'shapes' ? null : 'shapes');
+              setActiveShapeTool(null);
+            }}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTool === 'shapes'
                 ? 'bg-purple-600 text-white ring-2 ring-purple-400'
@@ -818,7 +1029,7 @@ export default function MediaEditorModal({
             }`}
           >
             <span>↗️</span>
-            <span>Shapes &amp; Arrows</span>
+            <span>Draw Shapes &amp; Arrows</span>
           </button>
 
           {/* Add Text Button */}
@@ -852,7 +1063,10 @@ export default function MediaEditorModal({
           {/* Freehand Pen */}
           <button
             type="button"
-            onClick={() => setActiveTool(activeTool === 'draw' ? null : 'draw')}
+            onClick={() => {
+              setActiveTool(activeTool === 'draw' ? null : 'draw');
+              setActiveShapeTool(null);
+            }}
             className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
               activeTool === 'draw'
                 ? 'bg-purple-600 text-white ring-2 ring-purple-400'
@@ -867,13 +1081,16 @@ export default function MediaEditorModal({
           {/* Blur / Redact Tool */}
           <button
             type="button"
-            onClick={() => setActiveTool(activeTool === 'blur' ? null : 'blur')}
+            onClick={() => {
+              setActiveTool(activeTool === 'blur' ? null : 'blur');
+              setActiveShapeTool(null);
+            }}
             className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
               activeTool === 'blur'
                 ? 'bg-purple-600 text-white ring-2 ring-purple-400'
                 : 'bg-white/10 hover:bg-white/20 text-white'
             }`}
-            title="Redact sensitive phone/face with blur"
+            title="Redact sensitive info with blur"
           >
             <span>🪟</span>
             <span className="hidden sm:inline">Blur</span>
@@ -885,7 +1102,7 @@ export default function MediaEditorModal({
               type="button"
               onClick={() => setStrokes([])}
               className="p-1.5 rounded-xl bg-white/10 hover:bg-rose-500/40 text-xs font-bold text-rose-300 transition-colors cursor-pointer"
-              title="Clear drawings & blur"
+              title="Clear freehand drawings"
             >
               Clear
             </button>
@@ -905,19 +1122,26 @@ export default function MediaEditorModal({
 
       {/* ── Sub Toolbars ── */}
 
-      {/* 1. Shapes Palette Sub-Bar */}
+      {/* 1. Shapes Palette: User Selects which Shape to Draw with Mouse */}
       {activeTool === 'shapes' && (
         <div
           className="bg-slate-900/95 border-b border-white/10 px-4 py-2.5 flex items-center gap-2 overflow-x-auto custom-scroll z-20"
           onClick={(e) => e.stopPropagation()}
         >
-          <span className="text-xs font-bold text-white/70 whitespace-nowrap">Add Shape:</span>
+          <span className="text-xs font-bold text-purple-300 whitespace-nowrap">Choose shape, then drag on photo:</span>
           {SHAPE_PRESETS.map((sp) => (
             <button
               key={sp.id}
               type="button"
-              onClick={() => handleAddShape(sp.id)}
-              className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-purple-600/80 text-white text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer hover:scale-105"
+              onClick={() => {
+                setActiveShapeTool(sp.id);
+                toast(`🖱️ Click and drag on the photo to draw a ${sp.label}!`, { icon: sp.icon });
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                activeShapeTool === sp.id
+                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md ring-2 ring-purple-300 scale-105'
+                  : 'bg-white/10 hover:bg-white/20 text-white'
+              }`}
               title={sp.desc}
             >
               <span>{sp.icon}</span>
@@ -1010,26 +1234,10 @@ export default function MediaEditorModal({
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => handleUpdateItemSize(selectedShape.id, 'shape', 15)}
-              className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-xs font-bold cursor-pointer"
-              title="Increase Size"
-            >
-              ➕ Bigger
-            </button>
-            <button
-              type="button"
-              onClick={() => handleUpdateItemSize(selectedShape.id, 'shape', -15)}
-              className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-xs font-bold cursor-pointer"
-              title="Decrease Size"
-            >
-              ➖ Smaller
-            </button>
-            <button
-              type="button"
               onClick={() => handleDeleteItem(selectedShape.id, 'shape')}
               className="px-2.5 py-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 text-xs font-bold transition-colors cursor-pointer"
             >
-              🗑️ Delete
+              🗑️ Delete Shape
             </button>
           </div>
         </div>
@@ -1090,39 +1298,20 @@ export default function MediaEditorModal({
               ))}
             </select>
 
-            {/* Size Steppers */}
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => handleUpdateItemSize(selectedText.id, 'text', 6)}
-                className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-xs font-bold cursor-pointer"
-              >
-                A+
-              </button>
-              <button
-                type="button"
-                onClick={() => handleUpdateItemSize(selectedText.id, 'text', -6)}
-                className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-xs font-bold cursor-pointer"
-              >
-                A-
-              </button>
-            </div>
-
             {/* Delete Text */}
             <button
               type="button"
               onClick={() => handleDeleteItem(selectedText.id, 'text')}
               className="px-2.5 py-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 text-xs font-bold transition-colors cursor-pointer"
             >
-              🗑️ Delete
+              🗑️ Delete Text
             </button>
           </div>
 
           {/* Text Color & Background Fill Color Pickers */}
           <div className="flex items-center gap-4 flex-wrap text-xs">
-            {/* Text Color */}
             <div className="flex items-center gap-1.5">
-              <span className="text-white/60">Text Color:</span>
+              <span className="text-white/60">Text:</span>
               {COLOR_PALETTE.filter((c) => c !== 'transparent').map((c) => (
                 <button
                   key={c}
@@ -1140,7 +1329,6 @@ export default function MediaEditorModal({
               ))}
             </div>
 
-            {/* Background Color */}
             <div className="flex items-center gap-1.5">
               <span className="text-white/60">Background:</span>
               {COLOR_PALETTE.map((c) => (
@@ -1231,22 +1419,43 @@ export default function MediaEditorModal({
         {/* Center Viewport Canvas */}
         <div
           ref={viewportRef}
-          className="flex-1 relative flex items-center justify-center p-3 sm:p-5 overflow-hidden touch-none"
+          onMouseDown={handleViewportMouseDown}
+          onMouseMove={handleViewportMouseMove}
+          onMouseUp={handleViewportMouseUp}
+          onTouchStart={handleViewportMouseDown}
+          onTouchMove={handleViewportMouseMove}
+          onTouchEnd={handleViewportMouseUp}
+          className={`flex-1 relative flex items-center justify-center p-3 sm:p-5 overflow-hidden touch-none ${
+            activeShapeTool || activeTool === 'draw' || activeTool === 'blur'
+              ? 'cursor-crosshair'
+              : 'cursor-default'
+          }`}
         >
           <div className="relative max-w-full max-h-[76vh] flex items-center justify-center shadow-2xl rounded-2xl overflow-hidden border border-white/10 bg-black">
             {/* HTML5 Base Canvas */}
             <canvas
               ref={canvasRef}
-              onMouseDown={handleCanvasMouseDown}
-              onMouseMove={handleCanvasMouseMove}
-              onMouseUp={handleCanvasMouseUp}
-              onTouchStart={handleCanvasMouseDown}
-              onTouchMove={handleCanvasMouseMove}
-              onTouchEnd={handleCanvasMouseUp}
-              className={`max-w-full max-h-[76vh] object-contain block ${
-                activeTool === 'draw' || activeTool === 'blur' ? 'cursor-crosshair' : 'cursor-default'
-              }`}
+              className="max-w-full max-h-[76vh] object-contain block pointer-events-none"
             />
+
+            {/* Live Mouse-Drawn Shape Preview while dragging */}
+            {isDrawingShape && shapeDragStart && shapeDragCurrent && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: `${Math.min(shapeDragStart.x, shapeDragCurrent.x)}%`,
+                  top: `${Math.min(shapeDragStart.y, shapeDragCurrent.y)}%`,
+                  width: `${Math.max(10, Math.abs(shapeDragCurrent.clientX - shapeDragStart.clientX))}px`,
+                  height: `${Math.max(10, Math.abs(shapeDragCurrent.clientY - shapeDragStart.clientY))}px`,
+                  pointerEvents: 'none',
+                }}
+                className="border-2 border-dashed border-emerald-400 bg-emerald-500/10 rounded flex items-center justify-center z-50 animate-pulse"
+              >
+                <span className="text-xs font-bold text-white bg-black/60 px-1.5 py-0.5 rounded">
+                  Drawing {activeShapeTool.toUpperCase()}
+                </span>
+              </div>
+            )}
 
             {/* ── Interactive Shapes Layer ── */}
             {shapes.map((s) => {
@@ -1254,8 +1463,8 @@ export default function MediaEditorModal({
               return (
                 <div
                   key={s.id}
-                  onMouseDown={(e) => handleDragStart(e, 'shape', s.id, s.x, s.y)}
-                  onTouchStart={(e) => handleDragStart(e, 'shape', s.id, s.x, s.y)}
+                  onMouseDown={(e) => startMove(e, 'shape', s)}
+                  onTouchStart={(e) => startMove(e, 'shape', s)}
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedItemId(s.id);
@@ -1268,9 +1477,9 @@ export default function MediaEditorModal({
                     width: `${s.width}px`,
                     height: `${s.height}px`,
                     transform: `translate(-50%, -50%) rotate(${s.rotation || 0}deg)`,
-                    cursor: activeTool === 'draw' || activeTool === 'blur' ? 'crosshair' : 'move',
+                    cursor: activeShapeTool ? 'crosshair' : 'move',
                   }}
-                  className={`select-none group ${isSelected ? 'ring-2 ring-purple-400 ring-offset-2 ring-offset-black' : ''}`}
+                  className="select-none group"
                 >
                   {/* Shape Rendering via SVG for Ultra Sharp Display */}
                   <svg
@@ -1363,31 +1572,8 @@ export default function MediaEditorModal({
                     )}
                   </svg>
 
-                  {/* Corner Resize & Delete Handles (When Selected) */}
-                  {isSelected && (
-                    <>
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteItem(s.id, 'shape');
-                        }}
-                        className="absolute -top-3 -right-3 w-6 h-6 rounded-full bg-rose-600 text-white flex items-center justify-center text-xs font-bold shadow-md cursor-pointer hover:scale-110 active:scale-95"
-                        title="Delete Shape"
-                      >
-                        ✕
-                      </div>
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleUpdateItemSize(s.id, 'shape', 15);
-                        }}
-                        className="absolute -bottom-3 -right-3 w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-xs font-bold shadow-md cursor-pointer hover:scale-110 active:scale-95"
-                        title="Enlarge Shape"
-                      >
-                        +
-                      </div>
-                    </>
-                  )}
+                  {/* 4 Corner Points Resize + Rotate Handle + Delete Cross */}
+                  {renderTransformHandles('shape', s, s.width, s.height)}
                 </div>
               );
             })}
@@ -1398,8 +1584,8 @@ export default function MediaEditorModal({
               return (
                 <div
                   key={s.id}
-                  onMouseDown={(e) => handleDragStart(e, 'sticker', s.id, s.x, s.y)}
-                  onTouchStart={(e) => handleDragStart(e, 'sticker', s.id, s.x, s.y)}
+                  onMouseDown={(e) => startMove(e, 'sticker', s)}
+                  onTouchStart={(e) => startMove(e, 'sticker', s)}
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedItemId(s.id);
@@ -1409,34 +1595,28 @@ export default function MediaEditorModal({
                     position: 'absolute',
                     left: `${s.x}%`,
                     top: `${s.y}%`,
-                    transform: 'translate(-50%, -50%)',
-                    cursor: activeTool === 'draw' || activeTool === 'blur' ? 'crosshair' : 'move',
+                    width: `${s.size}px`,
+                    height: `${s.size}px`,
+                    transform: `translate(-50%, -50%) rotate(${s.rotation || 0}deg)`,
+                    cursor: activeShapeTool ? 'crosshair' : 'move',
                   }}
-                  className={`select-none ${isSelected ? 'ring-2 ring-purple-400 rounded-lg p-1' : ''}`}
+                  className="select-none flex items-center justify-center"
                 >
                   {s.type === 'emoji' ? (
-                    <span style={{ fontSize: `${s.size}px`, lineHeight: 1 }}>{s.content}</span>
+                    <span style={{ fontSize: `${s.size * 0.85}px`, lineHeight: 1 }} className="pointer-events-none select-none">
+                      {s.content}
+                    </span>
                   ) : (
                     <img
                       src={s.content}
                       alt="sticker"
-                      style={{ width: `${s.size}px`, height: `${s.size}px` }}
-                      className="object-contain pointer-events-none"
+                      style={{ width: '100%', height: '100%' }}
+                      className="object-contain pointer-events-none select-none"
                     />
                   )}
 
-                  {/* Delete Handle */}
-                  {isSelected && (
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteItem(s.id, 'sticker');
-                      }}
-                      className="absolute -top-2.5 -right-2.5 w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px] font-bold shadow-md cursor-pointer"
-                    >
-                      ✕
-                    </div>
-                  )}
+                  {/* 4 Corner Points Resize + Rotate Handle + Delete Cross */}
+                  {renderTransformHandles('sticker', s, s.size, s.size)}
                 </div>
               );
             })}
@@ -1449,8 +1629,8 @@ export default function MediaEditorModal({
               return (
                 <div
                   key={t.id}
-                  onMouseDown={(e) => handleDragStart(e, 'text', t.id, t.x, t.y)}
-                  onTouchStart={(e) => handleDragStart(e, 'text', t.id, t.x, t.y)}
+                  onMouseDown={(e) => startMove(e, 'text', t)}
+                  onTouchStart={(e) => startMove(e, 'text', t)}
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedItemId(t.id);
@@ -1460,10 +1640,10 @@ export default function MediaEditorModal({
                     position: 'absolute',
                     left: `${t.x}%`,
                     top: `${t.y}%`,
-                    transform: 'translate(-50%, -50%)',
-                    cursor: activeTool === 'draw' || activeTool === 'blur' ? 'crosshair' : 'move',
+                    transform: `translate(-50%, -50%) rotate(${t.rotation || 0}deg)`,
+                    cursor: activeShapeTool ? 'crosshair' : 'move',
                   }}
-                  className={`select-none ${isSelected ? 'ring-2 ring-purple-400' : ''}`}
+                  className="select-none"
                 >
                   <div
                     style={{
@@ -1475,22 +1655,13 @@ export default function MediaEditorModal({
                       fontWeight: 'bold',
                       whiteSpace: 'nowrap',
                     }}
+                    className="pointer-events-none select-none"
                   >
                     {t.text}
                   </div>
 
-                  {/* Delete Handle */}
-                  {isSelected && (
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteItem(t.id, 'text');
-                      }}
-                      className="absolute -top-2.5 -right-2.5 w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px] font-bold shadow-md cursor-pointer"
-                    >
-                      ✕
-                    </div>
-                  )}
+                  {/* 4 Corner Points Resize + Rotate Handle + Delete Cross */}
+                  {renderTransformHandles('text', t, 100, 40)}
                 </div>
               );
             })}
@@ -1634,9 +1805,9 @@ export default function MediaEditorModal({
       </div>
 
       {/* ── Bottom Help Hint ── */}
-      <div className="px-4 py-2 bg-black/70 border-t border-white/10 flex items-center justify-between text-[11px] text-white/70">
+      <div className="px-4 py-2 bg-black/75 border-t border-white/10 flex items-center justify-between text-[11px] text-white/70">
         <span>
-          💡 <strong>Tip:</strong> Click any shape, arrow, or text to select it · Use <strong>+ / -</strong> to resize · Drag to move · Tap <strong>Apply &amp; Save</strong> when done.
+          💡 <strong>Tip:</strong> Click shape tool then <strong>drag on photo</strong> to draw · Drag <strong>4 corner points</strong> to resize · Drag top <strong>🔄 handle</strong> to rotate · Click center to move · Tap <strong>✕</strong> to delete.
         </span>
         <span className="text-[10px] text-purple-400 font-bold uppercase tracking-wider hidden sm:inline">
           Pro Smart Editor
