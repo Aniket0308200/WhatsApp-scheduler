@@ -1168,8 +1168,9 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       setContactExists(false);
       setRecipients([]);
       
-      // Trigger instant refresh
+      // Trigger instant refresh and auto-followup refresh
       onScheduled?.();
+      setTimeout(() => onScheduled?.(), 1500);
     } catch (err) {
       toast.error(err.response?.data?.error || err.message);
     } finally {

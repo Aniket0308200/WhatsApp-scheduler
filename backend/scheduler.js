@@ -35,9 +35,8 @@ async function processAllDueMessages() {
     await Promise.allSettled(
       due.map(async (msg) => {
         const sessionId = msg.sessionId;
-        const activeSessions = whatsapp.getAllActiveSessions();
-        const sessionInfo = activeSessions.find(s => s.sessionId === sessionId);
-        let isConnected = sessionInfo && sessionInfo.status === 'connected';
+        let activeSession = typeof whatsapp.getEffectiveSession === 'function' ? whatsapp.getEffectiveSession(sessionId) : null;
+        let isConnected = activeSession && activeSession.status === 'connected' && Boolean(activeSession.sock);
 
         console.log(`[Scheduler] [${sessionId}] Attempting #${msg.id} → +${msg.phone} (scheduled: ${msg.scheduled_at})`);
 
@@ -51,7 +50,8 @@ async function processAllDueMessages() {
               // Wait for socket to connect (up to 8s)
               for (let w = 0; w < 16; w++) {
                 await new Promise(r => setTimeout(r, 500));
-                if (whatsapp.getStatus(sessionId) === 'connected') {
+                activeSession = typeof whatsapp.getEffectiveSession === 'function' ? whatsapp.getEffectiveSession(sessionId) : null;
+                if (activeSession && activeSession.status === 'connected') {
                   isConnected = true;
                   break;
                 }
@@ -63,12 +63,14 @@ async function processAllDueMessages() {
         }
 
         if (!isConnected) {
-          const currentStatus = whatsapp.getStatus(sessionId) || (sessionInfo ? sessionInfo.status : 'disconnected');
+          const currentStatus = activeSession ? activeSession.status : (whatsapp.getStatus(sessionId) || 'disconnected');
           const errMsg = `WhatsApp not connected (status: ${currentStatus})`;
           console.error(`[Scheduler] [${sessionId}] ✗ #${msg.id}: ${errMsg}`);
           await db.updateMessageStatus(sessionId, msg.id, 'failed', errMsg);
           return;
         }
+
+        const effectiveSessionId = activeSession?.sessionId || sessionId;
 
         try {
           let lastResult = null;
@@ -80,14 +82,14 @@ async function processAllDueMessages() {
             .replace(/\{FirstName\}/gi, recipientDisplayName ? recipientDisplayName.split(' ')[0] : '');
 
           if (msg.mediaList && Array.isArray(msg.mediaList) && msg.mediaList.length > 0) {
-            console.log(`[Scheduler] [${sessionId}] Sending batch of ${msg.mediaList.length} media items to ${msg.phone}`);
+            console.log(`[Scheduler] [${effectiveSessionId}] Sending batch of ${msg.mediaList.length} media items to ${msg.phone}`);
             for (let i = 0; i < msg.mediaList.length; i++) {
               const item = msg.mediaList[i];
               // First item carries the text caption; subsequent items send clean media
               const caption = i === 0 ? personalizedText : '';
 
               const sendPromise = whatsapp.sendMessage(
-                sessionId,
+                effectiveSessionId,
                 msg.phone,
                 caption,
                 item.type,
@@ -103,7 +105,7 @@ async function processAllDueMessages() {
               lastResult = await Promise.race([sendPromise, timeoutPromise]);
 
               if (lastResult?.id && lastResult?.message) {
-                whatsapp.cacheMessage(sessionId, lastResult.id, lastResult.message);
+                whatsapp.cacheMessage(effectiveSessionId, lastResult.id, lastResult.message);
               }
 
               // Small delay between items to ensure order & avoid socket congestion
@@ -114,7 +116,7 @@ async function processAllDueMessages() {
           } else {
             // Single media, poll, or pure text message
             const sendPromise = whatsapp.sendMessage(
-              sessionId,
+              effectiveSessionId,
               msg.phone,
               personalizedText,
               msg.mediaType,
@@ -130,7 +132,7 @@ async function processAllDueMessages() {
             lastResult = await Promise.race([sendPromise, timeoutPromise]);
 
             if (lastResult?.id && lastResult?.message) {
-              whatsapp.cacheMessage(sessionId, lastResult.id, lastResult.message);
+              whatsapp.cacheMessage(effectiveSessionId, lastResult.id, lastResult.message);
             }
           }
 

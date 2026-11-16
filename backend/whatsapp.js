@@ -92,6 +92,48 @@ function hasSession(sessionId) {
   return sessions.has(sessionId);
 }
 
+/** Helper to retrieve the effective connected session, reusing any active socket in memory */
+function getEffectiveSession(sessionId) {
+  if (!sessionId) return null;
+  const direct = sessions.get(sessionId);
+  if (direct && direct.status === 'connected' && direct.sock) {
+    return direct;
+  }
+
+  // If there's any active connected session in memory, return it so multi-tenant/naming differences don't break delivery
+  for (const s of sessions.values()) {
+    if (s.status === 'connected' && s.sock) {
+      return s;
+    }
+  }
+
+  return direct || null;
+}
+
+async function getEffectiveSessionAsync(sessionId) {
+  const eff = getEffectiveSession(sessionId);
+  if (eff && eff.status === 'connected' && eff.sock) {
+    return eff;
+  }
+
+  // Auto-restore on demand if credentials exist
+  if (sessionId && !sessions.has(sessionId)) {
+    const hasCreds = await hasSavedCredentials(sessionId);
+    if (hasCreds) {
+      try {
+        await initWhatsApp(sessionId);
+        for (let w = 0; w < 10; w++) {
+          await new Promise(r => setTimeout(r, 400));
+          const s = getEffectiveSession(sessionId);
+          if (s && s.status === 'connected' && s.sock) return s;
+        }
+      } catch (_) {}
+    }
+  }
+
+  return getEffectiveSession(sessionId);
+}
+
 /** Returns true if this session has saved, registered credentials in MongoDB. */
 async function hasSavedCredentials(sessionId) {
   if (!sessionId) return false;
@@ -793,6 +835,19 @@ async function _performInitWhatsApp(sessionId) {
           return protoMsg;
         }
 
+        if (doc.mediaType) {
+          const cap = db.decrypt(doc.encryptedMessageText) || '';
+          const protoMsg = proto.Message.fromObject(
+            doc.mediaType === 'image' ? { imageMessage: { caption: cap } } :
+            doc.mediaType === 'video' ? { videoMessage: { caption: cap } } :
+            doc.mediaType === 'sticker' ? { stickerMessage: {} } :
+            doc.mediaType === 'document' ? { documentMessage: { caption: cap, fileName: doc.mediaName || 'Document' } } :
+            { conversation: cap }
+          );
+          session.messageCache.set(key.id, protoMsg);
+          return protoMsg;
+        }
+
         const text = db.decrypt(doc.encryptedMessageText);
         if (text) {
           const msgObj = proto.Message.fromObject({ conversation: text });
@@ -963,6 +1018,11 @@ async function _performInitWhatsApp(sessionId) {
         await updateConnectedProfile(sessionId);
         const currentPhone = session.connectedProfile.phone;
         console.log(`[WA] [${sessionId}] Connected as: ${session.connectedProfile.name || session.connectedProfile.phone} (+${currentPhone})`);
+
+        // Ensure fresh pre-keys so newly messaged personal contacts never see "Waiting for this message"
+        if (typeof sock.uploadPreKeys === 'function') {
+          sock.uploadPreKeys().catch(e => console.warn(`[WA] [${sessionId}] Pre-keys refresh:`, e.message));
+        }
 
         // Enforce 1 WhatsApp Phone per User Account Link
         if (sessionId.startsWith('user_acc_') && currentPhone) {
@@ -1343,7 +1403,7 @@ function getAllContacts(sessionId) {
 // ─── Send message ─────────────────────────────────────────────────────────────
 
 async function sendMessage(sessionId, phone, text, mediaType = null, mediaData = null, mediaName = null, pollData = null, explicitMentions = []) {
-  const session = sessions.get(sessionId);
+  const session = await getEffectiveSessionAsync(sessionId);
   if (!session || session.status !== 'connected' || !session.sock) {
     throw new Error('WhatsApp is not connected for this session.');
   }
@@ -1614,7 +1674,14 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
     if (result.message) {
       session.messageCache.set(result.key.id, result.message);
     } else {
-      session.messageCache.set(result.key.id, { conversation: text || '' });
+      const cap = text || '';
+      session.messageCache.set(result.key.id, proto.Message.fromObject(
+        mediaType === 'image' ? { imageMessage: { caption: cap } } :
+        mediaType === 'video' ? { videoMessage: { caption: cap } } :
+        mediaType === 'sticker' ? { stickerMessage: {} } :
+        mediaType === 'document' ? { documentMessage: { caption: cap, fileName: mediaName || 'Document' } } :
+        { conversation: cap }
+      ));
     }
     if (session.messageCache.size > 500) {
       const oldestKey = session.messageCache.keys().next().value;
@@ -1687,7 +1754,7 @@ async function clearSession(sessionId) {
 // ─── Getters / State ──────────────────────────────────────────────────────────
 
 function getStatus(sessionId) {
-  const session = sessions.get(sessionId);
+  const session = getEffectiveSession(sessionId);
   return session ? session.status : 'disconnected';
 }
 
@@ -1763,12 +1830,12 @@ async function updateConnectedProfile(sessionId) {
 
 function getConnectedProfile(sessionId) {
   updateConnectedProfile(sessionId);
-  const session = sessions.get(sessionId);
+  const session = getEffectiveSession(sessionId);
   return session ? session.connectedProfile : { name: null, phone: null, jid: null };
 }
 
 function getSyncStatus(sessionId) {
-  const session = sessions.get(sessionId);
+  const session = getEffectiveSession(sessionId);
   return session ? Boolean(session.isSyncing) : false;
 }
 
@@ -1908,6 +1975,8 @@ function cacheMessage(sessionId, waId, message) {
 
 module.exports = {
   cacheMessage,
+  getEffectiveSession,
+  getEffectiveSessionAsync,
   hasSession,
   shouldReinitialize,
   initWhatsApp,

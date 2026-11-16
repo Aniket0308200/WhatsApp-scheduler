@@ -7,13 +7,14 @@ import AdvancedAnalytics from './AdvancedAnalytics';
 import { formatUtcToZoned, getUserTimeZone } from '../utils/timezoneHelper';
 
 const STATUS_BADGE = {
-  pending:   { label: '⏳ Pending',     cls: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-900/40' },
-  sent:      { label: '✓ Sent',         cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/40' },
-  submitted: { label: '✓ Sent',         cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/40' },
-  delivered: { label: '✓✓ Delivered',   cls: 'bg-teal-100 text-teal-800 dark:bg-teal-950/40 dark:text-teal-400 border border-teal-200 dark:border-teal-900/40' },
-  read:      { label: '✅ Read',        cls: 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-200 dark:border-blue-900/40' },
-  failed:    { label: '❌ Failed',      cls: 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-900/40' },
-  cancelled: { label: '🚫 Cancelled',   cls: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700' },
+  pending:    { label: '⏳ Pending',     cls: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-900/40' },
+  processing: { label: '🚀 Sending…',    cls: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900/40 animate-pulse' },
+  sent:       { label: '✓ Sent',         cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/40' },
+  submitted:  { label: '✓ Sent',         cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/40' },
+  delivered:  { label: '✓✓ Delivered',   cls: 'bg-teal-100 text-teal-800 dark:bg-teal-950/40 dark:text-teal-400 border border-teal-200 dark:border-teal-900/40' },
+  read:       { label: '✅ Read',        cls: 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-200 dark:border-blue-900/40' },
+  failed:     { label: '❌ Failed',      cls: 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-900/40' },
+  cancelled:  { label: '🚫 Cancelled',   cls: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700' },
 };
 
 const RefreshIcon = ({ className = "w-4 h-4", spinning = false }) => (
@@ -59,8 +60,13 @@ export default function MessageTable({ messages, loading, onRefresh, plan = 'fre
   }, [messages]);
 
 
-  // Sort messages: newest first (highest ID or timestamp first, so new schedules always appear at the top)
+  // Sort messages: newest first (highest timestamp first, so new schedules always appear at the top)
   const sortedMessages = [...messages].sort((a, b) => {
+    const timeA = new Date(a.created_at || a.scheduled_at || 0).getTime();
+    const timeB = new Date(b.created_at || b.scheduled_at || 0).getTime();
+    if (timeA && timeB && timeA !== timeB) {
+      return timeB - timeA;
+    }
     if (typeof a.id === 'string' && typeof b.id === 'string') {
       return b.id.localeCompare(a.id);
     }
@@ -70,6 +76,7 @@ export default function MessageTable({ messages, loading, onRefresh, plan = 'fre
   const filtered = filter === 'all'
     ? sortedMessages
     : sortedMessages.filter(m => {
+        if (filter === 'pending') return m.status === 'pending' || m.status === 'processing';
         if (filter === 'sent') return m.status === 'sent' || m.status === 'submitted';
         return m.status === filter;
       });
@@ -90,6 +97,7 @@ export default function MessageTable({ messages, loading, onRefresh, plan = 'fre
 
   const counts = FILTERS.reduce((acc, f) => {
     if (f === 'all') acc[f] = messages.length;
+    else if (f === 'pending') acc[f] = messages.filter(m => m.status === 'pending' || m.status === 'processing').length;
     else if (f === 'sent') acc[f] = messages.filter(m => m.status === 'sent' || m.status === 'submitted').length;
     else acc[f] = messages.filter(m => m.status === f).length;
     return acc;

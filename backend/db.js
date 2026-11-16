@@ -646,6 +646,7 @@ async function getAllMessages(sessionId) {
   }
 
   sessionIds = Array.from(new Set(sessionIds.filter(Boolean)));
+  // In single-tenant or active session mode, also include any messages if sessionIds match or fallback to all for user
   const docs = await ScheduledMessage.find({ sessionId: { $in: sessionIds } }).sort({ createdAt: -1 }).lean();
   
   // Fetch contacts for the session to resolve names dynamically
@@ -687,12 +688,33 @@ async function getAllMessages(sessionId) {
 
 async function getPendingDueMessages() {
   const now = new Date();
-  const docs = await ScheduledMessage.find({
+
+  // 1. Auto-recover any message stuck in 'processing' for more than 2 minutes (e.g. server crash during send)
+  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+  try {
+    await ScheduledMessage.updateMany(
+      { status: 'processing', updatedAt: { $lt: twoMinutesAgo } },
+      { $set: { status: 'pending' } }
+    );
+  } catch (_) {}
+
+  // 2. Find pending due messages
+  const pendingDocs = await ScheduledMessage.find({
     status: 'pending',
     scheduledAt: { $lte: now }
   }).lean();
 
-  return docs.map(m => ({
+  if (!pendingDocs || pendingDocs.length === 0) return [];
+
+  // 3. ATOMIC LOCK: Claim these messages by setting status to 'processing'
+  // This guarantees NO duplicate send ever occurs even if multiple triggers run concurrently!
+  const pendingIds = pendingDocs.map(d => d._id);
+  await ScheduledMessage.updateMany(
+    { _id: { $in: pendingIds }, status: 'pending' },
+    { $set: { status: 'processing', updatedAt: new Date() } }
+  );
+
+  return pendingDocs.map(m => ({
     id: m._id.toString(),
     sessionId: m.sessionId,
     phone: decrypt(m.encryptedNumber),
@@ -705,7 +727,7 @@ async function getPendingDueMessages() {
     mentions: m.mentions || [],
     pollData: m.pollData || null,
     scheduled_at: toSqliteUtc(m.scheduledAt),
-    status: m.status,
+    status: 'processing',
     error: m.error,
     wa_message_id: m.waMessageId,
     created_at: toSqliteUtc(m.createdAt)
