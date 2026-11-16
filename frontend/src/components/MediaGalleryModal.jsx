@@ -1,5 +1,19 @@
 import React, { useState } from 'react';
 
+const resolveMediaSrc = (src) => {
+  if (!src) return '';
+  if (src.startsWith('data:') || src.startsWith('blob:') || src.startsWith('http://') || src.startsWith('https://')) {
+    return src;
+  }
+  if (src.startsWith('/api/')) {
+    const apiBase = (typeof window !== 'undefined' && window.location.hostname === 'localhost')
+      ? ''
+      : 'https://api.wascheduler.site';
+    return `${apiBase}${src}`;
+  }
+  return src;
+};
+
 /**
  * Phone-Gallery Style Media Modal
  * Displays items in a clean phone-gallery grid with thumbnails,
@@ -122,7 +136,7 @@ export default function MediaGalleryModal({
                       {/* Image / Sticker / GIF preview */}
                       {(isImage || isSticker || isGif) && (
                         <img
-                          src={item.preview || item.data}
+                          src={resolveMediaSrc(item.preview || item.data)}
                           alt={item.name || 'attachment'}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                         />
@@ -133,7 +147,7 @@ export default function MediaGalleryModal({
                         <div className="relative w-full h-full flex items-center justify-center bg-black/40">
                           {item.data ? (
                             <video
-                              src={item.data}
+                              src={resolveMediaSrc(item.data)}
                               className="w-full h-full object-cover"
                               muted
                               preload="metadata"
@@ -223,7 +237,7 @@ export default function MediaGalleryModal({
                       {isAudio && item.data && (
                         <audio
                           controls
-                          src={item.data}
+                          src={resolveMediaSrc(item.data)}
                           className="w-full mt-1.5 h-6 scale-90 -ml-1"
                         />
                       )}
@@ -273,7 +287,7 @@ export default function MediaGalleryModal({
               ✕ Close
             </button>
             <img
-              src={zoomItem.preview || zoomItem.data}
+              src={resolveMediaSrc(zoomItem.preview || zoomItem.data)}
               alt={zoomItem.name}
               className="max-w-full max-h-[80vh] rounded-xl object-contain shadow-2xl"
             />

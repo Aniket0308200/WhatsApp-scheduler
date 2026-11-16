@@ -930,7 +930,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
     }, 10);
   };
 
-  // Close emoji picker & sticker picker on outside click
+  // Close emoji picker on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) {
@@ -938,9 +938,6 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       }
       if (attachmentMenuRef.current && !attachmentMenuRef.current.contains(e.target)) {
         setShowAttachmentMenu(false);
-      }
-      if (stickerPickerRef.current && !stickerPickerRef.current.contains(e.target)) {
-        setShowStickerPicker(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);

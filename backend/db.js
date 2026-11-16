@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const CryptoJS = require('crypto-js');
 const dns = require('dns');
+const { saveMediaToDisk, removeMediaFile } = require('./mediaStorage');
 
 // Override DNS servers to Google & Cloudflare public DNS to bypass querySrv ECONNREFUSED issues on local network
 try {
@@ -431,6 +432,18 @@ async function enforceRollingCap(sessionId) {
         .select('_id')
         .lean();
       const keepIds = keepList.map(m => m._id);
+      const toDelete = await ScheduledMessage.find({
+        sessionId,
+        _id: { $nin: keepIds }
+      }).lean();
+      for (const m of toDelete) {
+        if (m.mediaData) await removeMediaFile(m.mediaData);
+        if (Array.isArray(m.mediaList)) {
+          for (const item of m.mediaList) {
+            if (item && item.data) await removeMediaFile(item.data);
+          }
+        }
+      }
       await ScheduledMessage.deleteMany({
         sessionId,
         _id: { $nin: keepIds }
@@ -591,15 +604,39 @@ function toSqliteUtc(dateInput) {
 
 async function insertMessage(sessionId, phone, message, scheduledAt, recipientName = null, mediaType = null, mediaData = null, mediaName = null, mediaList = [], pollData = null, mentions = []) {
   const schedDate = new Date(scheduledAt);
+
+  let cleanMediaData = mediaData;
+  if (cleanMediaData) {
+    cleanMediaData = await saveMediaToDisk(cleanMediaData, mediaName, mediaType);
+  }
+
+  let cleanMediaList = [];
+  if (Array.isArray(mediaList) && mediaList.length > 0) {
+    cleanMediaList = await Promise.all(mediaList.map(async (item) => {
+      let itemData = item.data;
+      if (itemData) {
+        itemData = await saveMediaToDisk(itemData, item.name, item.type);
+      }
+      return {
+        id: item.id || String(Date.now()),
+        type: item.type,
+        data: itemData,
+        name: item.name || null,
+        size: item.size || null,
+        preview: null // Keep MongoDB document < 1KB to prevent BSON RangeError
+      };
+    }));
+  }
+
   const msg = new ScheduledMessage({
     sessionId,
     encryptedNumber: encrypt(phone),
     encryptedRecipientName: encrypt(recipientName),
     encryptedMessageText: encrypt(message || ''),
     mediaType: mediaType || null,
-    mediaData: mediaData || null,
+    mediaData: cleanMediaData || null,
     mediaName: mediaName || null,
-    mediaList: Array.isArray(mediaList) ? mediaList : [],
+    mediaList: cleanMediaList,
     mentions: Array.isArray(mentions) ? mentions : [],
     pollData: pollData && pollData.question ? {
       question: String(pollData.question).trim(),
@@ -672,9 +709,16 @@ async function getAllMessages(sessionId) {
       recipient_name: name,
       message: decrypt(m.encryptedMessageText),
       mediaType: m.mediaType || null,
-      mediaData: m.mediaData || null,
+      mediaData: m.mediaData ? (m.mediaData.startsWith('disk:') ? `/api/media/${m._id}` : m.mediaData) : null,
       mediaName: m.mediaName || null,
-      mediaList: m.mediaList || [],
+      mediaList: (m.mediaList || []).map((item, idx) => ({
+        id: item.id || String(idx),
+        type: item.type,
+        name: item.name,
+        size: item.size,
+        data: item.data ? (item.data.startsWith('disk:') ? `/api/media/${m._id}?idx=${idx}` : item.data) : null,
+        preview: item.data && item.data.startsWith('disk:') ? `/api/media/${m._id}?idx=${idx}` : (item.preview || null)
+      })),
       mediaPurged: Boolean(m.mediaPurged),
       pollData: m.pollData || null,
       scheduled_at: toSqliteUtc(m.scheduledAt),
@@ -744,6 +788,25 @@ async function getPendingDueMessages() {
 async function purgeOldMediaData() {
   try {
     const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const oldDocs = await ScheduledMessage.find({
+      status: { $in: ['sent', 'delivered', 'read'] },
+      createdAt: { $lt: twoDaysAgo },
+      mediaPurged: { $ne: true },
+      $or: [
+        { mediaData: { $ne: null } },
+        { 'mediaList.0': { $exists: true } }
+      ]
+    }).lean();
+
+    for (const doc of oldDocs) {
+      if (doc.mediaData) await removeMediaFile(doc.mediaData);
+      if (Array.isArray(doc.mediaList)) {
+        for (const item of doc.mediaList) {
+          if (item && item.data) await removeMediaFile(item.data);
+        }
+      }
+    }
+
     const result = await ScheduledMessage.updateMany(
       {
         status: { $in: ['sent', 'delivered', 'read'] },
@@ -809,6 +872,17 @@ async function cancelMessage(sessionId, id) {
 }
 
 async function deleteMessage(sessionId, id) {
+  try {
+    const msg = await ScheduledMessage.findById(id).lean();
+    if (msg) {
+      if (msg.mediaData) await removeMediaFile(msg.mediaData);
+      if (Array.isArray(msg.mediaList)) {
+        for (const item of msg.mediaList) {
+          if (item && item.data) await removeMediaFile(item.data);
+        }
+      }
+    }
+  } catch (_) {}
   const res = await ScheduledMessage.deleteOne({ _id: id });
   return res.deletedCount;
 }

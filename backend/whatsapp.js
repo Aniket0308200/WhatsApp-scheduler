@@ -27,6 +27,7 @@ const fs = require('fs');
 const db = require('./db');
 const { Contact } = db;
 const { formatStickerBuffer, formatGifBuffer } = require('./mediaHelper');
+const { readMediaBuffer } = require('./mediaStorage');
 
 const SESSIONS_ROOT = path.join(__dirname, '..', 'data', 'session');
 if (!fs.existsSync(SESSIONS_ROOT)) {
@@ -1440,7 +1441,17 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
       let buffer;
       let detectedMime = null;
 
-      if (typeof mediaData === 'string' && (mediaData.startsWith('http://') || mediaData.startsWith('https://'))) {
+      if (typeof mediaData === 'string' && mediaData.startsWith('disk:')) {
+        buffer = await readMediaBuffer(mediaData);
+        const lowerPath = mediaData.toLowerCase();
+        if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg')) detectedMime = 'image/jpeg';
+        else if (lowerPath.endsWith('.png')) detectedMime = 'image/png';
+        else if (lowerPath.endsWith('.webp')) detectedMime = 'image/webp';
+        else if (lowerPath.endsWith('.mp4')) detectedMime = 'video/mp4';
+        else if (lowerPath.endsWith('.mp3')) detectedMime = 'audio/mpeg';
+        else if (lowerPath.endsWith('.ogg')) detectedMime = 'audio/ogg; codecs=opus';
+        else if (lowerPath.endsWith('.pdf')) detectedMime = 'application/pdf';
+      } else if (typeof mediaData === 'string' && (mediaData.startsWith('http://') || mediaData.startsWith('https://'))) {
         const axios = require('axios');
         const res = await axios.get(mediaData, { responseType: 'arraybuffer', timeout: 30000 });
         buffer = Buffer.from(res.data);

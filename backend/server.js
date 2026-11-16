@@ -33,8 +33,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-ID', 'Accept', 'Origin']
 }));
 app.options('*', cors());
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+app.use(express.json({ limit: '1024mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1024mb' }));
 
 function toVerifiedContact(document) {
   const jid = document.jid;
@@ -654,6 +654,71 @@ app.get('/api/contact/:phone', async (req, res) => {
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
 
+app.get('/api/media/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const idx = req.query.idx !== undefined ? parseInt(req.query.idx, 10) : null;
+    const msg = await db.ScheduledMessage.findById(id).lean();
+    if (!msg) {
+      return res.status(404).send('Media not found');
+    }
+
+    let targetPayload = null;
+    let targetName = null;
+    let targetType = null;
+
+    if (idx !== null && Array.isArray(msg.mediaList) && msg.mediaList[idx]) {
+      targetPayload = msg.mediaList[idx].data;
+      targetName = msg.mediaList[idx].name;
+      targetType = msg.mediaList[idx].type;
+    } else {
+      targetPayload = msg.mediaData || (msg.mediaList && msg.mediaList[0] && msg.mediaList[0].data);
+      targetName = msg.mediaName || (msg.mediaList && msg.mediaList[0] && msg.mediaList[0].name);
+      targetType = msg.mediaType || (msg.mediaList && msg.mediaList[0] && msg.mediaList[0].type);
+    }
+
+    if (!targetPayload) {
+      return res.status(404).send('Media content purged or not available');
+    }
+
+    const { readMediaBuffer } = require('./mediaStorage');
+    const buffer = await readMediaBuffer(targetPayload);
+    if (!buffer) {
+      return res.status(404).send('Media file unavailable');
+    }
+
+    let mimeType = 'application/octet-stream';
+    if (targetType === 'image') mimeType = 'image/jpeg';
+    else if (targetType === 'video') mimeType = 'video/mp4';
+    else if (targetType === 'audio') mimeType = 'audio/mp4';
+    else if (targetType === 'sticker') mimeType = 'image/webp';
+    else if (targetType === 'gif') mimeType = 'image/gif';
+    else if (targetType === 'document' || targetType === 'pdf') mimeType = 'application/pdf';
+
+    if (targetName) {
+      const lower = targetName.toLowerCase();
+      if (lower.endsWith('.png')) mimeType = 'image/png';
+      else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) mimeType = 'image/jpeg';
+      else if (lower.endsWith('.webp')) mimeType = 'image/webp';
+      else if (lower.endsWith('.gif')) mimeType = 'image/gif';
+      else if (lower.endsWith('.mp4')) mimeType = 'video/mp4';
+      else if (lower.endsWith('.mp3')) mimeType = 'audio/mpeg';
+      else if (lower.endsWith('.pdf')) mimeType = 'application/pdf';
+    }
+
+    res.set({
+      'Content-Type': mimeType,
+      'Content-Length': buffer.length,
+      'Cache-Control': 'public, max-age=86400',
+      'Access-Control-Allow-Origin': '*'
+    });
+    return res.end(buffer);
+  } catch (err) {
+    console.error('[Media Endpoint] Error serving media:', err.message);
+    res.status(500).send('Error serving media');
+  }
+});
+
 app.get('/api/messages', async (req, res) => {
   try {
     res.json(await db.getAllMessages(req.sessionId));
@@ -880,6 +945,18 @@ async function getSenderPhoneFromSession(req) {
   if (profile && profile.phone) return profile.phone;
   return await whatsapp.getPhoneFromSession(req.sessionId);
 }
+
+// ─── Global Error Handler ─────────────────────────────────────────────────────
+
+app.use((err, req, res, next) => {
+  console.error('[API Error Handler]', err);
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+  res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
+});
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
