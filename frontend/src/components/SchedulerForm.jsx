@@ -15,80 +15,80 @@ import { getUserTimeZone, zonedTimeToUtc } from '../utils/timezoneHelper';
 // ─── Complete country-code list ───────────────────────────────────────────────
 const INDIA_ITEM = { code: '91', name: 'India' };
 const OTHER_COUNTRIES = [
-  { code: '93',  name: 'Afghanistan' },    { code: '355', name: 'Albania' },
-  { code: '213', name: 'Algeria' },        { code: '376', name: 'Andorra' },
-  { code: '244', name: 'Angola' },         { code: '54',  name: 'Argentina' },
-  { code: '374', name: 'Armenia' },        { code: '61',  name: 'Australia' },
-  { code: '43',  name: 'Austria' },        { code: '994', name: 'Azerbaijan' },
-  { code: '973', name: 'Bahrain' },        { code: '880', name: 'Bangladesh' },
-  { code: '32',  name: 'Belgium' },        { code: '229', name: 'Benin' },
-  { code: '975', name: 'Bhutan' },         { code: '591', name: 'Bolivia' },
-  { code: '387', name: 'Bosnia' },         { code: '267', name: 'Botswana' },
-  { code: '55',  name: 'Brazil' },         { code: '673', name: 'Brunei' },
-  { code: '359', name: 'Bulgaria' },       { code: '226', name: 'Burkina Faso' },
-  { code: '855', name: 'Cambodia' },       { code: '237', name: 'Cameroon' },
-  { code: '1',   name: 'Canada / USA' },   { code: '236', name: 'Central African Rep.' },
-  { code: '56',  name: 'Chile' },          { code: '86',  name: 'China' },
-  { code: '57',  name: 'Colombia' },       { code: '243', name: 'Congo (DRC)' },
-  { code: '506', name: 'Costa Rica' },     { code: '385', name: 'Croatia' },
-  { code: '53',  name: 'Cuba' },           { code: '357', name: 'Cyprus' },
-  { code: '420', name: 'Czech Republic' }, { code: '45',  name: 'Denmark' },
-  { code: '593', name: 'Ecuador' },        { code: '20',  name: 'Egypt' },
-  { code: '503', name: 'El Salvador' },    { code: '372', name: 'Estonia' },
-  { code: '251', name: 'Ethiopia' },       { code: '358', name: 'Finland' },
-  { code: '33',  name: 'France' },         { code: '241', name: 'Gabon' },
-  { code: '995', name: 'Georgia' },        { code: '49',  name: 'Germany' },
-  { code: '233', name: 'Ghana' },          { code: '30',  name: 'Greece' },
-  { code: '502', name: 'Guatemala' },      { code: '224', name: 'Guinea' },
-  { code: '509', name: 'Haiti' },          { code: '504', name: 'Honduras' },
-  { code: '852', name: 'Hong Kong' },      { code: '36',  name: 'Hungary' },
+  { code: '93', name: 'Afghanistan' }, { code: '355', name: 'Albania' },
+  { code: '213', name: 'Algeria' }, { code: '376', name: 'Andorra' },
+  { code: '244', name: 'Angola' }, { code: '54', name: 'Argentina' },
+  { code: '374', name: 'Armenia' }, { code: '61', name: 'Australia' },
+  { code: '43', name: 'Austria' }, { code: '994', name: 'Azerbaijan' },
+  { code: '973', name: 'Bahrain' }, { code: '880', name: 'Bangladesh' },
+  { code: '32', name: 'Belgium' }, { code: '229', name: 'Benin' },
+  { code: '975', name: 'Bhutan' }, { code: '591', name: 'Bolivia' },
+  { code: '387', name: 'Bosnia' }, { code: '267', name: 'Botswana' },
+  { code: '55', name: 'Brazil' }, { code: '673', name: 'Brunei' },
+  { code: '359', name: 'Bulgaria' }, { code: '226', name: 'Burkina Faso' },
+  { code: '855', name: 'Cambodia' }, { code: '237', name: 'Cameroon' },
+  { code: '1', name: 'Canada / USA' }, { code: '236', name: 'Central African Rep.' },
+  { code: '56', name: 'Chile' }, { code: '86', name: 'China' },
+  { code: '57', name: 'Colombia' }, { code: '243', name: 'Congo (DRC)' },
+  { code: '506', name: 'Costa Rica' }, { code: '385', name: 'Croatia' },
+  { code: '53', name: 'Cuba' }, { code: '357', name: 'Cyprus' },
+  { code: '420', name: 'Czech Republic' }, { code: '45', name: 'Denmark' },
+  { code: '593', name: 'Ecuador' }, { code: '20', name: 'Egypt' },
+  { code: '503', name: 'El Salvador' }, { code: '372', name: 'Estonia' },
+  { code: '251', name: 'Ethiopia' }, { code: '358', name: 'Finland' },
+  { code: '33', name: 'France' }, { code: '241', name: 'Gabon' },
+  { code: '995', name: 'Georgia' }, { code: '49', name: 'Germany' },
+  { code: '233', name: 'Ghana' }, { code: '30', name: 'Greece' },
+  { code: '502', name: 'Guatemala' }, { code: '224', name: 'Guinea' },
+  { code: '509', name: 'Haiti' }, { code: '504', name: 'Honduras' },
+  { code: '852', name: 'Hong Kong' }, { code: '36', name: 'Hungary' },
   { code: '354', name: 'Iceland' },
-  { code: '62',  name: 'Indonesia' },      { code: '98',  name: 'Iran' },
-  { code: '964', name: 'Iraq' },           { code: '353', name: 'Ireland' },
-  { code: '972', name: 'Israel' },         { code: '39',  name: 'Italy' },
-  { code: '225', name: 'Ivory Coast' },    { code: '1876',name: 'Jamaica' },
-  { code: '81',  name: 'Japan' },          { code: '962', name: 'Jordan' },
-  { code: '7',   name: 'Kazakhstan' },     { code: '254', name: 'Kenya' },
-  { code: '82',  name: 'South Korea' },    { code: '965', name: 'Kuwait' },
-  { code: '996', name: 'Kyrgyzstan' },     { code: '856', name: 'Laos' },
-  { code: '371', name: 'Latvia' },         { code: '961', name: 'Lebanon' },
-  { code: '231', name: 'Liberia' },        { code: '218', name: 'Libya' },
-  { code: '370', name: 'Lithuania' },      { code: '352', name: 'Luxembourg' },
-  { code: '853', name: 'Macau' },          { code: '261', name: 'Madagascar' },
-  { code: '265', name: 'Malawi' },         { code: '60',  name: 'Malaysia' },
-  { code: '960', name: 'Maldives' },       { code: '223', name: 'Mali' },
-  { code: '356', name: 'Malta' },          { code: '222', name: 'Mauritania' },
-  { code: '230', name: 'Mauritius' },      { code: '52',  name: 'Mexico' },
-  { code: '373', name: 'Moldova' },        { code: '976', name: 'Mongolia' },
-  { code: '212', name: 'Morocco' },        { code: '258', name: 'Mozambique' },
-  { code: '95',  name: 'Myanmar' },        { code: '264', name: 'Namibia' },
-  { code: '977', name: 'Nepal' },          { code: '31',  name: 'Netherlands' },
-  { code: '64',  name: 'New Zealand' },    { code: '505', name: 'Nicaragua' },
-  { code: '227', name: 'Niger' },          { code: '234', name: 'Nigeria' },
-  { code: '47',  name: 'Norway' },         { code: '968', name: 'Oman' },
-  { code: '92',  name: 'Pakistan' },       { code: '507', name: 'Panama' },
-  { code: '675', name: 'Papua New Guinea'},{ code: '595', name: 'Paraguay' },
-  { code: '51',  name: 'Peru' },           { code: '63',  name: 'Philippines' },
-  { code: '48',  name: 'Poland' },         { code: '351', name: 'Portugal' },
-  { code: '974', name: 'Qatar' },          { code: '40',  name: 'Romania' },
-  { code: '7',   name: 'Russia' },         { code: '250', name: 'Rwanda' },
-  { code: '966', name: 'Saudi Arabia' },   { code: '221', name: 'Senegal' },
-  { code: '381', name: 'Serbia' },         { code: '232', name: 'Sierra Leone' },
-  { code: '65',  name: 'Singapore' },      { code: '421', name: 'Slovakia' },
-  { code: '386', name: 'Slovenia' },       { code: '252', name: 'Somalia' },
-  { code: '27',  name: 'South Africa' },   { code: '211', name: 'South Sudan' },
-  { code: '34',  name: 'Spain' },          { code: '94',  name: 'Sri Lanka' },
-  { code: '249', name: 'Sudan' },          { code: '46',  name: 'Sweden' },
-  { code: '41',  name: 'Switzerland' },    { code: '963', name: 'Syria' },
-  { code: '886', name: 'Taiwan' },         { code: '992', name: 'Tajikistan' },
-  { code: '255', name: 'Tanzania' },       { code: '66',  name: 'Thailand' },
-  { code: '228', name: 'Togo' },           { code: '216', name: 'Tunisia' },
-  { code: '90',  name: 'Turkey' },         { code: '993', name: 'Turkmenistan' },
-  { code: '256', name: 'Uganda' },         { code: '380', name: 'Ukraine' },
-  { code: '971', name: 'UAE' },            { code: '44',  name: 'United Kingdom' },
-  { code: '598', name: 'Uruguay' },        { code: '998', name: 'Uzbekistan' },
-  { code: '58',  name: 'Venezuela' },      { code: '84',  name: 'Vietnam' },
-  { code: '967', name: 'Yemen' },          { code: '260', name: 'Zambia' },
+  { code: '62', name: 'Indonesia' }, { code: '98', name: 'Iran' },
+  { code: '964', name: 'Iraq' }, { code: '353', name: 'Ireland' },
+  { code: '972', name: 'Israel' }, { code: '39', name: 'Italy' },
+  { code: '225', name: 'Ivory Coast' }, { code: '1876', name: 'Jamaica' },
+  { code: '81', name: 'Japan' }, { code: '962', name: 'Jordan' },
+  { code: '7', name: 'Kazakhstan' }, { code: '254', name: 'Kenya' },
+  { code: '82', name: 'South Korea' }, { code: '965', name: 'Kuwait' },
+  { code: '996', name: 'Kyrgyzstan' }, { code: '856', name: 'Laos' },
+  { code: '371', name: 'Latvia' }, { code: '961', name: 'Lebanon' },
+  { code: '231', name: 'Liberia' }, { code: '218', name: 'Libya' },
+  { code: '370', name: 'Lithuania' }, { code: '352', name: 'Luxembourg' },
+  { code: '853', name: 'Macau' }, { code: '261', name: 'Madagascar' },
+  { code: '265', name: 'Malawi' }, { code: '60', name: 'Malaysia' },
+  { code: '960', name: 'Maldives' }, { code: '223', name: 'Mali' },
+  { code: '356', name: 'Malta' }, { code: '222', name: 'Mauritania' },
+  { code: '230', name: 'Mauritius' }, { code: '52', name: 'Mexico' },
+  { code: '373', name: 'Moldova' }, { code: '976', name: 'Mongolia' },
+  { code: '212', name: 'Morocco' }, { code: '258', name: 'Mozambique' },
+  { code: '95', name: 'Myanmar' }, { code: '264', name: 'Namibia' },
+  { code: '977', name: 'Nepal' }, { code: '31', name: 'Netherlands' },
+  { code: '64', name: 'New Zealand' }, { code: '505', name: 'Nicaragua' },
+  { code: '227', name: 'Niger' }, { code: '234', name: 'Nigeria' },
+  { code: '47', name: 'Norway' }, { code: '968', name: 'Oman' },
+  { code: '92', name: 'Pakistan' }, { code: '507', name: 'Panama' },
+  { code: '675', name: 'Papua New Guinea' }, { code: '595', name: 'Paraguay' },
+  { code: '51', name: 'Peru' }, { code: '63', name: 'Philippines' },
+  { code: '48', name: 'Poland' }, { code: '351', name: 'Portugal' },
+  { code: '974', name: 'Qatar' }, { code: '40', name: 'Romania' },
+  { code: '7', name: 'Russia' }, { code: '250', name: 'Rwanda' },
+  { code: '966', name: 'Saudi Arabia' }, { code: '221', name: 'Senegal' },
+  { code: '381', name: 'Serbia' }, { code: '232', name: 'Sierra Leone' },
+  { code: '65', name: 'Singapore' }, { code: '421', name: 'Slovakia' },
+  { code: '386', name: 'Slovenia' }, { code: '252', name: 'Somalia' },
+  { code: '27', name: 'South Africa' }, { code: '211', name: 'South Sudan' },
+  { code: '34', name: 'Spain' }, { code: '94', name: 'Sri Lanka' },
+  { code: '249', name: 'Sudan' }, { code: '46', name: 'Sweden' },
+  { code: '41', name: 'Switzerland' }, { code: '963', name: 'Syria' },
+  { code: '886', name: 'Taiwan' }, { code: '992', name: 'Tajikistan' },
+  { code: '255', name: 'Tanzania' }, { code: '66', name: 'Thailand' },
+  { code: '228', name: 'Togo' }, { code: '216', name: 'Tunisia' },
+  { code: '90', name: 'Turkey' }, { code: '993', name: 'Turkmenistan' },
+  { code: '256', name: 'Uganda' }, { code: '380', name: 'Ukraine' },
+  { code: '971', name: 'UAE' }, { code: '44', name: 'United Kingdom' },
+  { code: '598', name: 'Uruguay' }, { code: '998', name: 'Uzbekistan' },
+  { code: '58', name: 'Venezuela' }, { code: '84', name: 'Vietnam' },
+  { code: '967', name: 'Yemen' }, { code: '260', name: 'Zambia' },
   { code: '263', name: 'Zimbabwe' },
 ].sort((a, b) => a.name.localeCompare(b.name));
 
@@ -96,19 +96,19 @@ const ALL_COUNTRIES = [INDIA_ITEM, ...OTHER_COUNTRIES];
 
 // ─── Searchable Country Picker ────────────────────────────────────────────────
 function CountryPicker({ value, onChange, disabled }) {
-  const [open,    setOpen]    = useState(false);
-  const [search,  setSearch]  = useState('');
-  const ref                   = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef(null);
 
   const cleanSearch = search.trim().toLowerCase();
   const searchDigits = search.replace(/\D/g, '');
 
   const filtered = cleanSearch
     ? ALL_COUNTRIES.filter(c => {
-        const matchesName = c.name.toLowerCase().includes(cleanSearch);
-        const matchesCode = searchDigits ? c.code.includes(searchDigits) : false;
-        return matchesName || matchesCode;
-      })
+      const matchesName = c.name.toLowerCase().includes(cleanSearch);
+      const matchesCode = searchDigits ? c.code.includes(searchDigits) : false;
+      return matchesName || matchesCode;
+    })
     : ALL_COUNTRIES;
 
   const selected = ALL_COUNTRIES.find(c => c.code === value) || null;
@@ -141,7 +141,7 @@ function CountryPicker({ value, onChange, disabled }) {
         <span className="text-gray-400 dark:text-wa-dmuted text-xs">{selected?.name?.split(' ')[0] ?? ''}</span>
         <svg className={`w-3.5 h-3.5 text-gray-400 dark:text-wa-dmuted transition-transform ${open ? 'rotate-180' : ''}`}
           fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
@@ -296,31 +296,31 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
     return format(d, "yyyy-MM-dd'T'HH:mm:ss");
   };
 
-  const [countryCode,   setCountryCode]   = useState('91');
-  const [phone,         setPhone]         = useState('');
-  const [contactName,   setContactName]   = useState(null);   // fetched name for current input
+  const [countryCode, setCountryCode] = useState('91');
+  const [phone, setPhone] = useState('');
+  const [contactName, setContactName] = useState(null);   // fetched name for current input
   const [contactExists, setContactExists] = useState(false);
-  const [fetchingName,  setFetchingName]  = useState(false);
+  const [fetchingName, setFetchingName] = useState(false);
   // ── Multi-recipient chips ─────────────────────────────────────────────────
   // Each chip: { phone, name, isGroup }
-  const [recipients,    setRecipients]    = useState([]); // confirmed recipient chips
-  
+  const [recipients, setRecipients] = useState([]); // confirmed recipient chips
+
   // Dynamic Limits based on Plan:
   // Free: 5 contacts, 2 groups
   // Starter: 20 contacts, 10 groups
   // Pro: Unlimited (1000 contacts, 100 groups)
   const userPlanKey = (quota?.plan || 'free').toLowerCase();
   const MAX_PERSONAL = userPlanKey === 'pro' ? 1000 : userPlanKey === 'starter' ? 20 : 5;
-  const MAX_GROUPS   = userPlanKey === 'pro' ? 100 : userPlanKey === 'starter' ? 10 : 2;
+  const MAX_GROUPS = userPlanKey === 'pro' ? 100 : userPlanKey === 'starter' ? 10 : 2;
   const personalCount = recipients.filter(r => !r.isGroup).length;
-  const groupCount    = recipients.filter(r =>  r.isGroup).length;
+  const groupCount = recipients.filter(r => r.isGroup).length;
   // ─────────────────────────────────────────────────────────────────────────
-  const [message,       setMessage]       = useState('');
-  const [scheduledAt,   setScheduledAt]   = useState(getDefaultTime);
+  const [message, setMessage] = useState('');
+  const [scheduledAt, setScheduledAt] = useState(getDefaultTime);
   const [selectedTimeZone, setSelectedTimeZone] = useState(getUserTimeZone);
   const [timeConfirmed, setTimeConfirmed] = useState(true);  // Initialized to true for default 30s-ahead time
-  const [loading,       setLoading]       = useState(false);
-  const [isMobile,      setIsMobile]      = useState(() => typeof window !== 'undefined' && window.innerWidth < 640);
+  const [loading, setLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 640);
 
   useEffect(() => {
     const handleResize = () => {
@@ -382,8 +382,8 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
   const dropdownRef = useRef(null);
 
   // Directory and Contacts list states
-  const [showDirectory,   setShowDirectory]   = useState(false);
-  const [contactsList,    setContactsList]    = useState(() => {
+  const [showDirectory, setShowDirectory] = useState(false);
+  const [contactsList, setContactsList] = useState(() => {
     try {
       const cached = localStorage.getItem('wa_cached_contacts');
       return cached ? JSON.parse(cached) : { all: [], personal: [], groups: [] };
@@ -392,11 +392,11 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
     }
   });
   const [loadingContacts, setLoadingContacts] = useState(false);
-  const [manualSyncing,   setManualSyncing]   = useState(false);
+  const [manualSyncing, setManualSyncing] = useState(false);
   const [directorySearch, setDirectorySearch] = useState('');
-  const [directoryTab,    setDirectoryTab]    = useState('all');
-  const [linkedEmails,        setLinkedEmails]        = useState([]);
-  const [maxGoogleAccounts,   setMaxGoogleAccounts]   = useState(1);
+  const [directoryTab, setDirectoryTab] = useState('all');
+  const [linkedEmails, setLinkedEmails] = useState([]);
+  const [maxGoogleAccounts, setMaxGoogleAccounts] = useState(1);
 
   // Dynamic plan-based Google account sync limit calculation
   const planCode = (quota?.plan || '').toLowerCase();
@@ -443,7 +443,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
             return;
           }
         }
-      } catch {}
+      } catch { }
     }
 
     setLoadingContacts(true);
@@ -451,7 +451,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       const data = await fetchAllContacts();
       if (data && Array.isArray(data.all)) {
         setContactsList(data);
-        try { localStorage.setItem('wa_cached_contacts', JSON.stringify(data)); } catch {}
+        try { localStorage.setItem('wa_cached_contacts', JSON.stringify(data)); } catch { }
       }
     } catch (err) {
       console.error('Failed to load contacts directory:', err);
@@ -740,21 +740,58 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       const reader = new FileReader();
       reader.onload = () => {
         const id = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-        newItems.push({
-          id,
-          type: mType,
-          data: reader.result,
-          name: file.name,
-          size: file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(file.size / 1024)} KB`,
-          preview: (mType === 'image' || mType === 'gif') ? reader.result : null
-        });
+        const processItem = (dataUrl) => {
+          newItems.push({
+            id,
+            type: mType,
+            data: dataUrl,
+            name: file.name,
+            size: file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(file.size / 1024)} KB`,
+            preview: (mType === 'image' || mType === 'gif') ? dataUrl : null
+          });
 
-        loadedCount++;
-        if (loadedCount === filesToRead.length) {
-          setAttachedMediaList(prev => [...prev, ...newItems]);
-          toast.success(`Attached ${newItems.length} file(s)`);
-          if (e.target) e.target.value = '';
+          loadedCount++;
+          if (loadedCount === filesToRead.length) {
+            setAttachedMediaList(prev => [...prev, ...newItems]);
+            toast.success(`Attached ${newItems.length} file(s)`);
+            if (e.target) e.target.value = '';
+          }
+        };
+
+        // If it's a huge photo (> 2MB), optimize it down to max 1920px for fast upload and delivery
+        if (mType === 'image' && file.size > 2 * 1024 * 1024) {
+          try {
+            const img = new Image();
+            img.onload = () => {
+              const maxDim = 1920;
+              let w = img.width;
+              let h = img.height;
+              if (w > maxDim || h > maxDim) {
+                if (w > h) {
+                  h = Math.round((h * maxDim) / w);
+                  w = maxDim;
+                } else {
+                  w = Math.round((w * maxDim) / h);
+                  h = maxDim;
+                }
+              }
+              const canvas = document.createElement('canvas');
+              canvas.width = w;
+              canvas.height = h;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, w, h);
+              processItem(canvas.toDataURL('image/jpeg', 0.88));
+            };
+            img.onerror = () => processItem(reader.result);
+            img.src = reader.result;
+            return;
+          } catch (_) {
+            processItem(reader.result);
+            return;
+          }
         }
+
+        processItem(reader.result);
       };
       reader.readAsDataURL(file);
     });
@@ -1015,10 +1052,10 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
     if (ph && /[A-Za-z]/.test(ph)) return;
 
     const full = getFullPhone(cc, ph);
-    if (!isConnected || full.length < 8) { 
-      setContactName(null); 
-      setContactExists(false); 
-      return; 
+    if (!isConnected || full.length < 8) {
+      setContactName(null);
+      setContactExists(false);
+      return;
     }
 
     // Look up locally first!
@@ -1032,7 +1069,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       setContactExists(true);
       return;
     }
-    
+
     setFetchingName(true);
     try {
       // Use the new live resolver for immediate results
@@ -1049,10 +1086,10 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       }
     } catch (err) {
       console.error('[Contact] Lookup error:', err);
-      setContactName(null); 
+      setContactName(null);
       setContactExists(false);
-    } finally { 
-      setFetchingName(false); 
+    } finally {
+      setFetchingName(false);
     }
   }, [isConnected, contactsList]);
 
@@ -1167,7 +1204,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       setContactName(null);
       setContactExists(false);
       setRecipients([]);
-      
+
       // Trigger instant refresh and auto-followup refresh
       onScheduled?.();
       setTimeout(() => onScheduled?.(), 1500);
@@ -1184,10 +1221,10 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
   const phoneSearchDigits = cleanPhoneSearch.replace(/\D/g, '');
   const suggestions = cleanPhoneSearch.length >= 2
     ? (contactsList.all || []).filter(c => {
-        const nameMatch = c.name && c.name.toLowerCase().includes(cleanPhoneSearch);
-        const phoneMatch = c.phone && (c.phone.includes(cleanPhoneSearch) || (phoneSearchDigits && c.phone.replace(/\D/g, '').includes(phoneSearchDigits)));
-        return nameMatch || phoneMatch;
-      }).slice(0, 10)
+      const nameMatch = c.name && c.name.toLowerCase().includes(cleanPhoneSearch);
+      const phoneMatch = c.phone && (c.phone.includes(cleanPhoneSearch) || (phoneSearchDigits && c.phone.replace(/\D/g, '').includes(phoneSearchDigits)));
+      return nameMatch || phoneMatch;
+    }).slice(0, 10)
     : [];
 
   const cleanDirSearch = directorySearch.trim().toLowerCase();
@@ -1220,15 +1257,14 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                 type="button"
                 onClick={onViewQuota}
                 title={`${quota.planName || 'Monthly'} Quota: ${quota.remaining} of ${quota.monthlyLimit} messages left. Click to view plan details & usage.`}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all hover:scale-[1.02] ${
-                  (quota.isUnlimited || quota.plan === 'pro')
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all hover:scale-[1.02] ${(quota.isUnlimited || quota.plan === 'pro')
                     ? 'bg-purple-500/10 dark:bg-purple-500/20 border-purple-500/30 text-purple-700 dark:text-purple-300'
                     : quota.remaining <= 0
-                    ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-400'
-                    : quota.remaining <= 10
-                    ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40 text-amber-700 dark:text-amber-400'
-                    : 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-400'
-                }`}
+                      ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/50 text-rose-700 dark:text-rose-400'
+                      : quota.remaining <= 10
+                        ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40 text-amber-700 dark:text-amber-400'
+                        : 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-400'
+                  }`}
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
@@ -1237,8 +1273,8 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                   {(quota.isUnlimited || quota.plan === 'pro')
                     ? '👑 Pro Plan: Unlimited Messages'
                     : quota.remaining <= 0
-                    ? `Monthly Quota: Full (0/${quota.monthlyLimit})`
-                    : `Monthly Quota: ${quota.remaining}/${quota.monthlyLimit} Left`}
+                      ? `Monthly Quota: Full (0/${quota.monthlyLimit})`
+                      : `Monthly Quota: ${quota.remaining}/${quota.monthlyLimit} Left`}
                 </span>
                 <svg className="w-3 h-3 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
@@ -1252,7 +1288,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                   setShowDirectory(true);
                   loadContactsList();
                 }}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-wa-teal/30 bg-wa-teal/10 px-3 py-2 sm:py-1.5 text-xs font-semibold text-wa-teal hover:bg-wa-teal/20 backdrop-blur-xs transition-colors focus:outline-none"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-wa-teal bg-wa-teal/10 px-3 py-2 sm:py-1.5 text-xs font-semibold text-[#12b5a2] hover:bg-wa-teal/20 backdrop-blur-xs transition-colors focus:outline-none"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
@@ -1364,9 +1400,8 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                           type="button"
                           onClick={() => !alreadyAdded && handleSelectSuggestion(c)}
                           disabled={alreadyAdded}
-                          className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between transition-colors ${
-                            alreadyAdded ? 'opacity-50 cursor-not-allowed bg-gray-50 dark:bg-wa-dsurf/30' : 'hover:bg-teal-50 dark:hover:bg-wa-dsurf'
-                          }`}
+                          className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between transition-colors ${alreadyAdded ? 'opacity-50 cursor-not-allowed bg-gray-50 dark:bg-wa-dsurf/30' : 'hover:bg-teal-50 dark:hover:bg-wa-dsurf'
+                            }`}
                         >
                           <span className="flex flex-col">
                             <span className="font-semibold text-gray-800 dark:text-wa-dtext flex items-center gap-1.5">
@@ -1404,11 +1439,10 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
               {recipients.map(r => (
                 <span
                   key={r.phone}
-                  className={`inline-flex items-center gap-2 pl-3 pr-2 py-1 rounded-full text-xs font-medium border shadow-2xs transition-all ${
-                    r.isGroup
+                  className={`inline-flex items-center gap-2 pl-3 pr-2 py-1 rounded-full text-xs font-medium border shadow-2xs transition-all ${r.isGroup
                       ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 border-purple-200/80 dark:border-purple-800/60'
                       : 'bg-white dark:bg-wa-dpanel text-slate-800 dark:text-slate-100 border-slate-300 dark:border-wa-dbdr'
-                  }`}
+                    }`}
                 >
                   <span className="text-[11px] opacity-75">{r.isGroup ? '👥' : '👤'}</span>
                   <span className="max-w-[150px] truncate font-semibold">
@@ -1453,7 +1487,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
             {contactExists && phone && (
               <span className="text-xs bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-medium flex items-center gap-1 border border-green-200/50 dark:border-green-900/30">
                 <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"/>
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                 </svg>
                 {contactName || `+${getFullPhone(countryCode, phone)}`}
                 {!contactName && ' ✓ Valid'}
@@ -1478,8 +1512,8 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                 pollData
                   ? "Add an optional message or note for your poll..."
                   : attachedMediaList.length > 0
-                  ? "Add an optional caption for your media..."
-                  : "Type your message here… (e.g: Happy birthday 🎉)"
+                    ? "Add an optional caption for your media..."
+                    : "Type your message here… (e.g: Happy birthday 🎉)"
               }
               rows={4}
               required={attachedMediaList.length === 0 && !pollData}
@@ -1751,7 +1785,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                     title="Insert emoji"
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                       <path strokeLinecap="round" strokeLinejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </button>
 
@@ -1790,11 +1824,10 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                       <button
                         type="button"
                         onClick={() => setShowAttachmentMenu(prev => !prev)}
-                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                          attachedMediaList.length > 0
+                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${attachedMediaList.length > 0
                             ? 'text-wa-teal dark:text-wa-green bg-emerald-100/70 dark:bg-emerald-950/60 ring-1 ring-emerald-400/40'
                             : 'text-gray-400 hover:text-wa-teal dark:text-wa-dmuted dark:hover:text-wa-green hover:bg-gray-200 dark:hover:bg-wa-dsurf'
-                        }`}
+                          }`}
                         title="Attach Media or Document"
                       >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1902,11 +1935,10 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                         setMediaPickerTab('gif');
                         setShowMediaPicker(true);
                       }}
-                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                        attachedMediaList.some(m => m.type === 'gif')
+                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${attachedMediaList.some(m => m.type === 'gif')
                           ? 'text-violet-600 dark:text-violet-400 bg-violet-100/70 dark:bg-violet-950/60 ring-1 ring-violet-400/40'
                           : 'text-gray-400 hover:text-violet-500 dark:text-wa-dmuted dark:hover:text-violet-400 hover:bg-gray-200 dark:hover:bg-wa-dsurf'
-                      }`}
+                        }`}
                       title="Search & Attach WhatsApp GIF"
                     >
                       <WhatsAppGifIcon className="w-5 h-5" />
@@ -1919,11 +1951,10 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                         setMediaPickerTab('sticker');
                         setShowMediaPicker(true);
                       }}
-                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                        attachedMediaList.some(m => m.type === 'sticker')
+                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${attachedMediaList.some(m => m.type === 'sticker')
                           ? 'text-pink-600 dark:text-pink-400 bg-pink-100/70 dark:bg-pink-950/60 ring-1 ring-pink-400/40'
                           : 'text-gray-400 hover:text-pink-500 dark:text-wa-dmuted dark:hover:text-pink-400 hover:bg-gray-200 dark:hover:bg-wa-dsurf'
-                      }`}
+                        }`}
                       title="Search & Attach WhatsApp Sticker"
                     >
                       <WhatsAppStickerIcon className="w-5 h-5" />
@@ -1933,11 +1964,10 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                     <button
                       type="button"
                       onClick={() => setShowPollModal(true)}
-                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                        pollData
+                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${pollData
                           ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-100/70 dark:bg-emerald-950/60 ring-1 ring-emerald-400/40'
                           : 'text-gray-400 hover:text-emerald-500 dark:text-wa-dmuted dark:hover:text-emerald-400 hover:bg-gray-200 dark:hover:bg-wa-dsurf'
-                      }`}
+                        }`}
                       title={pollData ? "Edit WhatsApp Poll" : "Create WhatsApp Poll"}
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -2134,24 +2164,24 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
             activeGalleryFolder === 'image'
               ? '📷 Photos & Images Gallery'
               : activeGalleryFolder === 'video'
-              ? '🎥 Videos Gallery'
-              : activeGalleryFolder === 'audio'
-              ? '🎵 Audio Files'
-              : activeGalleryFolder === 'document'
-              ? '📄 Documents (Original Uncompressed Quality)'
-              : '🏷️ Stickers & GIFs'
+                ? '🎥 Videos Gallery'
+                : activeGalleryFolder === 'audio'
+                  ? '🎵 Audio Files'
+                  : activeGalleryFolder === 'document'
+                    ? '📄 Documents (Original Uncompressed Quality)'
+                    : '🏷️ Stickers & GIFs'
           }
           category={activeGalleryFolder || 'all'}
           items={
             activeGalleryFolder === 'image'
               ? imagesList
               : activeGalleryFolder === 'video'
-              ? videosList
-              : activeGalleryFolder === 'audio'
-              ? audiosList
-              : activeGalleryFolder === 'document'
-              ? documentsList
-              : stickersGifsList
+                ? videosList
+                : activeGalleryFolder === 'audio'
+                  ? audiosList
+                  : activeGalleryFolder === 'document'
+                    ? documentsList
+                    : stickersGifsList
           }
           onRemoveItem={handleRemoveMediaItem}
           onClearCategory={() => handleClearCategory(activeGalleryFolder)}
@@ -2208,7 +2238,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
         <div className="fixed inset-0 z-50 flex justify-end overflow-hidden">
           {/* Backdrop overlay */}
           <div className="absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity" onClick={() => setShowDirectory(false)} />
-          
+
           {/* Drawer Panel */}
           <div className="relative w-full max-w-sm sm:max-w-md h-full bg-white dark:bg-wa-dpanel shadow-2xl border-l border-slate-200 dark:border-wa-dbdr flex flex-col z-10 animate-slide-in">
             {/* Drawer Header */}
@@ -2294,16 +2324,15 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                         handleGoogleSync();
                       }}
                       disabled={isGoogleLimitReached}
-                      className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-xs font-semibold rounded-lg transition-colors ${
-                        isGoogleLimitReached
+                      className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-xs font-semibold rounded-lg transition-colors ${isGoogleLimitReached
                           ? 'text-gray-400 dark:text-wa-dmuted bg-gray-50/70 dark:bg-wa-dsurf/40 cursor-not-allowed opacity-60'
                           : 'text-gray-700 dark:text-wa-dtext hover:bg-slate-50 dark:hover:bg-wa-dsurf'
-                      }`}
+                        }`}
                       title={
                         isGoogleLimitReached
                           ? (isFreePlan
-                              ? 'Free plan allows 1 Google Account. Disconnect current account or upgrade to add another.'
-                              : 'Maximum 2 Google Accounts reached. Disconnect one to add another.')
+                            ? 'Free plan allows 1 Google Account. Disconnect current account or upgrade to add another.'
+                            : 'Maximum 2 Google Accounts reached. Disconnect one to add another.')
                           : 'Sync Google Contacts'
                       }
                     >
@@ -2373,7 +2402,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                 )}
               </div>
             </div>
-            
+
             {/* Search Input */}
             <div className="p-4 pb-2 bg-slate-50/20 dark:bg-transparent">
               <div className="relative">
@@ -2420,7 +2449,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                 Groups ({contactsList.groups?.length || 0})
               </button>
             </div>
-            
+
             {/* Scrollable list */}
             <div className="flex-1 overflow-y-auto custom-scroll divide-y divide-slate-100 dark:divide-wa-dbdr/40 p-2">
               {loadingContacts ? (
@@ -2438,7 +2467,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                   const isGroup = Boolean(c.type === 'group' || c.isGroup || c.is_group || String(c.phone || '').endsWith('@g.us'));
                   const contactNameDisplay = c.name || (isGroup ? c.phone : `+${c.phone}`);
                   const hasName = Boolean(c.name);
-                  
+
                   // Simple source pill styling
                   const isVcf = c.source === 'import_vcf';
                   const isCsv = c.source === 'import_csv';
@@ -2447,23 +2476,23 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                   const badgeCls = isVcf
                     ? 'bg-blue-50 dark:bg-blue-950/20 text-blue-600 border border-blue-100/50'
                     : isCsv
-                    ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 border border-indigo-100/50'
-                    : isLive
-                    ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 border border-emerald-100/50'
-                    : isGroupSource
-                    ? 'bg-purple-50 dark:bg-purple-950/20 text-purple-600 border border-purple-100/50'
-                    : 'bg-slate-50 dark:bg-wa-dsurf text-gray-600';
-                  
+                      ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 border border-indigo-100/50'
+                      : isLive
+                        ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 border border-emerald-100/50'
+                        : isGroupSource
+                          ? 'bg-purple-50 dark:bg-purple-950/20 text-purple-600 border border-purple-100/50'
+                          : 'bg-slate-50 dark:bg-wa-dsurf text-gray-600';
+
                   const sourceLabel = isVcf
                     ? 'VCF Import'
                     : isCsv
-                    ? 'CSV Import'
-                    : isLive
-                    ? 'WhatsApp Live'
-                    : isGroupSource
-                    ? 'Group Sync'
-                    : c.source || 'WhatsApp';
-                  
+                      ? 'CSV Import'
+                      : isLive
+                        ? 'WhatsApp Live'
+                        : isGroupSource
+                          ? 'Group Sync'
+                          : c.source || 'WhatsApp';
+
                   const rawTarget = isGroup ? (c.phone || c.jid) : (c.phone || '').replace(/\D/g, '');
                   const isSelected = recipients.some(r => r.phone === rawTarget);
 
@@ -2472,19 +2501,17 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                       key={c.phone + '-' + c.jid}
                       type="button"
                       onClick={() => handleSelectContactFromDirectory(c)}
-                      className={`w-full text-left px-4 py-3.5 rounded-xl flex items-center justify-between gap-3 transition-all group border-b ${
-                        isSelected
+                      className={`w-full text-left px-4 py-3.5 rounded-xl flex items-center justify-between gap-3 transition-all group border-b ${isSelected
                           ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/40'
                           : 'hover:bg-emerald-500/5 dark:hover:bg-emerald-500/10 border-slate-100/50 dark:border-wa-dbdr/20'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         {/* Initial/Avatar */}
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 border ${
-                          isSelected
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 border ${isSelected
                             ? 'bg-emerald-500 text-white border-emerald-600'
                             : 'bg-emerald-500/10 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                        }`}>
+                          }`}>
                           {isSelected ? '✓' : (hasName ? c.name.charAt(0).toUpperCase() : '#')}
                         </div>
                         <div className="min-w-0">

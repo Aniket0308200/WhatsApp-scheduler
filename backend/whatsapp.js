@@ -1442,38 +1442,51 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
 
       if (typeof mediaData === 'string' && (mediaData.startsWith('http://') || mediaData.startsWith('https://'))) {
         const axios = require('axios');
-        const res = await axios.get(mediaData, { responseType: 'arraybuffer', timeout: 20000 });
+        const res = await axios.get(mediaData, { responseType: 'arraybuffer', timeout: 30000 });
         buffer = Buffer.from(res.data);
         detectedMime = res.headers['content-type'] || null;
       } else if (typeof mediaData === 'string' && mediaData.startsWith('data:')) {
-        const match = mediaData.match(/^data:([^;]+);base64,(.+)$/);
-        if (match) {
-          detectedMime = match[1];
-          buffer = Buffer.from(match[2], 'base64');
+        const commaIdx = mediaData.indexOf(',');
+        if (commaIdx !== -1) {
+          const header = mediaData.slice(0, commaIdx);
+          const mimeMatch = header.match(/data:([^;]+)/);
+          if (mimeMatch) {
+            detectedMime = mimeMatch[1].trim();
+          }
+          const rawBase64 = mediaData.slice(commaIdx + 1).replace(/\s+/g, '');
+          buffer = Buffer.from(rawBase64, 'base64');
         } else {
-          const parts = mediaData.split(',');
-          buffer = Buffer.from(parts[1] || parts[0], 'base64');
+          buffer = Buffer.from(mediaData.replace(/\s+/g, ''), 'base64');
         }
       } else if (Buffer.isBuffer(mediaData)) {
         buffer = mediaData;
       } else if (typeof mediaData === 'string') {
-        buffer = Buffer.from(mediaData, 'base64');
+        buffer = Buffer.from(mediaData.replace(/\s+/g, ''), 'base64');
+      }
+
+      if (!buffer || buffer.length === 0) {
+        throw new Error(`Media buffer for ${mediaType} could not be parsed.`);
       }
 
       if (mediaType === 'image') {
+        let imgMime = detectedMime || 'image/jpeg';
+        if (mediaName && mediaName.toLowerCase().endsWith('.png')) imgMime = 'image/png';
+        else if (mediaName && mediaName.toLowerCase().endsWith('.webp')) imgMime = 'image/webp';
+        else if (mediaName && (mediaName.toLowerCase().endsWith('.jpg') || mediaName.toLowerCase().endsWith('.jpeg'))) imgMime = 'image/jpeg';
+
         messagePayload = {
           image: buffer,
           caption: text || '',
-          mimetype: detectedMime || 'image/jpeg'
+          mimetype: imgMime
         };
       } else if (mediaType === 'video') {
         messagePayload = {
           video: buffer,
           caption: text || '',
-          mimetype: detectedMime || 'video/mp4'
+          mimetype: 'video/mp4'
         };
       } else if (mediaType === 'audio') {
-        let audioMime = detectedMime || 'audio/mpeg';
+        let audioMime = detectedMime || 'audio/mp4';
         if (mediaName && mediaName.toLowerCase().endsWith('.mp3')) audioMime = 'audio/mpeg';
         else if (mediaName && mediaName.toLowerCase().endsWith('.ogg')) audioMime = 'audio/ogg; codecs=opus';
         else if (mediaName && (mediaName.toLowerCase().endsWith('.m4a') || mediaName.toLowerCase().endsWith('.mp4'))) audioMime = 'audio/mp4';
