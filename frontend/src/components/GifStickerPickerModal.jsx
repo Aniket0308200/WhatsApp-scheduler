@@ -83,7 +83,7 @@ export function convertImageFileToWebpSticker(file) {
         const canvas = document.createElement('canvas');
         canvas.width = 512;
         canvas.height = 512;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx) return reject(new Error('Canvas context unavailable'));
 
         ctx.clearRect(0, 0, 512, 512);
@@ -118,7 +118,7 @@ export function convertImageUrlToWebpSticker(imageUrl) {
         const canvas = document.createElement('canvas');
         canvas.width = 512;
         canvas.height = 512;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx) return resolve(imageUrl);
 
         ctx.clearRect(0, 0, 512, 512);

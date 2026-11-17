@@ -254,7 +254,7 @@ export default function MediaEditorModal({
   const redrawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas || !imageElementRef.current) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const img = imageElementRef.current;
 
     canvas.width = img.naturalWidth || 1080;
@@ -720,7 +720,7 @@ export default function MediaEditorModal({
       const baseCanvas = canvasRef.current;
       bakeCanvas.width = baseCanvas.width;
       bakeCanvas.height = baseCanvas.height;
-      const ctx = bakeCanvas.getContext('2d');
+      const ctx = bakeCanvas.getContext('2d', { willReadFrequently: true });
 
       // 1. Draw base photo + freehand strokes
       ctx.drawImage(baseCanvas, 0, 0);

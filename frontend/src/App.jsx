@@ -197,26 +197,26 @@ export default function App() {
     }
   }, [authUser, activeView, location.pathname, refreshMessages, refreshQuota]);
 
-  // Adaptive background polling ONLY if there are pending messages
+  // Adaptive background polling: Fast (4s) when messages are pending or processing,
+  // stops when completed so zero idle server load.
   useEffect(() => {
     const isAdminOrStatic = location.pathname.startsWith('/admin') ||
       location.pathname.startsWith('/privacy-policy') ||
       location.pathname.startsWith('/terms-of-service');
 
-    if (isAdminOrStatic || !authUser) return;
+    if (isAdminOrStatic) return;
 
-    const hasPending = messages.some(m => m.status === 'pending');
-    if (!hasPending) return;
+    const hasActiveMessages = messages.some(m => m.status === 'pending' || m.status === 'processing');
+    if (!hasActiveMessages) return;
 
-    // Only check every 25s if there is actually a pending message waiting to be sent
-    const pendingTimer = setInterval(() => {
+    const activeTimer = setInterval(() => {
       if (!document.hidden) {
         refreshMessages();
       }
-    }, 25_000);
+    }, 4_000);
 
-    return () => clearInterval(pendingTimer);
-  }, [messages, authUser, location.pathname, refreshMessages]);
+    return () => clearInterval(activeTimer);
+  }, [messages, location.pathname, refreshMessages]);
 
   // Tab visibility change: silently refresh once when user switches back to this tab
   useEffect(() => {

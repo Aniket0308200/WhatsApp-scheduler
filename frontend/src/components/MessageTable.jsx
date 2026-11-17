@@ -420,8 +420,15 @@ export default function MessageTable({ messages, loading, onRefresh, plan = 'fre
                     </td>
 
                     {/* Scheduled at */}
-                    <td className="px-5 py-3.5 whitespace-nowrap text-gray-500 dark:text-wa-dmuted text-xs">
-                      {formatDate(msg.scheduled_at)}
+                    <td className="px-5 py-3.5 whitespace-nowrap text-xs">
+                      <div className="font-medium text-gray-700 dark:text-wa-dtext">
+                        {formatDate(msg.scheduled_at)}
+                      </div>
+                      {msg.status === 'pending' && (
+                        <div className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold mt-0.5">
+                          ⏳ Scheduled
+                        </div>
+                      )}
                     </td>
 
                     {/* Status */}

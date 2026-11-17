@@ -778,7 +778,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
               const canvas = document.createElement('canvas');
               canvas.width = w;
               canvas.height = h;
-              const ctx = canvas.getContext('2d');
+              const ctx = canvas.getContext('2d', { willReadFrequently: true });
               ctx.drawImage(img, 0, 0, w, h);
               processItem(canvas.toDataURL('image/jpeg', 0.88));
             };
@@ -1157,39 +1157,30 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
 
     const utcISO = zonedTimeToUtc(scheduledAt, selectedTimeZone).toISOString();
     setLoading(true);
-    let successCount = 0;
-    let failCount = 0;
-    const errors = [];
 
     try {
-      for (const recipient of finalRecipients) {
-        try {
-          await scheduleMessage({
-            phone: recipient.phone,
-            message: message.trim(),
-            scheduledAt: utcISO,
-            recipientName: recipient.name,
-            mediaType: attachedMediaList.length === 1 ? attachedMediaList[0].type : attachedMediaList.length > 1 ? 'multiple' : (pollData ? 'poll' : null),
-            mediaData: attachedMediaList.length === 1 ? attachedMediaList[0].data : null,
-            mediaName: attachedMediaList.length === 1 ? attachedMediaList[0].name : attachedMediaList.length > 1 ? `${attachedMediaList.length} items` : null,
-            mediaList: attachedMediaList,
-            pollData: pollData || null
-          });
-          successCount++;
-        } catch (err) {
-          failCount++;
-          errors.push(err.response?.data?.error || err.message);
-        }
-      }
+      // Send single batch request with all recipients — media files are uploaded ONLY ONCE!
+      const payload = {
+        recipients: finalRecipients.map(r => ({
+          phone: r.phone,
+          name: r.name,
+          isGroup: r.isGroup
+        })),
+        phone: finalRecipients[0]?.phone,
+        recipientName: finalRecipients[0]?.name,
+        message: message.trim(),
+        scheduledAt: utcISO,
+        mediaType: attachedMediaList.length === 1 ? attachedMediaList[0].type : attachedMediaList.length > 1 ? 'multiple' : (pollData ? 'poll' : null),
+        mediaData: attachedMediaList.length === 1 ? attachedMediaList[0].data : null,
+        mediaName: attachedMediaList.length === 1 ? attachedMediaList[0].name : attachedMediaList.length > 1 ? `${attachedMediaList.length} items` : null,
+        mediaList: attachedMediaList,
+        pollData: pollData || null
+      };
 
-      if (successCount > 0 && failCount === 0) {
-        toast.success(successCount === 1 ? 'Message scheduled!' : `${successCount} messages scheduled!`);
-      } else if (successCount > 0 && failCount > 0) {
-        toast.success(`${successCount} scheduled, ${failCount} failed.`);
-      } else {
-        toast.error(errors[0] || 'All scheduled messages failed.');
-        return;
-      }
+      const res = await scheduleMessage(payload);
+      const totalScheduled = res?.count || finalRecipients.length;
+
+      toast.success(totalScheduled === 1 ? 'Message scheduled successfully!' : `${totalScheduled} messages scheduled successfully!`);
 
       // Reset form
       setPhone('');
@@ -1202,11 +1193,12 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       setContactExists(false);
       setRecipients([]);
 
-      // Trigger instant refresh and auto-followup refresh
+      // Trigger instant refresh and auto-followup refreshes
       onScheduled?.();
+      setTimeout(() => onScheduled?.(), 400);
       setTimeout(() => onScheduled?.(), 1500);
     } catch (err) {
-      toast.error(err.response?.data?.error || err.message);
+      toast.error(err.response?.data?.error || err.message || 'Failed to schedule message.');
     } finally {
       setLoading(false);
     }

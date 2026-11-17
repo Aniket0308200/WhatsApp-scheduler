@@ -729,10 +729,11 @@ app.get('/api/messages', async (req, res) => {
 
 /**
  * POST /api/messages
- * Body: { phone, message, scheduledAt, recipientName? }
+ * Body: { phone?, recipientName?, recipients?, message, scheduledAt, mediaType?, mediaData?, mediaName?, mediaList?, pollData?, mentions? }
+ * Supports single recipient (phone) or batch recipients (recipients array) with single-upload media offloading.
  */
 app.post('/api/messages', async (req, res) => {
-  const { phone, message, scheduledAt, recipientName, mediaType, mediaData, mediaName, mediaList, pollData, mentions } = req.body;
+  const { phone, message, scheduledAt, recipientName, mediaType, mediaData, mediaName, mediaList, pollData, mentions, recipients } = req.body;
 
   const status = whatsapp.getStatus(req.sessionId);
   const profile = whatsapp.getConnectedProfile(req.sessionId);
@@ -760,20 +761,58 @@ app.post('/api/messages', async (req, res) => {
     } catch (e) {}
   }
 
-  let targetPhone = phone;
-  const isStatus = phone === 'status@broadcast' || phone === 'status' || phone === '__status__';
-  const isGroup = phone && phone.endsWith('@g.us');
-
-  if (isStatus) {
-    targetPhone = 'status@broadcast';
-  } else if (isGroup) {
-    if (!/^\d+@g\.us$/.test(phone)) {
-      return res.status(400).json({ error: 'Invalid group JID.' });
-    }
+  // Normalize recipient list: batch recipients array OR single phone
+  let rawRecipients = [];
+  if (Array.isArray(recipients) && recipients.length > 0) {
+    rawRecipients = recipients;
+  } else if (phone) {
+    rawRecipients = [{ phone, name: recipientName }];
   } else {
-    if (!phone || !/^\d{7,15}$/.test(phone.replace(/\D/g, ''))) {
-      return res.status(400).json({ error: 'Invalid phone number (digits only, 7–15 chars).' });
+    return res.status(400).json({ error: 'At least one recipient is required.' });
+  }
+
+  // Validate recipients (supports personal numbers, status@broadcast, and all WhatsApp group JID formats)
+  const validatedRecipients = [];
+  for (const r of rawRecipients) {
+    const rawP = String(r.phone || '').trim();
+    if (!rawP) continue;
+    const isStatus = rawP === 'status@broadcast' || rawP === 'status' || rawP === '__status__';
+    const isGroup = rawP.endsWith('@g.us');
+
+    if (isStatus) {
+      validatedRecipients.push({
+        phone: 'status@broadcast',
+        name: r.name ? String(r.name).trim().slice(0, 100) : 'WhatsApp Status (Story)',
+        isStatus: true,
+        isGroup: false
+      });
+    } else if (isGroup) {
+      // Validate group JID: ends with @g.us and has sufficient identifier length
+      if (rawP.length < 5) {
+        return res.status(400).json({ error: `Invalid group JID: ${rawP}` });
+      }
+      validatedRecipients.push({
+        phone: rawP,
+        name: r.name ? String(r.name).trim().slice(0, 100) : null,
+        isStatus: false,
+        isGroup: true
+      });
+    } else {
+      const cleanDigits = rawP.replace(/\D/g, '');
+      if (cleanDigits.length < 7 || cleanDigits.length > 15) {
+        return res.status(400).json({ error: `Invalid phone number: ${rawP} (must be 7–15 digits).` });
+      }
+      validatedRecipients.push({
+        phone: cleanDigits,
+        name: r.name ? String(r.name).trim().slice(0, 100) : null,
+        isStatus: false,
+        isGroup: false
+      });
     }
+  }
+
+  if (validatedRecipients.length === 0) {
+    return res.status(400).json({ error: 'At least one valid recipient is required.' });
   }
 
   // If there's no media and no poll, message cannot be empty. If media or poll is attached, caption (message) is optional.
@@ -803,19 +842,19 @@ app.post('/api/messages', async (req, res) => {
   }
 
   try {
-    // ─── Enforce Monthly Message Limit (50 for Free, 250 for Starter, 1000 for Pro) ───
+    // ─── Enforce Monthly Message Limit (50 for Free, 250 for Starter, Unlimited for Pro) ───
     const quota = await db.getUserMonthlyQuota(req.sessionId);
     const isPro = quota && (quota.plan === 'pro' || quota.isUnlimited);
-    if (!isPro && quota && typeof quota.remaining === 'number' && quota.remaining <= 0) {
+    if (!isPro && quota && typeof quota.remaining === 'number' && quota.remaining < validatedRecipients.length) {
       return res.status(403).json({
-        error: `Monthly quota reached (${quota.monthlyLimit}/${quota.monthlyLimit} scheduled messages used for ${quota.monthName}). Your quota resets on ${quota.resetsOnFormatted}. Upgrade your plan for higher limits.`,
+        error: `Not enough monthly quota. You have ${quota.remaining} message(s) left but are trying to schedule to ${validatedRecipients.length} recipients. Your quota resets on ${quota.resetsOnFormatted}. Upgrade your plan for higher limits.`,
         quotaExceeded: true,
         quota
       });
     }
 
     // Media & Sticker is an exclusive feature for Starter & Pro plans (Status stories exempt)
-    if (hasMedia && !isStatus) {
+    if (hasMedia && !validatedRecipients.every(r => r.isStatus)) {
       const userPlan = (quota?.plan || 'free').toLowerCase();
       if (userPlan === 'free') {
         return res.status(403).json({
@@ -828,16 +867,6 @@ app.post('/api/messages', async (req, res) => {
     const senderPhone = await getSenderPhoneFromSession(req);
     if (!senderPhone) {
       return res.status(400).json({ error: 'Connected WhatsApp number could not be identified.' });
-    }
-    const cleanPhone = isStatus ? 'status@broadcast' : (isGroup ? targetPhone : targetPhone.replace(/\D/g, ''));
-    let cleanName  = recipientName ? String(recipientName).trim().slice(0, 100) : (isStatus ? 'WhatsApp Status (Story)' : null);
-
-    if (!cleanName) {
-      try {
-        cleanName = whatsapp.getContactNameSync(req.sessionId, cleanPhone) || await whatsapp.getContactName(req.sessionId, cleanPhone);
-      } catch (e) {
-        console.error('[Server] Could not auto-resolve name:', e.message);
-      }
     }
 
     // Prepare standardized mediaList and primary media metadata
@@ -867,31 +896,78 @@ app.post('/api/messages', async (req, res) => {
       finalMediaType = 'poll';
     }
 
-    const id = await db.insertMessage(
-      req.sessionId,
-      cleanPhone,
-      message ? message.trim() : '',
-      schedDate,
-      cleanName,
-      finalMediaType,
-      finalMediaData,
-      finalMediaName,
-      finalMediaList,
-      hasPoll ? pollData : null,
-      Array.isArray(mentions) ? mentions : []
-    );
+    // Offload media to VPS disk ONCE so all batch recipients share the same file without redundant disk writes!
+    const { saveMediaToDisk } = require('./mediaStorage');
+    if (finalMediaData) {
+      finalMediaData = await saveMediaToDisk(finalMediaData, finalMediaName, finalMediaType);
+    }
+    if (Array.isArray(finalMediaList) && finalMediaList.length > 0) {
+      finalMediaList = await Promise.all(finalMediaList.map(async (item) => {
+        let itemData = item.data;
+        if (itemData) {
+          itemData = await saveMediaToDisk(itemData, item.name, item.type);
+        }
+        return {
+          id: item.id || String(Date.now()),
+          type: item.type,
+          data: itemData,
+          name: item.name || null,
+          size: item.size || null,
+          preview: null
+        };
+      }));
+    }
+
+    // Create scheduled messages for all recipients
+    const createdMessages = [];
+    for (const r of validatedRecipients) {
+      let cleanName = r.name;
+      if (!cleanName && !r.isStatus) {
+        try {
+          cleanName = whatsapp.getContactNameSync(req.sessionId, r.phone) || await whatsapp.getContactName(req.sessionId, r.phone);
+        } catch (_) {}
+      }
+
+      const id = await db.insertMessage(
+        req.sessionId,
+        r.phone,
+        message ? message.trim() : '',
+        schedDate,
+        cleanName,
+        finalMediaType,
+        finalMediaData,
+        finalMediaName,
+        finalMediaList,
+        hasPoll ? pollData : null,
+        Array.isArray(mentions) ? mentions : []
+      );
+
+      createdMessages.push({
+        id,
+        phone:          r.phone,
+        recipient_name: cleanName,
+        message:        message ? message.trim() : '',
+        mediaType:      finalMediaType,
+        mediaName:      finalMediaName,
+        scheduled_at:   db.toSqliteUtc(schedDate),
+        status:         'pending',
+      });
+    }
 
     res.status(201).json({
-      id,
-      phone:          cleanPhone,
-      recipient_name: cleanName,
-      message:        message ? message.trim() : '',
-      mediaType:      finalMediaType,
-      mediaName:      finalMediaName,
-      mediaList:      finalMediaList,
-      pollData:       hasPoll ? pollData : null,
-      scheduled_at:   db.toSqliteUtc(schedDate),
-      status:         'pending',
+      success: true,
+      count: createdMessages.length,
+      id: createdMessages[0]?.id,
+      phone: createdMessages[0]?.phone,
+      recipient_name: createdMessages[0]?.recipient_name,
+      message: message ? message.trim() : '',
+      mediaType: finalMediaType,
+      mediaName: finalMediaName,
+      mediaList: finalMediaList,
+      pollData: hasPoll ? pollData : null,
+      scheduled_at: db.toSqliteUtc(schedDate),
+      status: 'pending',
+      messages: createdMessages
     });
 
     // High-performance trigger: If the message is due now (or within 5 seconds),
@@ -905,6 +981,7 @@ app.post('/api/messages', async (req, res) => {
       });
     }
   } catch (err) {
+    console.error('[Schedule Error]', err);
     res.status(500).json({ error: err.message });
   }
 });
