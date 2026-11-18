@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import LandingPage from './components/LandingPage';
 import AuthModal from './components/AuthModal';
 import PaymentModal from './components/PaymentModal';
+import SubscriptionExpiredModal from './components/SubscriptionExpiredModal';
 import AdminPanel from './components/AdminPanel';
 
 const POLL_INTERVAL_DISCONNECTED = 6_000;  // fast poll when waiting for QR/connection
@@ -54,6 +55,9 @@ export default function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedUpgradePlan, setSelectedUpgradePlan] = useState('starter');
+  const [selectedUpgradeCycle, setSelectedUpgradeCycle] = useState('monthly');
+  const [showExpiredModal, setShowExpiredModal] = useState(false);
+  const [hasShownExpiredPopup, setHasShownExpiredPopup] = useState(false);
   const [pendingUpgradePlan, setPendingUpgradePlan] = useState(() => {
     try {
       return localStorage.getItem('wa_pending_upgrade_plan');
@@ -102,6 +106,14 @@ export default function App() {
       setLoadingQuota(false);
     }
   }, []);
+
+  // Show Subscription Expired modal if user quota reports expired status
+  useEffect(() => {
+    if (quota?.isExpired && !hasShownExpiredPopup) {
+      setShowExpiredModal(true);
+      setHasShownExpiredPopup(true);
+    }
+  }, [quota?.isExpired, hasShownExpiredPopup]);
 
   const refreshMessages = useCallback(async () => {
     if (document.hidden) return;
@@ -264,12 +276,14 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleUpgradePlan = (planKey = 'starter') => {
+  const handleUpgradePlan = (planKey = 'starter', cycle = 'monthly') => {
     const targetPlan = planKey === 'pro' ? 'pro' : 'starter';
+    const targetCycle = cycle === 'yearly' ? 'yearly' : 'monthly';
     if (!authUser) {
       // 1. Authentication & Routing Guard
       try {
         localStorage.setItem('wa_pending_upgrade_plan', targetPlan);
+        localStorage.setItem('wa_pending_upgrade_cycle', targetCycle);
       } catch (e) {}
       setPendingUpgradePlan(targetPlan);
       setShowAuthModal(true);
@@ -278,6 +292,7 @@ export default function App() {
     }
 
     setSelectedUpgradePlan(targetPlan);
+    setSelectedUpgradeCycle(targetCycle);
     setShowPaymentModal(true);
   };
 
@@ -457,14 +472,18 @@ export default function App() {
           setShowAuthModal(false);
 
           let target = pendingUpgradePlan;
+          let targetCycle = 'monthly';
           try {
             if (!target) target = localStorage.getItem('wa_pending_upgrade_plan');
+            targetCycle = localStorage.getItem('wa_pending_upgrade_cycle') || 'monthly';
             localStorage.removeItem('wa_pending_upgrade_plan');
+            localStorage.removeItem('wa_pending_upgrade_cycle');
           } catch (e) {}
           setPendingUpgradePlan(null);
 
           if (target) {
             setSelectedUpgradePlan(target);
+            setSelectedUpgradeCycle(targetCycle);
             setShowPaymentModal(true);
             toast.success(`Signed in! Continuing to ${target === 'pro' ? 'Pro' : 'Starter'} plan upgrade…`);
           } else {
@@ -475,10 +494,23 @@ export default function App() {
         }}
       />
 
+      <SubscriptionExpiredModal
+        isOpen={showExpiredModal}
+        onClose={() => setShowExpiredModal(false)}
+        onRenew={() => {
+          setShowExpiredModal(false);
+          setSelectedUpgradePlan(quota?.previousPlan === 'pro' ? 'pro' : 'starter');
+          setSelectedUpgradeCycle(quota?.billingCycle || 'monthly');
+          setShowPaymentModal(true);
+        }}
+        quota={quota}
+      />
+
       <PaymentModal
         isOpen={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
         initialPlan={selectedUpgradePlan}
+        initialCycle={selectedUpgradeCycle}
         authUser={authUser}
         connectedPhone={profile?.phone}
         currentPlan={quota?.plan || 'free'}

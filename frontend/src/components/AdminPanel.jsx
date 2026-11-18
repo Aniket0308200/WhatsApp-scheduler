@@ -168,17 +168,18 @@ export default function AdminPanel() {
   }, [token, autoRefresh, refreshData]);
 
   // ── Handle Change Plan (Unlock/Upgrade/Downgrade) ──────────────────────────
-  const handlePlanChange = async (userId, newPlan, userName) => {
-    if (!window.confirm(`Are you sure you want to change ${userName || 'this user'}'s plan to ${newPlan.toUpperCase()}?`)) {
+  const handlePlanChange = async (userId, newPlan, billingCycle = 'monthly', userName = 'User') => {
+    const cycleLabel = newPlan === 'free' ? '' : ` (${billingCycle === 'yearly' ? 'Yearly' : 'Monthly'})`;
+    if (!window.confirm(`Are you sure you want to change ${userName}'s plan to ${newPlan.toUpperCase()}${cycleLabel}?`)) {
       return;
     }
 
     setActionLoadingId(userId);
     try {
-      await adminUpdateUserPlan(token, userId, newPlan);
-      toast.success(`Plan updated to ${newPlan.toUpperCase()} for ${userName || 'User'}!`);
+      await adminUpdateUserPlan(token, userId, newPlan, billingCycle);
+      toast.success(`Plan updated to ${newPlan.toUpperCase()}${cycleLabel} for ${userName}!`);
       // Optimistic update
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, plan: newPlan, planStatus: 'active' } : u));
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, plan: newPlan, billingCycle, planStatus: 'active' } : u));
       refreshData(true);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to update plan.');
@@ -226,12 +227,13 @@ export default function AdminPanel() {
   };
 
   // ── Handle Subscription Approve / Reject ──────────────────────────────────
-  const handleApproveSub = async (id, email, plan) => {
-    if (!window.confirm(`Approve payment and activate ${plan.toUpperCase()} for ${email}?`)) return;
+  const handleApproveSub = async (id, email, plan, billingCycle = 'monthly') => {
+    const cycleLabel = billingCycle === 'yearly' ? 'Yearly' : 'Monthly';
+    if (!window.confirm(`Approve payment and activate ${plan.toUpperCase()} (${cycleLabel}) for ${email}?`)) return;
     setActionLoadingId(id);
     try {
-      await adminApproveSubscription(token, id, 'Verified via Admin Panel');
-      toast.success(`Plan ${plan.toUpperCase()} activated for ${email}!`);
+      await adminApproveSubscription(token, id, `Verified via Admin Panel (${cycleLabel})`);
+      toast.success(`Plan ${plan.toUpperCase()} (${cycleLabel}) activated for ${email}!`);
       refreshData(true);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Approval failed.');
@@ -736,52 +738,56 @@ export default function AdminPanel() {
                             </div>
                           </td>
 
-                          {/* 4. Plan Management (Unlock / Upgrade / Downgrade) */}
+                          {/* 4. Plan Management (Unlock / Upgrade / Downgrade with Billing Cycle) */}
                           <td className="px-5 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-1.5">
-                              {/* Free */}
-                              <button
-                                type="button"
-                                disabled={isBusy || u.plan === 'free'}
-                                onClick={() => handlePlanChange(u.id, 'free', u.name)}
-                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${
-                                  u.plan === 'free'
-                                    ? 'bg-slate-700 text-white border-slate-600 shadow-xs'
-                                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white hover:bg-slate-800'
-                                }`}
-                              >
-                                Free
-                              </button>
-
-                              {/* Starter */}
-                              <button
-                                type="button"
-                                disabled={isBusy || u.plan === 'starter'}
-                                onClick={() => handlePlanChange(u.id, 'starter', u.name)}
-                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${
-                                  u.plan === 'starter'
-                                    ? 'bg-teal-600 text-white border-teal-500 shadow-xs'
-                                    : 'bg-slate-900 text-teal-400/80 border-slate-800 hover:bg-teal-950/40 hover:text-teal-300'
-                                }`}
-                                title="Unlock Starter Plan (20 contacts, 10 groups, 250 schedules)"
-                              >
-                                ⚡ Starter
-                              </button>
-
-                              {/* Pro */}
-                              <button
-                                type="button"
-                                disabled={isBusy || u.plan === 'pro'}
-                                onClick={() => handlePlanChange(u.id, 'pro', u.name)}
-                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                            <div className="space-y-1.5">
+                              {/* Current Plan Badge */}
+                              <div className="flex items-center gap-1.5">
+                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase ${
                                   u.plan === 'pro'
-                                    ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
-                                    : 'bg-slate-900 text-emerald-400/80 border-slate-800 hover:bg-emerald-950/40 hover:text-emerald-300'
-                                }`}
-                                title="Unlock Pro Plan (Unlimited contacts & groups)"
-                              >
-                                👑 Pro
-                              </button>
+                                    ? 'bg-purple-950 text-purple-300 border border-purple-800'
+                                    : u.plan === 'starter'
+                                    ? 'bg-teal-950 text-teal-300 border border-teal-800'
+                                    : 'bg-slate-800 text-slate-300 border border-slate-700'
+                                }`}>
+                                  {u.plan === 'pro' ? '👑 Pro' : u.plan === 'starter' ? '⚡ Starter' : '🌱 Free Tier'}
+                                </span>
+                                {u.plan !== 'free' && (
+                                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-slate-800 text-slate-300 border border-slate-700">
+                                    {u.billingCycle === 'yearly' ? 'Yearly' : 'Monthly'}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Expiry / Validity Status */}
+                              {u.subscriptionExpiresAt && (
+                                <div className="text-[10px] text-slate-400">
+                                  {new Date(u.subscriptionExpiresAt) < new Date() ? (
+                                    <span className="text-red-400 font-bold">⚠️ Expired: {formatDateTime(u.subscriptionExpiresAt)}</span>
+                                  ) : (
+                                    <span>Expires: {formatDateTime(u.subscriptionExpiresAt)}</span>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Quick Plan Switcher Dropdown */}
+                              <div>
+                                <select
+                                  disabled={isBusy}
+                                  value={`${u.plan}:${u.billingCycle || 'monthly'}`}
+                                  onChange={(e) => {
+                                    const [newPlan, newCycle] = e.target.value.split(':');
+                                    handlePlanChange(u.id, newPlan, newCycle, u.name);
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-slate-950 border border-slate-700 text-[10px] font-bold text-slate-300 hover:text-white outline-none focus:border-emerald-500 cursor-pointer"
+                                >
+                                  <option value="free:monthly">Set to: Free Tier</option>
+                                  <option value="starter:monthly">Set to: ⚡ Starter (Monthly - ₹199)</option>
+                                  <option value="starter:yearly">Set to: ⚡ Starter (Yearly - ₹1,999)</option>
+                                  <option value="pro:monthly">Set to: 👑 Pro (Monthly - ₹499)</option>
+                                  <option value="pro:yearly">Set to: 👑 Pro (Yearly - ₹5,000)</option>
+                                </select>
+                              </div>
                             </div>
                           </td>
 
@@ -868,9 +874,22 @@ export default function AdminPanel() {
                           </td>
 
                           <td className="px-5 py-4 whitespace-nowrap">
-                            <span className="px-2.5 py-1 rounded-lg text-[11px] font-black uppercase bg-teal-950 text-teal-300 border border-teal-800">
-                              {sub.plan}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`px-2.5 py-1 rounded-lg text-[11px] font-black uppercase ${
+                                sub.plan === 'pro'
+                                  ? 'bg-purple-950 text-purple-300 border border-purple-800'
+                                  : 'bg-teal-950 text-teal-300 border border-teal-800'
+                              }`}>
+                                {sub.plan}
+                              </span>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                sub.billingCycle === 'yearly'
+                                  ? 'bg-purple-900/60 text-purple-200 border border-purple-700'
+                                  : 'bg-slate-800 text-slate-300 border border-slate-700'
+                              }`}>
+                                {sub.billingCycle === 'yearly' ? 'Yearly' : 'Monthly'}
+                              </span>
+                            </div>
                           </td>
 
                           <td className="px-5 py-4 whitespace-nowrap">
@@ -921,7 +940,7 @@ export default function AdminPanel() {
                                 <button
                                   type="button"
                                   disabled={isBusy}
-                                  onClick={() => handleApproveSub(sub._id, sub.email, sub.plan)}
+                                  onClick={() => handleApproveSub(sub._id, sub.email, sub.plan, sub.billingCycle || 'monthly')}
                                   className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors"
                                 >
                                   ✓ Approve

@@ -152,13 +152,21 @@ export default function PricingSection({ onGetStarted, onUpgradePlan, currentPla
               {/* Price */}
               <div className="my-6">
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-4xl font-extrabold text-slate-900 dark:text-white">
-                    ₹199
-                  </span>
-                  <span className="text-sm font-semibold text-slate-500 dark:text-wa-dmuted">/ month</span>
+                  {billingCycle === 'yearly' ? (
+                    <>
+                      <span className="text-xl font-bold text-slate-400 line-through">₹2,400</span>
+                      <span className="text-4xl font-extrabold text-slate-900 dark:text-white">₹1,999</span>
+                      <span className="text-sm font-semibold text-slate-500 dark:text-wa-dmuted">/ year</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-4xl font-extrabold text-slate-900 dark:text-white">₹199</span>
+                      <span className="text-sm font-semibold text-slate-500 dark:text-wa-dmuted">/ month</span>
+                    </>
+                  )}
                 </div>
                 <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-semibold">
-                  Instant UPI Activation · Cancel anytime · Risk-free
+                  {billingCycle === 'yearly' ? '🔥 Special Offer · Save ₹401/year · Instant UPI' : 'Instant UPI Activation · Cancel anytime · Risk-free'}
                 </p>
               </div>
 
@@ -210,14 +218,14 @@ export default function PricingSection({ onGetStarted, onUpgradePlan, currentPla
             </div>
 
             <button
-              onClick={() => (onUpgradePlan ? onUpgradePlan('starter') : onGetStarted())}
+              onClick={() => (onUpgradePlan ? onUpgradePlan('starter', billingCycle) : onGetStarted())}
               className={`mt-8 w-full py-3 px-4 rounded-xl font-extrabold text-xs sm:text-sm shadow-lg shadow-emerald-500/25 active:scale-98 transition-all duration-200 focus:outline-none ${
                 currentPlan === 'starter'
                   ? 'bg-emerald-600 text-white cursor-default'
                   : 'bg-gradient-to-r from-wa-teal to-emerald-500 hover:from-emerald-600 hover:to-wa-teal text-white'
               }`}
             >
-              {currentPlan === 'starter' ? '✓ Currently Active Tier' : 'Upgrade to Starter (₹199)'}
+              {currentPlan === 'starter' ? '✓ Currently Active Tier' : `Upgrade to Starter (${billingCycle === 'yearly' ? '₹1,999/yr' : '₹199/mo'})`}
             </button>
           </div>
 
@@ -238,13 +246,21 @@ export default function PricingSection({ onGetStarted, onUpgradePlan, currentPla
               {/* Price */}
               <div className="my-6">
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-4xl font-extrabold text-slate-900 dark:text-white">
-                    ₹499
-                  </span>
-                  <span className="text-sm font-semibold text-slate-500 dark:text-wa-dmuted">/ month</span>
+                  {billingCycle === 'yearly' ? (
+                    <>
+                      <span className="text-xl font-bold text-slate-400 line-through">₹6,000</span>
+                      <span className="text-4xl font-extrabold text-slate-900 dark:text-white">₹5,000</span>
+                      <span className="text-sm font-semibold text-slate-500 dark:text-wa-dmuted">/ year</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-4xl font-extrabold text-slate-900 dark:text-white">₹499</span>
+                      <span className="text-sm font-semibold text-slate-500 dark:text-wa-dmuted">/ month</span>
+                    </>
+                  )}
                 </div>
                 <p className="text-[11px] text-purple-600 dark:text-purple-400 mt-1 font-semibold">
-                  Full Pro Suite · Priority Dispatch & 24/7 VIP Support
+                  {billingCycle === 'yearly' ? '👑 Mega Offer · Save ₹1,000/year · Full Year Unlimited' : 'Full Pro Suite · Priority Dispatch & 24/7 VIP Support'}
                 </p>
               </div>
 
@@ -294,14 +310,14 @@ export default function PricingSection({ onGetStarted, onUpgradePlan, currentPla
             </div>
 
             <button
-              onClick={() => (onUpgradePlan ? onUpgradePlan('pro') : onGetStarted())}
+              onClick={() => (onUpgradePlan ? onUpgradePlan('pro', billingCycle) : onGetStarted())}
               className={`mt-8 w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm border transition-all duration-200 focus:outline-none ${
                 currentPlan === 'pro'
                   ? 'bg-purple-700 text-white cursor-default border-purple-700'
                   : 'bg-slate-900 dark:bg-wa-dsurf text-white hover:bg-slate-800 dark:hover:bg-wa-dbdr border-slate-800 dark:border-wa-dbdr'
               }`}
             >
-              {currentPlan === 'pro' ? '✓ Currently Active Tier' : 'Get Pro Access (₹499)'}
+              {currentPlan === 'pro' ? '✓ Currently Active Tier' : `Upgrade to Pro (${billingCycle === 'yearly' ? '₹5,000/yr' : '₹499/mo'})`}
             </button>
           </div>
 

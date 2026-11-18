@@ -186,16 +186,16 @@ router.get('/users/:id/activity', requireAdminAuth, async (req, res) => {
 router.post('/users/:id/plan', requireAdminAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { plan } = req.body || {};
+    const { plan, billingCycle } = req.body || {};
 
     if (!plan || !['free', 'starter', 'pro'].includes(plan)) {
       return res.status(400).json({ error: 'Valid plan required: free, starter, or pro.' });
     }
 
-    const updated = await db.updateUserPlanByAdmin(id, plan);
+    const updated = await db.updateUserPlanByAdmin(id, plan, billingCycle || 'monthly');
     return res.json({
       success: true,
-      message: `Plan successfully set to ${plan.toUpperCase()}`,
+      message: `Plan successfully set to ${plan.toUpperCase()} (${(billingCycle || 'monthly').toUpperCase()})`,
       user: updated
     });
   } catch (err) {

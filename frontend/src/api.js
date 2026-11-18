@@ -150,8 +150,8 @@ export const adminGetUsers = (token) =>
 export const adminGetUserActivity = (token, userId) =>
   api.get(`/admin/users/${userId}/activity`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
 
-export const adminUpdateUserPlan = (token, userId, plan) =>
-  api.post(`/admin/users/${userId}/plan`, { plan }, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+export const adminUpdateUserPlan = (token, userId, plan, billingCycle = 'monthly') =>
+  api.post(`/admin/users/${userId}/plan`, { plan, billingCycle }, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
 
 export const adminUpdateUserLock = (token, userId, isLocked) =>
   api.post(`/admin/users/${userId}/lock`, { isLocked }, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);

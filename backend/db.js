@@ -86,7 +86,10 @@ const UserSchema = new mongoose.Schema({
   phoneNumber: { type: String, required: true },
   name: { type: String, default: '' },
   plan: { type: String, enum: ['free', 'starter', 'pro'], default: 'free' },
-  planStatus: { type: String, enum: ['free', 'pending', 'starter', 'pro', 'active'], default: 'free' },
+  planStatus: { type: String, enum: ['free', 'pending', 'starter', 'pro', 'active', 'expired'], default: 'free' },
+  billingCycle: { type: String, enum: ['monthly', 'yearly'], default: 'monthly' },
+  subscriptionStartDate: { type: Date, default: null },
+  subscriptionExpiresAt: { type: Date, default: null },
   customMonthlyLimit: { type: Number, default: null },
   lastLoginAt: { type: Date, default: Date.now },
   lastSeenAt: { type: Date, default: Date.now },
@@ -116,7 +119,10 @@ const AuthAccountSchema = new mongoose.Schema({
   linkedWhatsAppPhone: { type: String, default: null },
   linkedWhatsAppJid: { type: String, default: null },
   plan: { type: String, enum: ['free', 'starter', 'pro'], default: 'free' },
-  planStatus: { type: String, enum: ['free', 'pending', 'starter', 'pro', 'active'], default: 'free' },
+  planStatus: { type: String, enum: ['free', 'pending', 'starter', 'pro', 'active', 'expired'], default: 'free' },
+  billingCycle: { type: String, enum: ['monthly', 'yearly'], default: 'monthly' },
+  subscriptionStartDate: { type: Date, default: null },
+  subscriptionExpiresAt: { type: Date, default: null },
   customMonthlyLimit: { type: Number, default: null },
   isLocked: { type: Boolean, default: false },
   lastLoginAt: { type: Date, default: Date.now },
@@ -132,6 +138,8 @@ const SubscriptionRequestSchema = new mongoose.Schema({
   email: { type: String, required: true, lowercase: true, trim: true },
   phone: { type: String, required: true, trim: true },
   plan: { type: String, enum: ['starter', 'pro'], required: true },
+  billingCycle: { type: String, enum: ['monthly', 'yearly'], default: 'monthly' },
+  durationDays: { type: Number, default: 30 },
   amount: { type: Number, required: true },
   currency: { type: String, default: 'INR' },
   utr: { type: String, required: true, trim: true },
@@ -172,7 +180,7 @@ function verifyAuthAccountPassword(inputPassword, storedHash) {
   return decrypted === inputPassword;
 }
 
-async function createSubscriptionRequest({ userId, email, phone, plan, amount, currency = 'INR', utr, screenshotUrl }) {
+async function createSubscriptionRequest({ userId, email, phone, plan, billingCycle = 'monthly', durationDays = 30, amount, currency = 'INR', utr, screenshotUrl }) {
   const cleanUtr = String(utr || '').trim();
   const cleanEmail = String(email || '').toLowerCase().trim();
 
@@ -191,6 +199,8 @@ async function createSubscriptionRequest({ userId, email, phone, plan, amount, c
     email: cleanEmail,
     phone: String(phone || '').trim(),
     plan,
+    billingCycle: billingCycle || 'monthly',
+    durationDays: durationDays || (billingCycle === 'yearly' ? 365 : 30),
     amount,
     currency: currency || 'INR',
     utr: cleanUtr,
@@ -229,16 +239,51 @@ async function approveSubscriptionRequest(requestId, adminNotes = '') {
   req.verifiedAt = new Date();
   await req.save();
 
-  // Upgrade user's plan and set planStatus to the plan ('pro' or 'starter')
+  const cycle = req.billingCycle || 'monthly';
+  const startDate = new Date();
+  const durationDays = req.durationDays || (cycle === 'yearly' ? 365 : 30);
+  const expiresAt = new Date(startDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
+  const limit = req.plan === 'pro' ? null : 250;
+
+  // Upgrade user's plan and set rolling subscription dates
   await AuthAccount.findOneAndUpdate(
     { email: req.email },
     {
       $set: {
         plan: req.plan,
-        planStatus: req.plan
+        planStatus: req.plan,
+        billingCycle: cycle,
+        subscriptionStartDate: startDate,
+        subscriptionExpiresAt: expiresAt,
+        customMonthlyLimit: limit
       }
     }
   );
+
+  // Also update User (WhatsApp session document) if linked
+  try {
+    const rawDigits = (req.phone || '').replace(/\D/g, '');
+    if (rawDigits) {
+      await User.updateMany(
+        {
+          $or: [
+            { phoneNumber: rawDigits },
+            { phoneNumber: { $regex: rawDigits.slice(-10) + '$' } }
+          ]
+        },
+        {
+          $set: {
+            plan: req.plan,
+            planStatus: req.plan,
+            billingCycle: cycle,
+            subscriptionStartDate: startDate,
+            subscriptionExpiresAt: expiresAt,
+            customMonthlyLimit: limit
+          }
+        }
+      );
+    }
+  } catch (_) {}
 
   return req;
 }
@@ -508,15 +553,57 @@ async function getUserMonthlyQuota(sessionId) {
   }
 
   const now = new Date();
-  // Start of current calendar month in UTC
-  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
-  const endOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999));
-  const nextMonthReset = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+  let isExpired = false;
 
-  // Count scheduled messages for this session
-  const monthMessages = await ScheduledMessage.find({
+  // 1. Subscription Expiry Check (Rolling Cycle Duration)
+  if (userAccount && userAccount.subscriptionExpiresAt && plan !== 'free') {
+    const expiryDate = new Date(userAccount.subscriptionExpiresAt);
+    if (now > expiryDate) {
+      console.log(`[Subscription Expiry] Subscription expired for user ${userAccount.email || sessionId} on ${expiryDate.toISOString()}. Downgrading to Free.`);
+      isExpired = true;
+      plan = 'free';
+      limit = PLAN_LIMITS.free;
+
+      // Update in DB
+      try {
+        if (userAccount._id) {
+          const Model = userAccount.email ? AuthAccount : User;
+          await Model.findByIdAndUpdate(userAccount._id, {
+            $set: {
+              plan: 'free',
+              planStatus: 'expired'
+            }
+          });
+        }
+      } catch (err) {
+        console.error('[DB] Error updating expired user:', err.message);
+      }
+    }
+  }
+
+  // 2. Billing Cycle and Quota Window Calculation
+  let cycleStart, cycleEnd;
+  if (userAccount && userAccount.subscriptionStartDate && plan !== 'free') {
+    // Rolling cycle based on subscription activation day
+    const subStart = new Date(userAccount.subscriptionStartDate);
+    const day = subStart.getUTCDate();
+
+    // Determine current month cycle
+    cycleStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), day, subStart.getUTCHours(), subStart.getUTCMinutes(), 0, 0));
+    if (cycleStart > now) {
+      cycleStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, day, subStart.getUTCHours(), subStart.getUTCMinutes(), 0, 0));
+    }
+    cycleEnd = new Date(Date.UTC(cycleStart.getUTCFullYear(), cycleStart.getUTCMonth() + 1, day, subStart.getUTCHours(), subStart.getUTCMinutes(), 0, 0));
+  } else {
+    // Default Calendar month cycle for free plan
+    cycleStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+    cycleEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+  }
+
+  // Count scheduled messages within current cycle window
+  const cycleMessages = await ScheduledMessage.find({
     sessionId,
-    createdAt: { $gte: startOfMonth, $lte: endOfMonth }
+    createdAt: { $gte: cycleStart, $lt: cycleEnd }
   }).lean();
 
   let pendingCount = 0;
@@ -524,7 +611,7 @@ async function getUserMonthlyQuota(sessionId) {
   let failedCount = 0;
   let cancelledCount = 0;
 
-  for (const m of monthMessages) {
+  for (const m of cycleMessages) {
     if (m.status === 'pending') {
       pendingCount++;
     } else if (m.status === 'sent' || m.status === 'submitted' || m.status === 'delivered' || m.status === 'read') {
@@ -537,16 +624,16 @@ async function getUserMonthlyQuota(sessionId) {
   }
 
   // Active messages (excluding cancelled) count toward user's monthly quota
-  const activeCount = monthMessages.filter(m => m.status !== 'cancelled').length;
+  const activeCount = cycleMessages.filter(m => m.status !== 'cancelled').length;
   const used = activeCount;
   const isUnlimited = plan === 'pro' || limit >= 100000;
   const remaining = isUnlimited ? 'Unlimited' : Math.max(0, limit - used);
   const percentUsed = isUnlimited ? 0 : Math.min(100, Math.round((used / limit) * 100));
 
   const monthName = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-  const resetsOnFormatted = nextMonthReset.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+  const resetsOnFormatted = cycleEnd.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 
-  const planStatus = userAccount?.planStatus || (plan === 'free' ? 'free' : 'active');
+  const planStatus = isExpired ? 'expired' : (userAccount?.planStatus || (plan === 'free' ? 'free' : 'active'));
   let pendingSubscription = null;
   if (userAccount?.email) {
     pendingSubscription = await SubscriptionRequest.findOne({ email: userAccount.email, status: 'pending' }).lean();
@@ -555,6 +642,10 @@ async function getUserMonthlyQuota(sessionId) {
   return {
     plan,
     planStatus,
+    billingCycle: userAccount?.billingCycle || 'monthly',
+    subscriptionStartDate: userAccount?.subscriptionStartDate ? userAccount.subscriptionStartDate.toISOString() : null,
+    subscriptionExpiresAt: userAccount?.subscriptionExpiresAt ? userAccount.subscriptionExpiresAt.toISOString() : null,
+    isExpired,
     isUnlimited,
     monthlyLimit: isUnlimited ? 'Unlimited' : limit,
     used,
@@ -563,13 +654,14 @@ async function getUserMonthlyQuota(sessionId) {
     pendingSubscription: pendingSubscription ? {
       id: pendingSubscription._id,
       plan: pendingSubscription.plan,
+      billingCycle: pendingSubscription.billingCycle || 'monthly',
       amount: pendingSubscription.amount,
       utr: pendingSubscription.utr,
       createdAt: pendingSubscription.createdAt,
       status: pendingSubscription.status
     } : null,
     planName: plan === 'starter' ? 'Starter Plan' : (plan === 'pro' ? 'Pro Plan' : 'Free Plan'),
-    resetsAt: nextMonthReset.toISOString(),
+    resetsAt: cycleEnd.toISOString(),
     resetsOnFormatted,
     monthName,
     breakdown: {
@@ -577,7 +669,7 @@ async function getUserMonthlyQuota(sessionId) {
       sent: sentCount,
       failed: failedCount,
       cancelled: cancelledCount,
-      totalThisMonth: monthMessages.length
+      totalThisMonth: cycleMessages.length
     }
   };
 }
@@ -917,6 +1009,9 @@ async function getAllUsersForAdmin() {
       phone: acc.linkedWhatsAppPhone || '',
       plan: acc.plan || 'free',
       planStatus: acc.planStatus || 'free',
+      billingCycle: acc.billingCycle || 'monthly',
+      subscriptionStartDate: acc.subscriptionStartDate || null,
+      subscriptionExpiresAt: acc.subscriptionExpiresAt || null,
       isLocked: Boolean(acc.isLocked),
       lastLoginAt: acc.lastLoginAt || acc.createdAt,
       lastSeenAt: acc.lastSeenAt || acc.createdAt,
@@ -940,6 +1035,9 @@ async function getAllUsersForAdmin() {
         phone: wu.phoneNumber,
         plan: wu.plan || 'free',
         planStatus: wu.planStatus || (wu.plan && wu.plan !== 'free' ? 'active' : 'free'),
+        billingCycle: wu.billingCycle || 'monthly',
+        subscriptionStartDate: wu.subscriptionStartDate || null,
+        subscriptionExpiresAt: wu.subscriptionExpiresAt || null,
         isLocked: Boolean(wu.isLocked),
         lastLoginAt: wu.lastLoginAt || wu.createdAt,
         lastSeenAt: wu.lastSeenAt || wu.createdAt,
@@ -953,23 +1051,33 @@ async function getAllUsersForAdmin() {
   return result;
 }
 
-async function updateUserPlanByAdmin(userId, plan) {
+async function updateUserPlanByAdmin(userId, plan, billingCycle = 'monthly') {
   const validPlans = ['free', 'starter', 'pro'];
   if (!validPlans.includes(plan)) {
     throw new Error('Invalid plan. Allowed: free, starter, pro');
   }
 
+  const cycle = billingCycle || 'monthly';
+  const isFree = plan === 'free';
+  const startDate = isFree ? null : new Date();
+  const durationDays = cycle === 'yearly' ? 365 : 30;
+  const expiresAt = isFree ? null : new Date(startDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
+  const limit = isFree ? PLAN_LIMITS.free : (plan === 'pro' ? null : 250);
+
+  const updateFields = {
+    plan,
+    planStatus: isFree ? 'free' : plan,
+    billingCycle: cycle,
+    subscriptionStartDate: startDate,
+    subscriptionExpiresAt: expiresAt,
+    customMonthlyLimit: limit
+  };
+
   if (userId.startsWith('wa_')) {
     const actualId = userId.replace('wa_', '');
     const updatedWu = await User.findByIdAndUpdate(
       actualId,
-      {
-        $set: {
-          plan,
-          planStatus: 'active',
-          customMonthlyLimit: PLAN_LIMITS[plan] || null
-        }
-      },
+      { $set: updateFields },
       { new: true }
     ).lean();
 
@@ -982,19 +1090,15 @@ async function updateUserPlanByAdmin(userId, plan) {
       name: updatedWu.name || 'WhatsApp User',
       email: 'Direct QR (No email registered)',
       plan: updatedWu.plan,
-      planStatus: 'active'
+      planStatus: updatedWu.planStatus,
+      billingCycle: updatedWu.billingCycle,
+      subscriptionExpiresAt: updatedWu.subscriptionExpiresAt
     };
   }
 
   const updated = await AuthAccount.findByIdAndUpdate(
     userId,
-    {
-      $set: {
-        plan,
-        planStatus: 'active',
-        customMonthlyLimit: PLAN_LIMITS[plan] || null
-      }
-    },
+    { $set: updateFields },
     { new: true }
   ).lean();
 
@@ -1007,7 +1111,9 @@ async function updateUserPlanByAdmin(userId, plan) {
     name: updated.name,
     email: updated.email,
     plan: updated.plan,
-    planStatus: updated.planStatus
+    planStatus: updated.planStatus,
+    billingCycle: updated.billingCycle,
+    subscriptionExpiresAt: updated.subscriptionExpiresAt
   };
 }
 

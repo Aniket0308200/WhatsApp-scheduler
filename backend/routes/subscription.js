@@ -2,22 +2,39 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 
-// Plan configurations & Pricing
+// Plan configurations & Pricing (Monthly & Yearly with Offers)
 const PLANS_CONFIG = {
   starter: {
     key: 'starter',
     name: 'Starter Plan',
+    pricing: {
+      monthly: {
+        amount: 199,
+        originalAmount: 249,
+        interval: 'month',
+        durationDays: 30,
+        label: '₹199 / month'
+      },
+      yearly: {
+        amount: 1999,
+        originalAmount: 2400,
+        interval: 'year',
+        durationDays: 365,
+        discountText: 'Save ₹401 (Special Offer)',
+        label: '₹1,999 / year'
+      }
+    },
     amount: 199,
     currency: 'INR',
     symbol: '₹',
-    interval: 'month',
     monthlyLimit: 250,
     badge: 'Popular',
+    icon: '⚡',
     features: [
-      '250 Scheduled Messages / month',
+      '250 Scheduled Messages / month (Auto-renews every month)',
       'Send to up to 20 Contacts at once',
       'Send to up to 10 Groups at once',
-      'Images, Videos, Audio & Stickers support',
+      'Images, Audio, Docs & Stickers support',
       'Recurring Schedules (Daily / Weekly repeats)',
       'Smart Name Variables ({Name})',
       'Google Contacts Sync (up to 2 accounts)',
@@ -27,24 +44,109 @@ const PLANS_CONFIG = {
   pro: {
     key: 'pro',
     name: 'Pro Plan',
+    pricing: {
+      monthly: {
+        amount: 499,
+        originalAmount: 599,
+        interval: 'month',
+        durationDays: 30,
+        label: '₹499 / month'
+      },
+      yearly: {
+        amount: 5000,
+        originalAmount: 6000,
+        interval: 'year',
+        durationDays: 365,
+        discountText: 'Save ₹1,000 (Mega Offer)',
+        label: '₹5,000 / year'
+      }
+    },
     amount: 499,
     currency: 'INR',
     symbol: '₹',
-    interval: 'month',
-    monthlyLimit: 1000,
+    monthlyLimit: 100000,
+    isUnlimited: true,
     badge: 'Ultimate Power',
+    icon: '🚀',
     features: [
-      'Unlimited / 1,000 Scheduled Messages / month',
+      '👑 100% Unlimited Scheduled Messages',
       'Unlimited Contacts & Groups at once',
       'All Media (Videos, Documents, PDFs, Audio)',
+      'Smart Media Editor (Draw, Shapes, Arrows, Blur & Text)',
       'WhatsApp Status & Story Scheduling',
       'WhatsApp Poll Scheduling',
       'Smart Timezone Auto-Adjustment',
-      'Google Contacts Sync (Multi-Account)',
-      'VIP 24/7 Priority Support & Advanced Delivery Analytics'
+      'Google Contacts Multi-Account Sync',
+      'VIP 24/7 Priority Support & Fast Server Dispatch'
     ]
   }
 };
+
+const TARGET_ADMIN_EMAILS = ['aniketchouhan243@gmail.com', 'aniketchouhan314@gmail.com'];
+
+async function notifyAdminSubscriptionAlert({ name, email, phone, plan, billingCycle, amount, utr, screenshotUrl }) {
+  try {
+    let nodemailer = null;
+    try { nodemailer = require('nodemailer'); } catch (_) {}
+    const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER;
+    const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASS || process.env.GMAIL_PASS;
+
+    const planLabel = `${plan === 'pro' ? 'Pro Plan' : 'Starter Plan'} (${billingCycle === 'yearly' ? 'Yearly' : 'Monthly'})`;
+    const subject = `🔔 [Payment Alert] New Subscription: ${planLabel} by ${name || email}`;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #ffffff;">
+        <div style="background: linear-gradient(135deg, #059669, #0d9488); padding: 24px; color: #ffffff; text-align: center;">
+          <h2 style="margin: 0; font-size: 22px;">💳 New Subscription Payment Received</h2>
+          <p style="margin: 6px 0 0; opacity: 0.9; font-size: 14px;">A user has submitted payment proof for verification.</p>
+        </div>
+        <div style="padding: 24px;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr><td style="padding: 8px 0; color: #64748b;">Plan:</td><td style="padding: 8px 0; font-weight: bold; color: #0f172a;">${planLabel}</td></tr>
+            <tr><td style="padding: 8px 0; color: #64748b;">Amount Paid:</td><td style="padding: 8px 0; font-weight: bold; color: #059669; font-size: 16px;">₹${amount}</td></tr>
+            <tr><td style="padding: 8px 0; color: #64748b;">12-Digit UTR:</td><td style="padding: 8px 0; font-weight: bold; font-family: monospace; font-size: 15px; color: #2563eb;">${utr}</td></tr>
+            <tr><td style="padding: 8px 0; color: #64748b;">User Name:</td><td style="padding: 8px 0; font-weight: bold; color: #0f172a;">${name || 'N/A'}</td></tr>
+            <tr><td style="padding: 8px 0; color: #64748b;">User Email:</td><td style="padding: 8px 0; color: #0f172a;"><a href="mailto:${email}">${email}</a></td></tr>
+            <tr><td style="padding: 8px 0; color: #64748b;">WhatsApp Phone:</td><td style="padding: 8px 0; font-weight: bold; color: #0f172a;">+${phone}</td></tr>
+            <tr><td style="padding: 8px 0; color: #64748b;">Billing Cycle:</td><td style="padding: 8px 0; font-weight: bold; color: #0f172a;">${billingCycle.toUpperCase()}</td></tr>
+            <tr><td style="padding: 8px 0; color: #64748b;">Submission Time:</td><td style="padding: 8px 0; color: #64748b;">${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</td></tr>
+          </table>
+
+          ${screenshotUrl ? `
+            <div style="margin-top: 20px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+              <p style="font-weight: bold; margin-bottom: 8px; color: #334155;">Payment Screenshot:</p>
+              <img src="${screenshotUrl}" alt="Payment Proof" style="max-width: 100%; border-radius: 8px; border: 1px solid #e2e8f0;" />
+            </div>
+          ` : ''}
+
+          <div style="margin-top: 24px; text-align: center;">
+            <a href="https://www.wascheduler.site/admin" style="display: inline-block; background: #059669; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: bold; border-radius: 8px; font-size: 14px;">
+              Open Admin Panel to Verify & Approve →
+            </a>
+          </div>
+        </div>
+      </div>
+    `;
+
+    if (nodemailer && smtpUser && smtpPass) {
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: { user: smtpUser, pass: smtpPass }
+      });
+      await transporter.sendMail({
+        from: `"WA Scheduler Billing" <${smtpUser}>`,
+        to: TARGET_ADMIN_EMAILS.join(', '),
+        subject,
+        html
+      });
+      console.log(`[Subscription Mailer] ✅ Email alert sent to ${TARGET_ADMIN_EMAILS.join(', ')}`);
+    } else {
+      console.log(`[Subscription Alert] New payment recorded for ${email} (Plan: ${planLabel}, UTR: ${utr}).`);
+    }
+  } catch (err) {
+    console.error('[Subscription Mailer Error]:', err.message);
+  }
+}
 
 /**
  * GET /api/subscription/config
@@ -78,7 +180,7 @@ router.get('/config', (req, res) => {
  */
 router.post('/submit', async (req, res) => {
   try {
-    const { email, phone, plan, utr, screenshotUrl, scannerActivatedAt } = req.body || {};
+    const { name, email, phone, plan, billingCycle = 'monthly', utr, screenshotUrl, scannerActivatedAt } = req.body || {};
 
     if (!email || !email.trim()) {
       return res.status(400).json({ error: 'Valid email address is required.' });
@@ -105,6 +207,10 @@ router.post('/submit', async (req, res) => {
       return res.status(400).json({ error: 'Invalid plan selected. Please choose Starter or Pro.' });
     }
 
+    const cycleKey = billingCycle === 'yearly' ? 'yearly' : 'monthly';
+    const planDetails = PLANS_CONFIG[planKey];
+    const pricingInfo = planDetails.pricing[cycleKey] || planDetails.pricing.monthly;
+
     // Validate 12-digit UTR
     const cleanUtr = String(utr || '').replace(/\s+/g, '').trim();
     if (!/^\d{12}$/.test(cleanUtr)) {
@@ -116,49 +222,41 @@ router.post('/submit', async (req, res) => {
       return res.status(400).json({ error: 'Payment screenshot is required. Please attach a screenshot of your successful UPI transaction.' });
     }
 
-    // Validate 30-minute scanner window if activation timestamp was passed
-    if (scannerActivatedAt) {
-      const elapsedMs = Date.now() - new Date(scannerActivatedAt).getTime();
-      const maxToleranceMs = 35 * 60 * 1000; // 35 minutes tolerance (30 min + 5 min buffer)
-      if (elapsedMs > maxToleranceMs) {
-        return res.status(400).json({
-          error: 'The 30-minute payment window has expired. Please reveal the scanner again to start a fresh 30-minute window.'
-        });
-      }
-    }
-
     // Check existing account if any
     const userAccount = await db.findAuthAccountByEmail(cleanEmail);
-    if (userAccount) {
-      // Disallow upgrading to a lower or same active plan
-      if (userAccount.plan === 'pro') {
-        return res.status(400).json({ error: 'Your account is already on the Pro Plan.' });
-      }
-      if (userAccount.plan === planKey) {
-        return res.status(400).json({ error: `You already have an active ${PLANS_CONFIG[planKey].name}.` });
-      }
-    }
-
-    const planDetails = PLANS_CONFIG[planKey];
 
     const subRequest = await db.createSubscriptionRequest({
       userId: userAccount?._id || null,
       email: cleanEmail,
       phone: cleanPhone,
       plan: planKey,
-      amount: planDetails.amount,
+      billingCycle: cycleKey,
+      durationDays: pricingInfo.durationDays,
+      amount: pricingInfo.amount,
       currency: 'INR',
       utr: cleanUtr,
       screenshotUrl
     });
 
-    // Auto-approve after 5 minutes (300,000 ms) as per workflow
+    // Send email alert to admin with all details & screenshot preview
+    notifyAdminSubscriptionAlert({
+      name: name || userAccount?.name || '',
+      email: cleanEmail,
+      phone: cleanPhone,
+      plan: planKey,
+      billingCycle: cycleKey,
+      amount: pricingInfo.amount,
+      utr: cleanUtr,
+      screenshotUrl
+    }).catch(e => console.warn('[Subscription Alert] Failed to send email alert:', e.message));
+
+    // Optional 5-minute auto-approval fallback
     setTimeout(async () => {
       try {
         const checkReq = await db.SubscriptionRequest.findById(subRequest._id);
         if (checkReq && checkReq.status === 'pending') {
-          await db.approveSubscriptionRequest(subRequest._id, 'Auto-verified after 5-minute queue window');
-          console.log(`[Subscription] Auto-approved request ${subRequest._id} for ${cleanEmail} -> ${planKey}`);
+          await db.approveSubscriptionRequest(subRequest._id, 'Auto-verified after queue window');
+          console.log(`[Subscription] Auto-approved request ${subRequest._id} for ${cleanEmail} -> ${planKey} (${cycleKey})`);
         }
       } catch (err) {
         console.error('[Subscription] Auto-approval error:', err.message);
@@ -167,11 +265,12 @@ router.post('/submit', async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Payment Details Received! Your plan will be activated within 5 minutes.',
+      message: '🎉 Congratulations! Your payment details have been submitted. If your plan does not activate immediately, our team will verify and activate it within 24 hours. Don’t worry!',
       request: {
         id: subRequest._id,
         plan: subRequest.plan,
-        planName: planDetails.name,
+        billingCycle: cycleKey,
+        planName: `${planDetails.name} (${cycleKey.toUpperCase()})`,
         amount: subRequest.amount,
         currency: subRequest.currency,
         utr: subRequest.utr,
