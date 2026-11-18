@@ -53,12 +53,12 @@ const PLANS_CONFIG = {
         label: '₹499 / month'
       },
       yearly: {
-        amount: 5000,
+        amount: 4999,
         originalAmount: 6000,
         interval: 'year',
         durationDays: 365,
-        discountText: 'Save ₹1,000 (Mega Offer)',
-        label: '₹5,000 / year'
+        discountText: 'Save ₹1,001 (Mega Offer)',
+        label: '₹4,999 / year'
       }
     },
     amount: 499,

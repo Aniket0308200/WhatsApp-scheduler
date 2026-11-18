@@ -249,7 +249,7 @@ export default function PricingSection({ onGetStarted, onUpgradePlan, currentPla
                   {billingCycle === 'yearly' ? (
                     <>
                       <span className="text-xl font-bold text-slate-400 line-through">₹6,000</span>
-                      <span className="text-4xl font-extrabold text-slate-900 dark:text-white">₹5,000</span>
+                      <span className="text-4xl font-extrabold text-slate-900 dark:text-white">₹4,999</span>
                       <span className="text-sm font-semibold text-slate-500 dark:text-wa-dmuted">/ year</span>
                     </>
                   ) : (
@@ -260,7 +260,7 @@ export default function PricingSection({ onGetStarted, onUpgradePlan, currentPla
                   )}
                 </div>
                 <p className="text-[11px] text-purple-600 dark:text-purple-400 mt-1 font-semibold">
-                  {billingCycle === 'yearly' ? '👑 Mega Offer · Save ₹1,000/year · Full Year Unlimited' : 'Full Pro Suite · Priority Dispatch & 24/7 VIP Support'}
+                  {billingCycle === 'yearly' ? '👑 Mega Offer · Save ₹1,001/year · Full Year Unlimited' : 'Full Pro Suite · Priority Dispatch & 24/7 VIP Support'}
                 </p>
               </div>
 
@@ -317,7 +317,7 @@ export default function PricingSection({ onGetStarted, onUpgradePlan, currentPla
                   : 'bg-slate-900 dark:bg-wa-dsurf text-white hover:bg-slate-800 dark:hover:bg-wa-dbdr border-slate-800 dark:border-wa-dbdr'
               }`}
             >
-              {currentPlan === 'pro' ? '✓ Currently Active Tier' : `Upgrade to Pro (${billingCycle === 'yearly' ? '₹5,000/yr' : '₹499/mo'})`}
+              {currentPlan === 'pro' ? '✓ Currently Active Tier' : `Upgrade to Pro (${billingCycle === 'yearly' ? '₹4,999/yr' : '₹499/mo'})`}
             </button>
           </div>
 

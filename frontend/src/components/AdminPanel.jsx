@@ -785,7 +785,7 @@ export default function AdminPanel() {
                                   <option value="starter:monthly">Set to: ⚡ Starter (Monthly - ₹199)</option>
                                   <option value="starter:yearly">Set to: ⚡ Starter (Yearly - ₹1,999)</option>
                                   <option value="pro:monthly">Set to: 👑 Pro (Monthly - ₹499)</option>
-                                  <option value="pro:yearly">Set to: 👑 Pro (Yearly - ₹5,000)</option>
+                                  <option value="pro:yearly">Set to: 👑 Pro (Yearly - ₹4,999)</option>
                                 </select>
                               </div>
                             </div>

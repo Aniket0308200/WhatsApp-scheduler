@@ -52,11 +52,11 @@ export const PLANS_INFO = {
         label: '₹499 / month'
       },
       yearly: {
-        amount: 5000,
+        amount: 4999,
         originalAmount: 6000,
         interval: 'year',
-        discountText: 'Save ₹1,000 (Mega Offer)',
-        label: '₹5,000 / year'
+        discountText: 'Save ₹1,001 (Mega Offer)',
+        label: '₹4,999 / year'
       }
     },
     symbol: '₹',
@@ -420,26 +420,26 @@ export default function PaymentModal({
 
   return (
     <div
-      className="fixed inset-0 z-[130] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[130] flex items-center justify-center p-2.5 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in"
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="w-full max-w-2xl bg-white dark:bg-wa-dpanel text-slate-900 dark:text-wa-dtext rounded-3xl shadow-2xl border border-slate-200 dark:border-wa-dbdr overflow-hidden flex flex-col max-h-[95vh] animate-scale-up"
+        className="w-full max-w-xl bg-white dark:bg-wa-dpanel text-slate-900 dark:text-wa-dtext rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 dark:border-wa-dbdr overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[95vh] animate-scale-up"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Header & Progress Wizard Indicator */}
-        <div className="bg-gradient-to-r from-wa-dark via-[#0d4f43] to-wa-teal p-5 text-white relative">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2.5">
-              <span className="w-8 h-8 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center text-lg">
+        <div className="bg-gradient-to-r from-wa-dark via-[#0d4f43] to-wa-teal p-4 sm:p-5 text-white relative">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="flex items-center gap-2 sm:gap-2.5">
+              <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center text-base sm:text-lg">
                 💳
               </span>
               <div>
-                <h3 className="text-base sm:text-lg font-black tracking-tight leading-tight">
+                <h3 className="text-sm sm:text-lg font-black tracking-tight leading-tight">
                   Upgrade to {planInfo.name}
                 </h3>
-                <p className="text-[11px] text-emerald-200 font-medium">
+                <p className="text-[10px] sm:text-[11px] text-emerald-200 font-medium">
                   {billingCycle === 'yearly' ? 'Yearly Membership with Big Savings' : 'Monthly Flexible Subscription'}
                 </p>
               </div>
@@ -447,7 +447,7 @@ export default function PaymentModal({
 
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-sm font-bold transition-colors"
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-xs sm:text-sm font-bold transition-colors"
               title="Close"
             >
               ✕
@@ -455,16 +455,16 @@ export default function PaymentModal({
           </div>
 
           {/* 4-Step Progress Bar */}
-          <div className="grid grid-cols-4 gap-2 pt-1 text-center select-none">
+          <div className="grid grid-cols-4 gap-1.5 sm:gap-2 pt-0.5 text-center select-none">
             {[
-              { num: 1, label: 'Plan & Info' },
-              { num: 2, label: 'Scan & Pay' },
-              { num: 3, label: 'Proof & UTR' },
+              { num: 1, label: 'Plan' },
+              { num: 2, label: 'Scanner' },
+              { num: 3, label: 'Proof' },
               { num: 4, label: 'Success' }
             ].map((s) => (
               <div key={s.num} className="flex flex-col items-center">
                 <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black transition-all ${
+                  className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-[11px] sm:text-xs font-black transition-all ${
                     step > s.num
                       ? 'bg-emerald-400 text-slate-900 font-extrabold shadow-md'
                       : step === s.num
@@ -475,7 +475,7 @@ export default function PaymentModal({
                   {step > s.num ? '✓' : s.num}
                 </div>
                 <span
-                  className={`text-[10px] mt-1 font-semibold truncate ${
+                  className={`text-[9px] sm:text-[10px] mt-1 font-semibold truncate ${
                     step === s.num ? 'text-white font-bold' : 'text-emerald-200/70'
                   }`}
                 >
@@ -487,7 +487,7 @@ export default function PaymentModal({
         </div>
 
         {/* Modal Scrollable Body */}
-        <div className="p-5 sm:p-7 overflow-y-auto custom-scroll flex-1">
+        <div className="p-4 sm:p-6 overflow-y-auto custom-scroll flex-1">
           {/* ───────────────────────────────────────────────────────────── */}
           {/* STEP 1: PLAN SELECTION & USER DETAILS                         */}
           {/* ───────────────────────────────────────────────────────────── */}
@@ -596,7 +596,7 @@ export default function PaymentModal({
                     {billingCycle === 'yearly' ? (
                       <div className="flex items-baseline gap-1.5">
                         <span className="text-xs text-slate-400 line-through">₹6,000</span>
-                        <span className="text-xl font-black text-purple-700 dark:text-purple-300">₹5,000</span>
+                        <span className="text-xl font-black text-purple-700 dark:text-purple-300">₹4,999</span>
                         <span className="text-[11px] text-slate-500">/ year</span>
                       </div>
                     ) : (
@@ -607,7 +607,7 @@ export default function PaymentModal({
                     )}
                     {billingCycle === 'yearly' && (
                       <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 block mt-0.5">
-                        👑 Save ₹1,000 (Mega Yearly Offer)
+                        👑 Save ₹1,001 (Mega Yearly Offer)
                       </span>
                     )}
                   </div>
@@ -683,30 +683,30 @@ export default function PaymentModal({
           )}
 
           {/* ───────────────────────────────────────────────────────────── */}
-          {/* STEP 2: DYNAMIC SCANNER & UPI DETAILS                         */}
+          {/* STEP 2: DYNAMIC SCANNER ONLY (CLEAN UI & NO UPI ID DISPLAY)  */}
           {/* ───────────────────────────────────────────────────────────── */}
           {step === 2 && (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-5">
               {/* 30-Minute Timer Badge */}
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50">
+              <div className="flex items-center justify-between p-2.5 sm:p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping" />
                   <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
                     Payment Window Active:
                   </span>
                 </div>
-                <div className="font-mono text-sm font-black text-amber-700 dark:text-amber-300">
+                <div className="font-mono text-xs sm:text-sm font-black text-amber-700 dark:text-amber-300">
                   ⏳ {formatTime(secondsRemaining)}
                 </div>
               </div>
 
-              {/* QR Code Container */}
-              <div className="flex flex-col items-center justify-center bg-slate-50 dark:bg-wa-dsurf/40 p-6 rounded-3xl border border-slate-200 dark:border-wa-dbdr">
-                <div className="text-center mb-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-wa-dmuted">
+              {/* QR Code Container - Pure Scanner Only */}
+              <div className="flex flex-col items-center justify-center bg-slate-50 dark:bg-wa-dsurf/40 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-wa-dbdr">
+                <div className="text-center mb-2.5">
+                  <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-wa-dmuted">
                     Exact Payable Amount
                   </span>
-                  <div className="text-3xl font-black text-slate-900 dark:text-white mt-0.5">
+                  <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-0.5">
                     ₹{activeAmount}
                   </div>
                   <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
@@ -715,76 +715,56 @@ export default function PaymentModal({
                 </div>
 
                 {/* QR Image Box */}
-                <div className="p-3 bg-white rounded-2xl shadow-lg border border-slate-200">
+                <div className="p-3 bg-white rounded-2xl shadow-md border border-slate-200 my-1">
                   {dynamicQrUrl ? (
                     <img
                       src={dynamicQrUrl}
                       alt="UPI Payment QR Code"
-                      className="w-56 h-56 sm:w-64 sm:h-64 object-contain rounded-xl"
+                      className="w-48 h-48 sm:w-60 sm:h-60 object-contain rounded-xl"
                     />
                   ) : (
-                    <div className="w-56 h-56 flex items-center justify-center text-xs text-slate-400">
-                      Generating QR…
+                    <div className="w-48 h-48 sm:w-60 sm:h-60 flex items-center justify-center text-xs text-slate-400">
+                      Generating Scanner…
                     </div>
                   )}
                 </div>
 
-                <p className="text-[11px] text-slate-500 dark:text-wa-dmuted mt-3 text-center">
-                  Scan with <strong>Google Pay</strong>, <strong>PhonePe</strong>, <strong>Paytm</strong>, or any UPI app.
+                <p className="text-[11px] text-slate-500 dark:text-wa-dmuted mt-2.5 text-center">
+                  Apne phone se <strong>Google Pay</strong>, <strong>PhonePe</strong>, <strong>Paytm</strong> ya kisi bhi UPI app se scan karein.
                 </p>
               </div>
 
-              {/* UPI ID Copy Box */}
-              <div className="bg-slate-100 dark:bg-wa-dsurf rounded-2xl p-4 border border-slate-200 dark:border-wa-dbdr flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div>
-                  <span className="text-[11px] text-slate-500 dark:text-wa-dmuted block">Official UPI ID</span>
-                  <span className="font-mono text-sm font-extrabold text-slate-900 dark:text-white select-all">
-                    {upiConfig.upiId}
-                  </span>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">
-                    Name: {upiConfig.upiName}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(upiConfig.upiId, 'UPI ID')}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-white dark:bg-wa-dpanel hover:bg-slate-200 dark:hover:bg-wa-dbdr text-emerald-600 dark:text-emerald-400 border border-slate-300 dark:border-wa-dbdr transition-all shadow-xs shrink-0"
-                >
-                  📋 Copy UPI ID
-                </button>
-              </div>
-
               {/* Supported UPI Apps Pills */}
-              <div className="flex items-center justify-center gap-2 flex-wrap text-[11px] text-slate-500">
-                <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr">
+              <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-wrap text-[10px] sm:text-[11px] text-slate-500">
+                <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr font-medium">
                   🟢 Google Pay
                 </span>
-                <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr">
+                <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr font-medium">
                   🟣 PhonePe
                 </span>
-                <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr">
+                <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr font-medium">
                   🔵 Paytm
                 </span>
-                <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr">
-                  🟠 BHIM / Cred
+                <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr font-medium">
+                  🟠 BHIM / Any UPI
                 </span>
               </div>
 
               {/* Step 2 Navigation Buttons */}
-              <div className="flex items-center gap-3 pt-2">
+              <div className="flex items-center gap-2 sm:gap-3 pt-1">
                 <button
                   type="button"
                   onClick={() => setStep(1)}
-                  className="py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm bg-slate-100 dark:bg-wa-dsurf text-slate-700 dark:text-slate-300 hover:bg-slate-200 transition-colors"
+                  className="py-2.5 sm:py-3 px-4 sm:px-5 rounded-2xl font-bold text-xs sm:text-sm bg-slate-100 dark:bg-wa-dsurf text-slate-700 dark:text-slate-300 hover:bg-slate-200 transition-colors"
                 >
                   ← Back
                 </button>
                 <button
                   type="button"
                   onClick={handleProceedToProof}
-                  className="flex-1 py-3 px-6 rounded-2xl font-black text-xs sm:text-sm bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-500/25 active:scale-98 transition-all flex items-center justify-center gap-2"
+                  className="flex-1 py-2.5 sm:py-3 px-4 sm:px-6 rounded-2xl font-black text-xs sm:text-sm bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-500/25 active:scale-98 transition-all flex items-center justify-center gap-1.5"
                 >
-                  <span>Paid? Enter UTR &amp; Upload Proof</span>
+                  <span>Paid? Enter UTR &amp; Proof</span>
                   <span>→</span>
                 </button>
               </div>
@@ -931,18 +911,18 @@ export default function PaymentModal({
               )}
 
               {/* Step 3 Navigation Buttons */}
-              <div className="flex items-center gap-3 pt-2">
+              <div className="flex items-center gap-2 sm:gap-3 pt-1">
                 <button
                   type="button"
                   onClick={() => setStep(2)}
-                  className="py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm bg-slate-100 dark:bg-wa-dsurf text-slate-700 dark:text-slate-300 hover:bg-slate-200 transition-colors"
+                  className="py-2.5 sm:py-3 px-4 sm:px-5 rounded-2xl font-bold text-xs sm:text-sm bg-slate-100 dark:bg-wa-dsurf text-slate-700 dark:text-slate-300 hover:bg-slate-200 transition-colors"
                 >
-                  ← Back to Scanner
+                  ← Back
                 </button>
                 <button
                   type="submit"
                   disabled={submitting || !utr || utr.length !== 12 || !screenshotData}
-                  className={`flex-1 py-3 px-6 rounded-2xl font-black text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
+                  className={`flex-1 py-2.5 sm:py-3 px-4 sm:px-6 rounded-2xl font-black text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
                     submitting || !utr || utr.length !== 12 || !screenshotData
                       ? 'bg-slate-300 dark:bg-wa-dsurf text-slate-500 cursor-not-allowed'
                       : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-500/25 active:scale-98'
