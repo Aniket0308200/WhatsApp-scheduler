@@ -698,6 +698,57 @@ function toSqliteUtc(dateInput) {
   }
 }
 
+// ─── Message Query Functions ──────────────────────────────────────────────────
+
+async function insertMessage(sessionId, phone, message, scheduledAt, recipientName = null, mediaType = null, mediaData = null, mediaName = null, mediaList = [], pollData = null, mentions = []) {
+  const schedDate = new Date(scheduledAt);
+
+  let cleanMediaData = mediaData;
+  if (cleanMediaData) {
+    cleanMediaData = await saveMediaToDisk(cleanMediaData, mediaName, mediaType);
+  }
+
+  let cleanMediaList = [];
+  if (Array.isArray(mediaList) && mediaList.length > 0) {
+    cleanMediaList = await Promise.all(mediaList.map(async (item) => {
+      let itemData = item.data;
+      if (itemData) {
+        itemData = await saveMediaToDisk(itemData, item.name, item.type);
+      }
+      return {
+        id: item.id || String(Date.now()),
+        type: item.type,
+        data: itemData,
+        name: item.name || null,
+        size: item.size || null,
+        preview: null // Keep MongoDB document < 1KB to prevent BSON RangeError
+      };
+    }));
+  }
+
+  const msg = new ScheduledMessage({
+    sessionId,
+    encryptedNumber: encrypt(phone),
+    encryptedRecipientName: encrypt(recipientName),
+    encryptedMessageText: encrypt(message || ''),
+    mediaType: mediaType || null,
+    mediaData: cleanMediaData || null,
+    mediaName: mediaName || null,
+    mediaList: cleanMediaList,
+    mentions: Array.isArray(mentions) ? mentions : [],
+    pollData: pollData && pollData.question ? {
+      question: String(pollData.question).trim(),
+      options: Array.isArray(pollData.options) ? pollData.options.map(o => String(o).trim()).filter(Boolean) : [],
+      allowMultiple: Boolean(pollData.allowMultiple)
+    } : null,
+    scheduledAt: schedDate,
+    status: 'pending'
+  });
+  await msg.save();
+  await enforceRollingCap(sessionId);
+  return msg._id.toString();
+}
+
 async function rescheduleMessage(id, newScheduledAt, newMessageText = null) {
   const schedDate = new Date(newScheduledAt);
   if (isNaN(schedDate.getTime())) {
