@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+let contactRouter = null;
+try {
+  contactRouter = require('./contact');
+} catch (_) {}
 
 // Plan configurations & Pricing (Monthly & Yearly with Offers)
 const PLANS_CONFIG = {
@@ -86,13 +90,39 @@ const TARGET_ADMIN_EMAILS = ['aniketchouhan243@gmail.com', 'aniketchouhan314@gma
 
 async function notifyAdminSubscriptionAlert({ name, email, phone, plan, billingCycle, amount, utr, screenshotUrl }) {
   try {
+    const planLabel = `${plan === 'pro' ? 'Pro Plan' : 'Starter Plan'} (${billingCycle === 'yearly' ? 'Yearly' : 'Monthly'})`;
+    const subject = `🔔 [Payment Alert] New Subscription: ${planLabel} by ${name || email}`;
+
+    // 1. Dispatch via the established Contact Mailer Pipeline (Same engine delivering Contact Us to aniketchouhan243@gmail.com)
+    if (contactRouter && typeof contactRouter.dispatchDirectEmail === 'function') {
+      try {
+        await contactRouter.dispatchDirectEmail({
+          loginName: name || 'User',
+          loginEmail: email,
+          whatsappNumber: phone,
+          contactEmail: email,
+          paymentDetails: {
+            hasPaid: true,
+            amountPaid: `₹${amount}`,
+            paymentMethod: `UPI QR Scanner (${billingCycle.toUpperCase()})`,
+            payerName: name || 'User',
+            payerEmail: email,
+            payerRef: utr
+          },
+          subject: `💳 Payment Alert: New ${planLabel} by ${name || email}`,
+          message: `NEW SUBSCRIPTION PAYMENT VERIFICATION REQUEST:\n\nPlan: ${planLabel}\nAmount Paid: ₹${amount}\n12-Digit UTR: ${utr}\nUser Name: ${name || 'N/A'}\nUser Email: ${email}\nWhatsApp: +${phone}\nBilling Cycle: ${billingCycle.toUpperCase()}\n\nPlease visit the Admin Panel to review the screenshot and approve: https://www.wascheduler.site/admin`
+        });
+        console.log(`[Subscription Mailer] ✅ Successfully dispatched via Contact mailer pipeline to aniketchouhan243@gmail.com`);
+      } catch (dispErr) {
+        console.warn(`[Subscription Mailer] Contact mailer dispatch notice:`, dispErr.message);
+      }
+    }
+
+    // 2. Direct SMTP attempt for both admin emails
     let nodemailer = null;
     try { nodemailer = require('nodemailer'); } catch (_) {}
     const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER;
     const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASS || process.env.GMAIL_PASS;
-
-    const planLabel = `${plan === 'pro' ? 'Pro Plan' : 'Starter Plan'} (${billingCycle === 'yearly' ? 'Yearly' : 'Monthly'})`;
-    const subject = `🔔 [Payment Alert] New Subscription: ${planLabel} by ${name || email}`;
 
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #ffffff;">

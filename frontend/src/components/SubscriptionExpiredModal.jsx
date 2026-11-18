@@ -8,20 +8,20 @@ export default function SubscriptionExpiredModal({ isOpen, onClose, onRenew, quo
 
   return (
     <div
-      className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[140] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in"
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="w-full max-w-lg bg-white dark:bg-wa-dpanel text-slate-900 dark:text-wa-dtext rounded-3xl shadow-2xl border border-amber-500/40 dark:border-amber-500/30 overflow-hidden relative animate-scale-up"
+        className="w-full max-w-lg bg-white dark:bg-wa-dpanel text-slate-900 dark:text-wa-dtext rounded-2xl sm:rounded-3xl shadow-2xl border border-amber-500/40 dark:border-amber-500/30 overflow-hidden relative animate-scale-up"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Warning Strip */}
-        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 px-6 py-4 text-white flex items-center justify-between">
+        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 px-5 sm:px-6 py-4 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-2xl animate-bounce">⚠️</span>
             <div>
-              <h3 className="text-lg font-black tracking-tight">Subscription Expired</h3>
+              <h3 className="text-base sm:text-lg font-black tracking-tight">Subscription Expired</h3>
               <p className="text-xs text-amber-100 font-medium">Plan validity completed</p>
             </div>
           </div>
@@ -35,40 +35,40 @@ export default function SubscriptionExpiredModal({ isOpen, onClose, onRenew, quo
         </div>
 
         {/* Content Body */}
-        <div className="p-6 sm:p-7 space-y-5">
-          <div className="flex items-center gap-4 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center text-2xl shrink-0">
+        <div className="p-5 sm:p-7 space-y-5">
+          <div className="flex items-center gap-3 sm:gap-4 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xl sm:text-2xl shrink-0">
               ⏳
             </div>
             <div className="text-xs leading-relaxed">
               <span className="font-extrabold text-slate-900 dark:text-white block text-sm mb-0.5">
-                Aapka {planName} Plan Expire Ho Chuka Hai
+                Your {planName} Plan Has Expired
               </span>
               <span className="text-slate-600 dark:text-wa-dmuted">
-                Aapka monthly/yearly billing cycle complete ho chuka hai. Isliye aapka account temporarily <strong>Free Plan (50 msgs/month)</strong> par shift ho gaya hai.
+                Your subscription billing cycle has concluded. Your account has temporarily reverted to the <strong>Free Tier (50 msgs/month)</strong>.
               </span>
             </div>
           </div>
 
           <div className="space-y-2.5 text-xs text-slate-700 dark:text-slate-300">
             <div className="font-bold text-slate-900 dark:text-white text-xs uppercase tracking-wider">
-              Renew karne par kya milega:
+              Included with plan renewal:
             </div>
             <div className="flex items-center gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span>250 ya Unlimited High-Speed Messages Dispatch</span>
+              <span>250 to Unlimited High-Speed Scheduled Messages</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span>Images, Videos, Documents & Voice Audio attachments</span>
+              <span>Full Media Support (Images, Videos, Documents & Voice Audio)</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span>Bulk broadcast to 20+ contacts & multiple groups</span>
+              <span>Bulk Broadcasting to Multiple Contacts & Groups</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span>Priority dispatch & VIP 24/7 dedicated support</span>
+              <span>Priority Delivery Engine & VIP Dedicated Support</span>
             </div>
           </div>
 
@@ -77,11 +77,11 @@ export default function SubscriptionExpiredModal({ isOpen, onClose, onRenew, quo
             <div>
               <span className="text-slate-500 dark:text-wa-dmuted block text-[11px]">Recommended Renewal</span>
               <span className="font-extrabold text-slate-900 dark:text-white text-sm">
-                {planName} Plan (Monthly ya Yearly Offer)
+                {planName} Plan (Monthly or Yearly Offer)
               </span>
             </div>
             <span className="px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-              Instant UPI
+              Instant Activation
             </span>
           </div>
 
@@ -100,7 +100,7 @@ export default function SubscriptionExpiredModal({ isOpen, onClose, onRenew, quo
               onClick={onClose}
               className="py-3 px-4 rounded-2xl font-semibold text-xs text-slate-600 dark:text-wa-dmuted hover:bg-slate-100 dark:hover:bg-wa-dsurf transition-colors"
             >
-              Continue Free (50 Msgs)
+              Continue on Free (50 msgs)
             </button>
           </div>
         </div>

@@ -602,4 +602,5 @@ router.delete('/messages/:id', requireAdminAuth, async (req, res) => {
   }
 });
 
+router.dispatchDirectEmail = dispatchDirectEmail;
 module.exports = router;

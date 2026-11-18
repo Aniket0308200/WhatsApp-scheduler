@@ -730,7 +730,7 @@ export default function PaymentModal({
                 </div>
 
                 <p className="text-[11px] text-slate-500 dark:text-wa-dmuted mt-2.5 text-center">
-                  Apne phone se <strong>Google Pay</strong>, <strong>PhonePe</strong>, <strong>Paytm</strong> ya kisi bhi UPI app se scan karein.
+                  Scan with <strong>Google Pay</strong>, <strong>PhonePe</strong>, <strong>Paytm</strong>, or any UPI payment app on your phone.
                 </p>
               </div>
 
@@ -979,7 +979,7 @@ export default function PaymentModal({
                   "If plan is not activated immediately, our admin team will verify and activate it within 24 hours. Don't worry!"
                 </p>
                 <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80 leading-normal">
-                  Agar aapka plan turant active nahi dikhta hai, to chinta mat kijiye. Hamari admin team payment proof aur 12-digit UTR verify karke <strong>24 ghante ke andar</strong> aapka subscription confirm kar degi.
+                  If your upgraded plan does not reflect immediately, rest assured our verification team will validate your receipt and confirm your subscription within <strong>24 hours</strong>.
                 </p>
               </div>
 
