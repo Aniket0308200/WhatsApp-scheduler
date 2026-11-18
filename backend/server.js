@@ -721,7 +721,54 @@ app.get('/api/media/:id', async (req, res) => {
 
 app.get('/api/messages', async (req, res) => {
   try {
-    res.json(await db.getAllMessages(req.sessionId));
+    const browserSessionId = req.headers['x-browser-session-id'] || req.query.browserSessionId || null;
+    let connectedPhone = null;
+    try {
+      const profile = whatsapp.getConnectedProfile(req.sessionId) || (browserSessionId ? whatsapp.getConnectedProfile(browserSessionId) : null);
+      if (profile?.phone) connectedPhone = String(profile.phone).replace(/\D/g, '');
+    } catch (_) {}
+
+    res.json(await db.getAllMessages(req.sessionId, browserSessionId, connectedPhone));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * PUT /api/messages/:id/reschedule
+ * Body: { scheduledAt, message? }
+ */
+app.put('/api/messages/:id/reschedule', async (req, res) => {
+  const id = req.params.id;
+  const { scheduledAt, message } = req.body || {};
+
+  if (!id) return res.status(400).json({ error: 'Message ID is required.' });
+  if (!scheduledAt) return res.status(400).json({ error: 'New scheduled date/time is required.' });
+
+  const schedDate = new Date(scheduledAt);
+  if (isNaN(schedDate.getTime())) {
+    return res.status(400).json({ error: 'Invalid date/time format.' });
+  }
+
+  if (schedDate.getTime() <= Date.now() + 30 * 1000) {
+    return res.status(400).json({ error: 'Scheduled time must be at least 30 seconds in the future.' });
+  }
+
+  try {
+    const updated = await db.rescheduleMessage(id, schedDate, message);
+    if (!updated) {
+      return res.status(404).json({ error: 'Message not found.' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Message successfully rescheduled!',
+      data: {
+        id: updated._id.toString(),
+        scheduled_at: db.toSqliteUtc(updated.scheduledAt),
+        status: updated.status
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

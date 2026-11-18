@@ -688,63 +688,46 @@ async function updateUserPlan(emailOrId, plan, customMonthlyLimit = null) {
 
 // ─── Convert Date to UTC string for compatibility ────────────────────────────
 function toSqliteUtc(dateInput) {
-  const d = (dateInput instanceof Date) ? dateInput : new Date(dateInput);
-  return d.toISOString().replace('T', ' ').replace(/\.\d+Z$/, '');
+  if (!dateInput) return null;
+  try {
+    const d = (dateInput instanceof Date) ? dateInput : new Date(dateInput);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString().replace('T', ' ').replace(/\.\d+Z$/, '');
+  } catch (_) {
+    return null;
+  }
 }
 
-// ─── Message Query Functions ──────────────────────────────────────────────────
-
-async function insertMessage(sessionId, phone, message, scheduledAt, recipientName = null, mediaType = null, mediaData = null, mediaName = null, mediaList = [], pollData = null, mentions = []) {
-  const schedDate = new Date(scheduledAt);
-
-  let cleanMediaData = mediaData;
-  if (cleanMediaData) {
-    cleanMediaData = await saveMediaToDisk(cleanMediaData, mediaName, mediaType);
+async function rescheduleMessage(id, newScheduledAt, newMessageText = null) {
+  const schedDate = new Date(newScheduledAt);
+  if (isNaN(schedDate.getTime())) {
+    throw new Error('Invalid scheduled date/time.');
   }
 
-  let cleanMediaList = [];
-  if (Array.isArray(mediaList) && mediaList.length > 0) {
-    cleanMediaList = await Promise.all(mediaList.map(async (item) => {
-      let itemData = item.data;
-      if (itemData) {
-        itemData = await saveMediaToDisk(itemData, item.name, item.type);
-      }
-      return {
-        id: item.id || String(Date.now()),
-        type: item.type,
-        data: itemData,
-        name: item.name || null,
-        size: item.size || null,
-        preview: null // Keep MongoDB document < 1KB to prevent BSON RangeError
-      };
-    }));
-  }
-
-  const msg = new ScheduledMessage({
-    sessionId,
-    encryptedNumber: encrypt(phone),
-    encryptedRecipientName: encrypt(recipientName),
-    encryptedMessageText: encrypt(message || ''),
-    mediaType: mediaType || null,
-    mediaData: cleanMediaData || null,
-    mediaName: mediaName || null,
-    mediaList: cleanMediaList,
-    mentions: Array.isArray(mentions) ? mentions : [],
-    pollData: pollData && pollData.question ? {
-      question: String(pollData.question).trim(),
-      options: Array.isArray(pollData.options) ? pollData.options.map(o => String(o).trim()).filter(Boolean) : [],
-      allowMultiple: Boolean(pollData.allowMultiple)
-    } : null,
+  const updateFields = {
     scheduledAt: schedDate,
-    status: 'pending'
-  });
-  await msg.save();
-  await enforceRollingCap(sessionId);
-  return msg._id.toString();
+    status: 'pending',
+    error: null
+  };
+
+  if (newMessageText !== null && newMessageText !== undefined) {
+    updateFields.encryptedMessageText = encrypt(String(newMessageText).trim());
+  }
+
+  const updated = await ScheduledMessage.findByIdAndUpdate(
+    id,
+    { $set: updateFields },
+    { new: true }
+  );
+
+  return updated;
 }
 
-async function getAllMessages(sessionId) {
+async function getAllMessages(sessionId, browserSessionId = null, connectedPhone = null) {
   let sessionIds = [sessionId];
+  if (browserSessionId && browserSessionId !== sessionId) {
+    sessionIds.push(browserSessionId);
+  }
 
   if (sessionId && sessionId.startsWith('user_acc_')) {
     const accountId = sessionId.replace('user_acc_', '');
@@ -752,7 +735,12 @@ async function getAllMessages(sessionId) {
       const account = await AuthAccount.findById(accountId).lean();
       if (account?.linkedWhatsAppPhone) {
         const rawPhone = account.linkedWhatsAppPhone.replace(/\D/g, '');
-        const waUsers = await User.find({ phoneNumber: { $regex: rawPhone.slice(-10) + '$' } }).lean();
+        const waUsers = await User.find({
+          $or: [
+            { phoneNumber: rawPhone },
+            { phoneNumber: { $regex: rawPhone.slice(-10) + '$' } }
+          ]
+        }).lean();
         waUsers.forEach(w => sessionIds.push(w.sessionId));
       }
     } catch (_) {}
@@ -774,6 +762,20 @@ async function getAllMessages(sessionId) {
     } catch (_) {}
   }
 
+  // Also include sessions matching connectedPhone if provided
+  if (connectedPhone) {
+    try {
+      const rawDigits = String(connectedPhone).replace(/\D/g, '');
+      const waUsers = await User.find({
+        $or: [
+          { phoneNumber: rawDigits },
+          { phoneNumber: { $regex: rawDigits.slice(-10) + '$' } }
+        ]
+      }).lean();
+      waUsers.forEach(w => sessionIds.push(w.sessionId));
+    } catch (_) {}
+  }
+
   sessionIds = Array.from(new Set(sessionIds.filter(Boolean)));
   // In single-tenant or active session mode, also include any messages if sessionIds match or fallback to all for user
   const docs = await ScheduledMessage.find({ sessionId: { $in: sessionIds } }).sort({ createdAt: -1 }).lean();
@@ -790,37 +792,52 @@ async function getAllMessages(sessionId) {
   }
 
   return docs.map(m => {
-    const phone = decrypt(m.encryptedNumber);
-    let name = decrypt(m.encryptedRecipientName) || null;
-    if (!name || name === phone || name === `+${phone}`) {
-      name = contactMap[phone] || null;
+    try {
+      const phone = decrypt(m.encryptedNumber) || m.encryptedNumber;
+      let name = decrypt(m.encryptedRecipientName) || null;
+      if (!name || name === phone || name === `+${phone}`) {
+        name = contactMap[phone] || null;
+      }
+      return {
+        id: m._id.toString(),
+        phone,
+        recipient_name: name,
+        message: decrypt(m.encryptedMessageText) || '',
+        mediaType: m.mediaType || null,
+        mediaData: m.mediaData ? (m.mediaData.startsWith('disk:') ? `/api/media/${m._id}` : m.mediaData) : null,
+        mediaName: m.mediaName || null,
+        mediaList: (m.mediaList || []).map((item, idx) => ({
+          id: item.id || String(idx),
+          type: item.type,
+          name: item.name,
+          size: item.size,
+          data: item.data ? (item.data.startsWith('disk:') ? `/api/media/${m._id}?idx=${idx}` : item.data) : null,
+          preview: item.data && item.data.startsWith('disk:') ? `/api/media/${m._id}?idx=${idx}` : (item.preview || null)
+        })),
+        mediaPurged: Boolean(m.mediaPurged),
+        pollData: m.pollData || null,
+        scheduled_at: toSqliteUtc(m.scheduledAt) || toSqliteUtc(m.createdAt),
+        status: m.status,
+        error: m.error,
+        wa_message_id: m.waMessageId,
+        created_at: toSqliteUtc(m.createdAt)
+      };
+    } catch (parseErr) {
+      console.warn('[getAllMessages] Item parse error:', m._id, parseErr.message);
+      return {
+        id: m._id.toString(),
+        phone: 'Unknown',
+        recipient_name: null,
+        message: '',
+        scheduled_at: toSqliteUtc(m.scheduledAt || m.createdAt),
+        status: m.status || 'pending',
+        created_at: toSqliteUtc(m.createdAt)
+      };
     }
-    return {
-      id: m._id.toString(),
-      phone,
-      recipient_name: name,
-      message: decrypt(m.encryptedMessageText),
-      mediaType: m.mediaType || null,
-      mediaData: m.mediaData ? (m.mediaData.startsWith('disk:') ? `/api/media/${m._id}` : m.mediaData) : null,
-      mediaName: m.mediaName || null,
-      mediaList: (m.mediaList || []).map((item, idx) => ({
-        id: item.id || String(idx),
-        type: item.type,
-        name: item.name,
-        size: item.size,
-        data: item.data ? (item.data.startsWith('disk:') ? `/api/media/${m._id}?idx=${idx}` : item.data) : null,
-        preview: item.data && item.data.startsWith('disk:') ? `/api/media/${m._id}?idx=${idx}` : (item.preview || null)
-      })),
-      mediaPurged: Boolean(m.mediaPurged),
-      pollData: m.pollData || null,
-      scheduled_at: toSqliteUtc(m.scheduledAt),
-      status: m.status,
-      error: m.error,
-      wa_message_id: m.waMessageId,
-      created_at: toSqliteUtc(m.createdAt)
-    };
   });
 }
+
+
 
 async function getPendingDueMessages() {
   const now = new Date();
@@ -1234,6 +1251,7 @@ module.exports = {
   encrypt,
   decrypt,
   insertMessage,
+  rescheduleMessage,
   getAllMessages,
   getPendingDueMessages,
   updateMessageStatus,

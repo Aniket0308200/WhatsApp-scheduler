@@ -5,6 +5,7 @@ import { cancelMessage, deleteMessage } from '../api';
 import MediaGalleryModal from './MediaGalleryModal';
 import AdvancedAnalytics from './AdvancedAnalytics';
 import { formatUtcToZoned, getUserTimeZone } from '../utils/timezoneHelper';
+import RescheduleModal from './RescheduleModal';
 
 const STATUS_BADGE = {
   pending:    { label: '⏳ Pending',     cls: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-900/40' },
@@ -49,6 +50,7 @@ export default function MessageTable({ messages, loading, onRefresh, plan = 'fre
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [galleryData, setGalleryData] = useState(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState(null);
 
   // Reset page to 1 if messages count increases (indicating a new message was scheduled)
   const prevCountRef = useRef(messages.length);
@@ -441,6 +443,18 @@ export default function MessageTable({ messages, loading, onRefresh, plan = 'fre
                     {/* Actions */}
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
+                        {(msg.status === 'pending' || msg.status === 'failed' || msg.status === 'cancelled') && (
+                          <button
+                            type="button"
+                            onClick={() => setRescheduleTarget(msg)}
+                            disabled={isBusy}
+                            className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 font-semibold cursor-pointer disabled:opacity-50"
+                            title="Reschedule or edit this message"
+                          >
+                            <span>✏️</span>
+                            <span>Reschedule</span>
+                          </button>
+                        )}
                         {msg.status === 'pending' && (
                           <button
                             onClick={() => handleCancel(msg.id)}
@@ -558,6 +572,19 @@ export default function MessageTable({ messages, loading, onRefresh, plan = 'fre
           items={galleryData.items}
           readOnly={true}
           mediaPurged={galleryData.purged}
+        />
+      )}
+
+      {/* ── Reschedule Modal ────────────────────────────────────────────── */}
+      {rescheduleTarget && (
+        <RescheduleModal
+          isOpen={Boolean(rescheduleTarget)}
+          message={rescheduleTarget}
+          onClose={() => setRescheduleTarget(null)}
+          onSuccess={() => {
+            onRefresh?.();
+            setRescheduleTarget(null);
+          }}
         />
       )}
     </div>

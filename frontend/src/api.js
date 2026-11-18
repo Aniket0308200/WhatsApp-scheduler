@@ -18,8 +18,9 @@ export const api = axios.create({
   baseURL: API_BASE_URL,
 });
 
-// Dynamic session mapping: Bind X-Session-ID to logged-in User Account ID
+// Dynamic session mapping: Bind X-Session-ID to logged-in User Account ID and pass X-Browser-Session-ID
 api.interceptors.request.use((config) => {
+  config.headers['X-Browser-Session-ID'] = sessionId;
   try {
     const savedUser = localStorage.getItem('wa_auth_user');
     if (savedUser) {
@@ -97,10 +98,11 @@ export const fetchLinkedGoogleAccounts = () =>
   api.get('/auth/google/linked').then(r => r.data);
 
 // ─── Messages ────────────────────────────────────────────────────────────────
-export const fetchMessages   = ()        => api.get('/messages').then(r => r.data);
-export const scheduleMessage = (payload) => api.post('/messages', payload).then(r => r.data);
-export const cancelMessage   = (id)      => api.delete(`/messages/${id}`).then(r => r.data);
-export const deleteMessage   = (id)      => api.delete(`/messages/${id}?permanent=true`).then(r => r.data);
+export const fetchMessages      = ()        => api.get('/messages').then(r => r.data);
+export const scheduleMessage    = (payload) => api.post('/messages', payload).then(r => r.data);
+export const rescheduleMessage  = (id, payload) => api.put(`/messages/${id}/reschedule`, payload).then(r => r.data);
+export const cancelMessage      = (id)      => api.delete(`/messages/${id}`).then(r => r.data);
+export const deleteMessage      = (id)      => api.delete(`/messages/${id}?permanent=true`).then(r => r.data);
 
 // ─── Feedback & Support ──────────────────────────────────────────────────────
 export const fetchPublicFeedback   = ()        => api.get('/feedback/public').then(r => r.data);
