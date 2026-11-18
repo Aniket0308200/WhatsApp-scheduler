@@ -453,6 +453,7 @@ const ScheduledMessageSchema = new mongoose.Schema({
 });
 
 ScheduledMessageSchema.index({ sessionId: 1, scheduledAt: 1 });
+ScheduledMessageSchema.index({ sessionId: 1, createdAt: -1 });
 ScheduledMessageSchema.index({ status: 1, scheduledAt: 1 });
 ScheduledMessageSchema.index({ waMessageId: 1 });
 
@@ -828,18 +829,60 @@ async function getAllMessages(sessionId, browserSessionId = null, connectedPhone
   }
 
   sessionIds = Array.from(new Set(sessionIds.filter(Boolean)));
-  // In single-tenant or active session mode, also include any messages if sessionIds match or fallback to all for user
-  const docs = await ScheduledMessage.find({ sessionId: { $in: sessionIds } }).sort({ createdAt: -1 }).lean();
+  // In single-tenant or active session mode, fetch recent messages with positive projection to strip heavy raw base64 data and ensure instant response
+  const docs = await ScheduledMessage.find({ sessionId: { $in: sessionIds } })
+    .select({
+      _id: 1,
+      sessionId: 1,
+      encryptedNumber: 1,
+      encryptedRecipientName: 1,
+      encryptedMessageText: 1,
+      mediaType: 1,
+      mediaName: 1,
+      'mediaList.id': 1,
+      'mediaList.type': 1,
+      'mediaList.name': 1,
+      'mediaList.size': 1,
+      mediaPurged: 1,
+      pollData: 1,
+      scheduledAt: 1,
+      status: 1,
+      error: 1,
+      waMessageId: 1,
+      createdAt: 1
+    })
+    .sort({ createdAt: -1 })
+    .limit(500)
+    .lean();
   
-  // Fetch contacts for the session to resolve names dynamically
-  const contacts = await Contact.find({ sessionId: { $in: sessionIds } }).lean();
-  const contactMap = {};
-  for (const c of contacts) {
-    const decName = decrypt(c.encryptedName);
-    const decPhone = decrypt(c.encryptedNumberOrJid);
-    if (decName && decName !== decPhone && decName !== `+${decPhone}`) {
-      contactMap[decPhone] = decName;
+  // Resolve recipient contact names on-demand only for numbers missing a display name
+  const missingNamePhones = new Set();
+  for (const m of docs) {
+    const rawName = decrypt(m.encryptedRecipientName);
+    const rawPhone = decrypt(m.encryptedNumber) || m.encryptedNumber;
+    if (!rawName || rawName === rawPhone || rawName === `+${rawPhone}`) {
+      if (rawPhone) missingNamePhones.add(rawPhone);
     }
+  }
+
+  const contactMap = {};
+  if (missingNamePhones.size > 0) {
+    try {
+      const samplePhones = Array.from(missingNamePhones).slice(0, 50);
+      const encPhones = samplePhones.map(p => encrypt(p));
+      const matchedContacts = await Contact.find({
+        sessionId: { $in: sessionIds },
+        encryptedNumberOrJid: { $in: encPhones }
+      }).select('encryptedName encryptedNumberOrJid').lean();
+
+      for (const c of matchedContacts) {
+        const decName = decrypt(c.encryptedName);
+        const decPhone = decrypt(c.encryptedNumberOrJid);
+        if (decName && decName !== decPhone && decName !== `+${decPhone}`) {
+          contactMap[decPhone] = decName;
+        }
+      }
+    } catch (_) {}
   }
 
   return docs.map(m => {
@@ -855,15 +898,15 @@ async function getAllMessages(sessionId, browserSessionId = null, connectedPhone
         recipient_name: name,
         message: decrypt(m.encryptedMessageText) || '',
         mediaType: m.mediaType || null,
-        mediaData: m.mediaData ? (m.mediaData.startsWith('disk:') ? `/api/media/${m._id}` : m.mediaData) : null,
+        mediaData: m.mediaType ? `/api/media/${m._id}` : null,
         mediaName: m.mediaName || null,
         mediaList: (m.mediaList || []).map((item, idx) => ({
           id: item.id || String(idx),
           type: item.type,
           name: item.name,
           size: item.size,
-          data: item.data ? (item.data.startsWith('disk:') ? `/api/media/${m._id}?idx=${idx}` : item.data) : null,
-          preview: item.data && item.data.startsWith('disk:') ? `/api/media/${m._id}?idx=${idx}` : (item.preview || null)
+          data: `/api/media/${m._id}?idx=${idx}`,
+          preview: `/api/media/${m._id}?idx=${idx}`
         })),
         mediaPurged: Boolean(m.mediaPurged),
         pollData: m.pollData || null,
