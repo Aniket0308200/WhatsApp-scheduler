@@ -58,6 +58,17 @@ export default function App() {
   const [selectedUpgradeCycle, setSelectedUpgradeCycle] = useState('monthly');
   const [showExpiredModal, setShowExpiredModal] = useState(false);
   const [hasShownExpiredPopup, setHasShownExpiredPopup] = useState(false);
+  const [editingMessage, setEditingMessage] = useState(null);
+  const schedulerSectionRef = useRef(null);
+
+  const handleStartReschedule = useCallback((msg) => {
+    setEditingMessage(msg);
+    if (schedulerSectionRef.current) {
+      schedulerSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
   const [pendingUpgradePlan, setPendingUpgradePlan] = useState(() => {
     try {
       return localStorage.getItem('wa_pending_upgrade_plan');
@@ -407,17 +418,22 @@ export default function App() {
                       </div>
                     )}
 
-                    <SchedulerForm
-                      isConnected={isConnected}
-                      isReconnecting={isReconnecting}
-                      onScheduled={() => {
-                        refreshMessages();
-                        refreshQuota();
-                      }}
-                      isSyncing={isSyncing}
-                      quota={quota}
-                      onViewQuota={() => setActiveView('quota')}
-                    />
+                    <div ref={schedulerSectionRef}>
+                      <SchedulerForm
+                        isConnected={isConnected}
+                        isReconnecting={isReconnecting}
+                        onScheduled={() => {
+                          setEditingMessage(null);
+                          refreshMessages();
+                          refreshQuota();
+                        }}
+                        isSyncing={isSyncing}
+                        quota={quota}
+                        onViewQuota={() => setActiveView('quota')}
+                        editTarget={editingMessage}
+                        onCancelEdit={() => setEditingMessage(null)}
+                      />
+                    </div>
 
                     <MessageTable
                       messages={messages}
@@ -428,6 +444,7 @@ export default function App() {
                       }}
                       plan={quota?.plan || 'free'}
                       onViewQuota={() => setActiveView('quota')}
+                      onReschedule={handleStartReschedule}
                     />
                   </div>
                 )

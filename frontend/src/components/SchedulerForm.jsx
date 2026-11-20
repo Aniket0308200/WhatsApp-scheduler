@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { format, addMinutes, addSeconds } from 'date-fns';
-import { scheduleMessage, fetchContactName, resolveContactLive, importContacts, fetchAllContacts, fetchGoogleAuthUrl, fetchLinkedGoogleAccounts, syncGroups, deleteGoogleAccount } from '../api';
+import { scheduleMessage, rescheduleMessage, fetchContactName, resolveContactLive, importContacts, fetchAllContacts, fetchGoogleAuthUrl, fetchLinkedGoogleAccounts, syncGroups, deleteGoogleAccount } from '../api';
 import DateTimePicker from './DateTimePicker';
 import GifStickerPickerModal, { WhatsAppStickerIcon, WhatsAppGifIcon, convertImageFileToWebpSticker } from './GifStickerPickerModal';
 import MediaGalleryModal from './MediaGalleryModal';
@@ -250,7 +250,7 @@ function ContactsImportModal({ onClose, onImported }) {
   );
 }
 
-export default function SchedulerForm({ isConnected, isReconnecting = false, onScheduled, isSyncing, quota, onViewQuota }) {
+export default function SchedulerForm({ isConnected, isReconnecting = false, onScheduled, isSyncing, quota, onViewQuota, editTarget = null, onCancelEdit = null }) {
   const { dark } = useTheme();
   const getFullPhone = (cc, ph) => {
     if (ph && ph.endsWith('@g.us')) {
@@ -912,6 +912,96 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
 
   const handleRemoveMedia = handleRemoveAllMedia;
 
+  // ── Reschedule Target listener & edit mode state ──
+  const [editingMessageId, setEditingMessageId] = useState(null);
+
+  useEffect(() => {
+    if (!editTarget) {
+      setEditingMessageId(null);
+      return;
+    }
+
+    setEditingMessageId(editTarget.id);
+
+    // Populate recipients
+    if (editTarget.phone === 'status@broadcast') {
+      setRecipients([{ phone: 'status@broadcast', name: 'WhatsApp Status', isGroup: false }]);
+    } else {
+      setRecipients([{
+        phone: editTarget.phone,
+        name: editTarget.recipient_name || null,
+        isGroup: String(editTarget.phone).endsWith('@g.us')
+      }]);
+    }
+
+    // Populate message
+    setMessage(editTarget.message || '');
+
+    // Populate poll
+    setPollData(editTarget.pollData || null);
+
+    // Populate media files
+    if (Array.isArray(editTarget.mediaList) && editTarget.mediaList.length > 0) {
+      setAttachedMediaList(editTarget.mediaList.map((m, idx) => ({
+        id: m.id || String(idx),
+        type: m.type,
+        name: m.name || 'Media File',
+        size: m.size || null,
+        data: m.data || `/api/media/${editTarget.id}?idx=${idx}`,
+        preview: m.preview || m.data || `/api/media/${editTarget.id}?idx=${idx}`
+      })));
+    } else if (editTarget.mediaType && editTarget.mediaType !== 'poll' && editTarget.mediaType !== 'multiple') {
+      setAttachedMediaList([{
+        id: '1',
+        type: editTarget.mediaType,
+        name: editTarget.mediaName || 'Media File',
+        size: null,
+        data: editTarget.mediaData || `/api/media/${editTarget.id}`,
+        preview: editTarget.mediaData || `/api/media/${editTarget.id}`
+      }]);
+    } else {
+      setAttachedMediaList([]);
+    }
+
+    // Populate scheduled date & time
+    if (editTarget.scheduled_at) {
+      try {
+        const clean = String(editTarget.scheduled_at).includes('T')
+          ? editTarget.scheduled_at
+          : String(editTarget.scheduled_at).replace(' ', 'T') + 'Z';
+        const d = new Date(clean);
+        if (!isNaN(d.getTime())) {
+          if (d.getTime() > Date.now() + 60000) {
+            const pad = n => String(n).padStart(2, '0');
+            setScheduledAt(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`);
+          } else {
+            setScheduledAt(getDefaultTime());
+          }
+        }
+      } catch {
+        setScheduledAt(getDefaultTime());
+      }
+    } else {
+      setScheduledAt(getDefaultTime());
+    }
+    setTimeConfirmed(true);
+  }, [editTarget]);
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null);
+    setPhone('');
+    setMessage('');
+    setPollData(null);
+    handleRemoveAllMedia();
+    setScheduledAt(getDefaultTime());
+    setTimeConfirmed(false);
+    setContactName(null);
+    setContactExists(false);
+    setRecipients([]);
+    onCancelEdit?.();
+    toast('Rescheduling cancelled. Original message unchanged.', { icon: 'ℹ️' });
+  };
+
   const handleInsertEmoji = (emoji) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -1149,8 +1239,8 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       return;
     }
 
-    // Check quota against total recipients being scheduled
-    if (!isProOrUnlimited && quota && typeof quota.remaining === 'number' && quota.remaining < finalRecipients.length) {
+    // Check quota against total recipients being scheduled (skip quota deduction if editing existing 1-recipient message)
+    if (!editingMessageId && !isProOrUnlimited && quota && typeof quota.remaining === 'number' && quota.remaining < finalRecipients.length) {
       toast.error(`Not enough quota. You have ${quota.remaining} message(s) remaining but are trying to send to ${finalRecipients.length} recipients.`);
       return;
     }
@@ -1177,10 +1267,27 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
         pollData: pollData || null
       };
 
-      const res = await scheduleMessage(payload);
-      const totalScheduled = res?.count || finalRecipients.length;
+      if (editingMessageId) {
+        // Rescheduling existing message
+        await rescheduleMessage(editingMessageId, payload);
 
-      toast.success(totalScheduled === 1 ? 'Message scheduled successfully!' : `${totalScheduled} messages scheduled successfully!`);
+        // If extra recipients were added during reschedule, schedule them as well
+        if (finalRecipients.length > 1) {
+          const additionalRecipients = finalRecipients.slice(1);
+          await scheduleMessage({
+            ...payload,
+            recipients: additionalRecipients
+          });
+        }
+
+        toast.success('Message rescheduled successfully!');
+        setEditingMessageId(null);
+        onCancelEdit?.();
+      } else {
+        const res = await scheduleMessage(payload);
+        const totalScheduled = res?.count || finalRecipients.length;
+        toast.success(totalScheduled === 1 ? 'Message scheduled successfully!' : `${totalScheduled} messages scheduled successfully!`);
+      }
 
       // Reset form
       setPhone('');
@@ -1311,6 +1418,32 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
       </div>
 
       <form onSubmit={handleSubmit} className="p-5 space-y-5">
+
+        {/* ── Rescheduling In-Progress Banner ────────────────────────────── */}
+        {editingMessageId && (
+          <div className="p-3.5 sm:p-4 bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-500/30 dark:border-emerald-700/50 rounded-2xl flex items-center justify-between gap-3 text-xs shadow-xs animate-fade-in">
+            <div className="flex items-center gap-2.5">
+              <span className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 text-base flex-shrink-0">
+                ✏️
+              </span>
+              <div>
+                <p className="font-bold text-emerald-950 dark:text-emerald-200 text-sm">
+                  Rescheduling Message
+                </p>
+                <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                  Update recipients, message text, media attachments, or scheduled date/time below.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              className="px-3 py-1.5 rounded-xl bg-white dark:bg-wa-dsurf text-slate-700 dark:text-wa-dtext font-semibold border border-slate-200 dark:border-wa-dbdr hover:bg-slate-50 dark:hover:bg-wa-dsurf/80 shadow-2xs transition-colors cursor-pointer shrink-0"
+            >
+              ✕ Cancel
+            </button>
+          </div>
+        )}
 
         {/* ── Recipients (multi-chip) ────────────────────────────────────── */}
         <div>
@@ -2090,7 +2223,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
           const hasValidRecipient = recipients.length > 0 || Boolean(phone.trim());
           const hasValidContent = Boolean(message.trim() || attachedMediaList.length > 0 || pollData);
           const canConnect = isConnected || isReconnecting;
-          const isQuotaExhausted = Boolean(quota && !quota.isUnlimited && quota.plan !== 'pro' && typeof quota.remaining === 'number' && quota.remaining <= 0);
+          const isQuotaExhausted = Boolean(!editingMessageId && quota && !quota.isUnlimited && quota.plan !== 'pro' && typeof quota.remaining === 'number' && quota.remaining <= 0);
 
           const isSubmitDisabled = loading ||
             !canConnect ||
@@ -2101,7 +2234,31 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
 
           const isReady = !isSubmitDisabled;
 
-          return (
+          return editingMessageId ? (
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                disabled={loading}
+                className="w-full sm:w-1/3 py-3 px-4 rounded-xl text-sm font-semibold border border-slate-300 dark:border-wa-dbdr text-slate-700 dark:text-wa-dtext bg-slate-100 hover:bg-slate-200 dark:bg-wa-dsurf dark:hover:bg-slate-700 transition-all cursor-pointer text-center"
+              >
+                ✕ Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitDisabled}
+                className={`w-full sm:w-2/3 font-semibold py-3 rounded-xl text-sm shadow-sm flex items-center justify-center gap-2 transition-colors
+                  ${isReady
+                    ? 'bg-wa-green hover:bg-wa-teal text-white cursor-pointer active:scale-[0.99]'
+                    : 'bg-gray-200 dark:bg-wa-dsurf text-gray-400 dark:text-wa-dmuted cursor-not-allowed border dark:border-wa-dbdr'}`}
+              >
+                {loading && (
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                )}
+                {loading ? 'Rescheduling…' : '📅 Reschedule Message'}
+              </button>
+            </div>
+          ) : (
             <button
               type="submit"
               disabled={isSubmitDisabled}

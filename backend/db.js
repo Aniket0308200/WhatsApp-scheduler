@@ -750,7 +750,7 @@ async function insertMessage(sessionId, phone, message, scheduledAt, recipientNa
   return msg._id.toString();
 }
 
-async function rescheduleMessage(id, newScheduledAt, newMessageText = null) {
+async function rescheduleMessage(id, newScheduledAt, newMessageText = null, extraPayload = {}) {
   const schedDate = new Date(newScheduledAt);
   if (isNaN(schedDate.getTime())) {
     throw new Error('Invalid scheduled date/time.');
@@ -764,6 +764,47 @@ async function rescheduleMessage(id, newScheduledAt, newMessageText = null) {
 
   if (newMessageText !== null && newMessageText !== undefined) {
     updateFields.encryptedMessageText = encrypt(String(newMessageText).trim());
+  }
+
+  if (extraPayload.phone) {
+    updateFields.encryptedNumber = encrypt(String(extraPayload.phone).trim());
+  }
+  if (extraPayload.recipientName !== undefined) {
+    updateFields.encryptedRecipientName = encrypt(String(extraPayload.recipientName || '').trim());
+  }
+  if (extraPayload.mediaType !== undefined) {
+    updateFields.mediaType = extraPayload.mediaType || null;
+  }
+  if (extraPayload.mediaName !== undefined) {
+    updateFields.mediaName = extraPayload.mediaName || null;
+  }
+  if (extraPayload.pollData !== undefined) {
+    updateFields.pollData = extraPayload.pollData && extraPayload.pollData.question ? {
+      question: String(extraPayload.pollData.question).trim(),
+      options: Array.isArray(extraPayload.pollData.options) ? extraPayload.pollData.options.map(o => String(o).trim()).filter(Boolean) : [],
+      allowMultiple: Boolean(extraPayload.pollData.allowMultiple)
+    } : null;
+  }
+
+  if (extraPayload.mediaData) {
+    updateFields.mediaData = await saveMediaToDisk(extraPayload.mediaData, extraPayload.mediaName, extraPayload.mediaType);
+  }
+
+  if (Array.isArray(extraPayload.mediaList)) {
+    updateFields.mediaList = await Promise.all(extraPayload.mediaList.map(async (item) => {
+      let itemData = item.data;
+      if (itemData && !itemData.startsWith('disk:') && !itemData.startsWith('/api/media/')) {
+        itemData = await saveMediaToDisk(itemData, item.name, item.type);
+      }
+      return {
+        id: item.id || String(Date.now()),
+        type: item.type,
+        data: itemData,
+        name: item.name || null,
+        size: item.size || null,
+        preview: null
+      };
+    }));
   }
 
   const updated = await ScheduledMessage.findByIdAndUpdate(

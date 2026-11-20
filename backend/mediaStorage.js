@@ -14,8 +14,8 @@ if (!fs.existsSync(MEDIA_DIR)) {
 async function saveMediaToDisk(payload, filename = null, mimeType = null) {
   if (!payload || typeof payload !== 'string') return payload;
 
-  // If already on disk, return as is
-  if (payload.startsWith('disk:') || payload.startsWith('http://') || payload.startsWith('https://')) {
+  // If already on disk, or an existing media API reference, return as is
+  if (payload.startsWith('disk:') || payload.startsWith('/api/media/') || payload.startsWith('http://') || payload.startsWith('https://')) {
     return payload;
   }
 
@@ -83,6 +83,31 @@ async function readMediaBuffer(storedPayload) {
         return await fs.promises.readFile(filePath);
       }
       throw new Error(`Media file on disk not found: ${filePath}`);
+    }
+
+    if (storedPayload.startsWith('/api/media/')) {
+      try {
+        const urlParts = storedPayload.replace('/api/media/', '').split('?');
+        const msgId = urlParts[0];
+        const idxParam = new URLSearchParams(urlParts[1] || '').get('idx');
+        const idx = idxParam !== null ? parseInt(idxParam, 10) : null;
+        const mongoose = require('mongoose');
+        const ScheduledMessage = mongoose.model('ScheduledMessage');
+        const sourceMsg = await ScheduledMessage.findById(msgId).lean();
+        if (sourceMsg) {
+          let nested = null;
+          if (idx !== null && Array.isArray(sourceMsg.mediaList) && sourceMsg.mediaList[idx]?.data) {
+            nested = sourceMsg.mediaList[idx].data;
+          } else {
+            nested = sourceMsg.mediaData || (sourceMsg.mediaList && sourceMsg.mediaList[0]?.data);
+          }
+          if (nested && nested !== storedPayload) {
+            return await readMediaBuffer(nested);
+          }
+        }
+      } catch (err) {
+        console.error('[readMediaBuffer] Failed to resolve nested /api/media URL:', err.message);
+      }
     }
 
     if (storedPayload.startsWith('http://') || storedPayload.startsWith('https://')) {

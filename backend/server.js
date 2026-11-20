@@ -740,7 +740,7 @@ app.get('/api/messages', async (req, res) => {
  */
 app.put('/api/messages/:id/reschedule', async (req, res) => {
   const id = req.params.id;
-  const { scheduledAt, message } = req.body || {};
+  const { scheduledAt, message, ...extraPayload } = req.body || {};
 
   if (!id) return res.status(400).json({ error: 'Message ID is required.' });
   if (!scheduledAt) return res.status(400).json({ error: 'New scheduled date/time is required.' });
@@ -755,7 +755,7 @@ app.put('/api/messages/:id/reschedule', async (req, res) => {
   }
 
   try {
-    const updated = await db.rescheduleMessage(id, schedDate, message);
+    const updated = await db.rescheduleMessage(id, schedDate, message, extraPayload);
     if (!updated) {
       return res.status(404).json({ error: 'Message not found.' });
     }
