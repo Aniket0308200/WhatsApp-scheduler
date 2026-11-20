@@ -67,8 +67,11 @@ export default function GuidePage() {
       </div>
 
       {/* ── Quick Sticky Table of Contents Pills ───────────────────────────── */}
-      <div className="sticky top-20 z-30 bg-slate-100/85 dark:bg-[#111b21]/85 backdrop-blur-lg py-3 mb-10 border-y border-slate-200/80 dark:border-wa-dbdr/70 shadow-xs">
-        <div className="flex items-center gap-2 overflow-x-auto custom-scroll pb-1 px-1">
+      <div
+        className="sticky top-20 z-30 bg-slate-100/85 dark:bg-[#111b21]/85 backdrop-blur-lg mb-10 border border-slate-200/80 dark:border-wa-dbdr/70 shadow-xs rounded-[15px]"
+        style={{ borderRadius: '15px', padding: '20px 20px 15px 20px' }}
+      >
+        <div className="flex items-center gap-2 overflow-x-auto custom-scroll pb-2 px-1">
           {[
             { id: 'step-tour', label: '🧭 App Tour & Overview' },
             { id: 'step-1', label: '1. Sign In & Profile' },
