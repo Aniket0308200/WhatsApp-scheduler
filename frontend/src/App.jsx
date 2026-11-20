@@ -14,6 +14,7 @@ import AuthModal from './components/AuthModal';
 import PaymentModal from './components/PaymentModal';
 import SubscriptionExpiredModal from './components/SubscriptionExpiredModal';
 import AdminPanel from './components/AdminPanel';
+import GuidePage from './components/GuidePage';
 
 const POLL_INTERVAL_DISCONNECTED = 6_000;  // fast poll when waiting for QR/connection
 const POLL_INTERVAL_CONNECTED    = 30_000; // slow poll when already connected (stable)
@@ -225,7 +226,8 @@ export default function App() {
   useEffect(() => {
     const isAdminOrStatic = location.pathname.startsWith('/admin') ||
       location.pathname.startsWith('/privacy-policy') ||
-      location.pathname.startsWith('/terms-of-service');
+      location.pathname.startsWith('/terms-of-service') ||
+      location.pathname.startsWith('/guide');
 
     if (isAdminOrStatic) return;
 
@@ -248,7 +250,8 @@ export default function App() {
         refreshStatus();
         const isAdminOrStatic = location.pathname.startsWith('/admin') ||
           location.pathname.startsWith('/privacy-policy') ||
-          location.pathname.startsWith('/terms-of-service');
+          location.pathname.startsWith('/terms-of-service') ||
+          location.pathname.startsWith('/guide');
         if (!isAdminOrStatic && authUser) {
           refreshMessages();
           refreshQuota();
@@ -337,6 +340,7 @@ export default function App() {
   };
 
   const isPolicyOrTerms = location.pathname === '/privacy-policy' || location.pathname === '/terms-of-service';
+  const isGuidePage = location.pathname === '/guide';
   const isAdminPath = location.pathname.startsWith('/admin');
 
   if (isAdminPath) {
@@ -372,10 +376,11 @@ export default function App() {
         {/* Spacer to push content below fixed header */}
         <div className={`flex-shrink-0 transition-all duration-150 ${waStatus === 'connected' && (profile?.name || profile?.phone) ? 'h-[96px] sm:h-[60px]' : 'h-[60px]'}`} />
 
-        <main className={`flex-1 container mx-auto ${isPolicyOrTerms ? 'px-4 max-w-4xl' : activeView === 'landing' ? 'px-2 sm:px-4 max-w-6xl' : 'px-4 max-w-5xl'} py-6 mt-5 sm:mt-0 transition-all duration-200`}>
+        <main className={`flex-1 container mx-auto ${isPolicyOrTerms ? 'px-4 max-w-4xl' : isGuidePage ? 'px-4 max-w-6xl' : activeView === 'landing' ? 'px-2 sm:px-4 max-w-6xl' : 'px-4 max-w-5xl'} py-6 mt-5 sm:mt-0 transition-all duration-200`}>
           <Routes>
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/terms-of-service" element={<TermsOfService />} />
+            <Route path="/guide" element={<GuidePage />} />
             <Route
               path="*"
               element={

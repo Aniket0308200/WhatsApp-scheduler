@@ -713,18 +713,37 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
         )}
       </header>
 
-      {/* Floating Feedback & Support Button */}
-      <div className="fixed bottom-6 right-6 z-[99] group">
-        <div className="absolute bottom-16 right-0 mb-1 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 bg-slate-950/90 dark:bg-wa-dpanel/95 backdrop-blur-sm text-slate-100 text-xs font-semibold px-3 py-1.5 rounded-xl shadow-xl border border-slate-800 dark:border-wa-dbdr whitespace-nowrap">
-          Feedback & Support Box
+      {/* Floating Action Buttons: User Guide & Support */}
+      <div className="fixed bottom-6 right-6 z-[99] flex items-center gap-3">
+        {/* Floating User Guide & Docs Button (opens in new tab) */}
+        <div className="relative group">
+          <div className="absolute bottom-16 right-0 mb-1 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 bg-slate-950/90 dark:bg-wa-dpanel/95 backdrop-blur-sm text-slate-100 text-xs font-semibold px-3 py-1.5 rounded-xl shadow-xl border border-slate-800 dark:border-wa-dbdr whitespace-nowrap">
+            User Guide & Documentation 📖
+          </div>
+          <a
+            href="/guide"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-12 h-12 rounded-full bg-slate-800/90 hover:bg-slate-900 dark:bg-wa-dsurf dark:hover:bg-wa-dbdr text-white flex items-center justify-center shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 border border-slate-700/80 dark:border-wa-dbdr/80 cursor-pointer"
+            aria-label="User Guide & Documentation"
+          >
+            <span className="text-xl leading-none select-none">📖</span>
+          </a>
         </div>
-        <button
-          onClick={() => setShowFeedback(true)}
-          className="w-14 h-14 rounded-full bg-wa-teal hover:bg-wa-teal/90 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 border border-teal-400/20"
-          aria-label="Feedback & Support"
-        >
-          <span className="text-2xl leading-none select-none">💬</span>
-        </button>
+
+        {/* Support Button */}
+        <div className="relative group">
+          <div className="absolute bottom-16 right-0 mb-1 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 bg-slate-950/90 dark:bg-wa-dpanel/95 backdrop-blur-sm text-slate-100 text-xs font-semibold px-3 py-1.5 rounded-xl shadow-xl border border-slate-800 dark:border-wa-dbdr whitespace-nowrap">
+            Feedback & Support Box
+          </div>
+          <button
+            onClick={() => setShowFeedback(true)}
+            className="w-14 h-14 rounded-full bg-wa-teal hover:bg-wa-teal/90 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 border border-teal-400/20 cursor-pointer"
+            aria-label="Feedback & Support"
+          >
+            <span className="text-2xl leading-none select-none">💬</span>
+          </button>
+        </div>
       </div>
       {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
       {showAvatarModal && (
