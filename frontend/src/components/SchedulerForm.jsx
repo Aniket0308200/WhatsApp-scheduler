@@ -914,13 +914,21 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
 
   // ── Reschedule Target listener & edit mode state ──
   const [editingMessageId, setEditingMessageId] = useState(null);
+  const lastLoadedTargetId = useRef(null);
 
   useEffect(() => {
     if (!editTarget) {
       setEditingMessageId(null);
+      lastLoadedTargetId.current = null;
       return;
     }
 
+    // Only populate form fields if this is a newly selected message target,
+    // so in-progress user changes and attached GIF/stickers are NEVER wiped out by re-renders!
+    if (lastLoadedTargetId.current === editTarget.id) {
+      return;
+    }
+    lastLoadedTargetId.current = editTarget.id;
     setEditingMessageId(editTarget.id);
 
     // Populate recipients
@@ -988,6 +996,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
   }, [editTarget]);
 
   const handleCancelEdit = () => {
+    lastLoadedTargetId.current = null;
     setEditingMessageId(null);
     setPhone('');
     setMessage('');
@@ -1281,6 +1290,7 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
         }
 
         toast.success('Message rescheduled successfully!');
+        lastLoadedTargetId.current = null;
         setEditingMessageId(null);
         onCancelEdit?.();
       } else {
@@ -2290,84 +2300,85 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
             </button>
           );
         })()}
-        {/* WhatsApp GIF & Sticker Picker Modal */}
-        <GifStickerPickerModal
-          isOpen={showMediaPicker}
-          initialTab={mediaPickerTab}
-          onClose={() => setShowMediaPicker(false)}
-          onSelectMedia={(media) => {
-            handleAddSingleMedia(media);
-          }}
-          customStickerInputRef={stickerInputRef}
-          customGifInputRef={gifInputRef}
-        />
-
-        {/* In-Page Phone Gallery Modal for Folders */}
-        <MediaGalleryModal
-          isOpen={activeGalleryFolder !== null}
-          onClose={() => setActiveGalleryFolder(null)}
-          title={
-            activeGalleryFolder === 'image'
-              ? '📷 Photos & Images Gallery'
-              : activeGalleryFolder === 'video'
-                ? '🎥 Videos Gallery'
-                : activeGalleryFolder === 'audio'
-                  ? '🎵 Audio Files'
-                  : activeGalleryFolder === 'document'
-                    ? '📄 Documents (Original Uncompressed Quality)'
-                    : '🏷️ Stickers & GIFs'
-          }
-          category={activeGalleryFolder || 'all'}
-          items={
-            activeGalleryFolder === 'image'
-              ? imagesList
-              : activeGalleryFolder === 'video'
-                ? videosList
-                : activeGalleryFolder === 'audio'
-                  ? audiosList
-                  : activeGalleryFolder === 'document'
-                    ? documentsList
-                    : stickersGifsList
-          }
-          onRemoveItem={handleRemoveMediaItem}
-          onClearCategory={() => handleClearCategory(activeGalleryFolder)}
-          onEditItem={handleOpenMediaEditor}
-          onAddMore={() => {
-            if (activeGalleryFolder === 'document') {
-              documentInputRef.current?.click();
-            } else if (activeGalleryFolder === 'image' || activeGalleryFolder === 'video') {
-              photosVideosInputRef.current?.click();
-            } else if (activeGalleryFolder === 'audio') {
-              audioInputRef.current?.click();
-            } else {
-              setShowMediaPicker(true);
-            }
-          }}
-        />
-
-        {/* WhatsApp Poll Creator Modal */}
-        <PollModal
-          isOpen={showPollModal}
-          onClose={() => setShowPollModal(false)}
-          initialData={pollData}
-          onSave={(newPoll) => {
-            setPollData(newPoll);
-            toast.success(pollData ? 'Poll updated!' : 'WhatsApp Poll attached!');
-          }}
-        />
-
-        {/* Smart Media & Photo Editor Modal (Pro) */}
-        {editingMediaItem && (
-          <MediaEditorModal
-            isOpen={Boolean(editingMediaItem)}
-            onClose={() => setEditingMediaItem(null)}
-            mediaItem={editingMediaItem}
-            onSave={handleSaveEditedMedia}
-            plan={quota?.plan || 'free'}
-            onUpgrade={onViewQuota}
-          />
-        )}
       </form>
+
+      {/* WhatsApp GIF & Sticker Picker Modal (outside <form> to prevent accidental submission) */}
+      <GifStickerPickerModal
+        isOpen={showMediaPicker}
+        initialTab={mediaPickerTab}
+        onClose={() => setShowMediaPicker(false)}
+        onSelectMedia={(media) => {
+          handleAddSingleMedia(media);
+        }}
+        customStickerInputRef={stickerInputRef}
+        customGifInputRef={gifInputRef}
+      />
+
+      {/* In-Page Phone Gallery Modal for Folders */}
+      <MediaGalleryModal
+        isOpen={activeGalleryFolder !== null}
+        onClose={() => setActiveGalleryFolder(null)}
+        title={
+          activeGalleryFolder === 'image'
+            ? '📷 Photos & Images Gallery'
+            : activeGalleryFolder === 'video'
+              ? '🎥 Videos Gallery'
+              : activeGalleryFolder === 'audio'
+                ? '🎵 Audio Files'
+                : activeGalleryFolder === 'document'
+                  ? '📄 Documents (Original Uncompressed Quality)'
+                  : '🏷️ Stickers & GIFs'
+        }
+        category={activeGalleryFolder || 'all'}
+        items={
+          activeGalleryFolder === 'image'
+            ? imagesList
+            : activeGalleryFolder === 'video'
+              ? videosList
+              : activeGalleryFolder === 'audio'
+                ? audiosList
+                : activeGalleryFolder === 'document'
+                  ? documentsList
+                  : stickersGifsList
+        }
+        onRemoveItem={handleRemoveMediaItem}
+        onClearCategory={() => handleClearCategory(activeGalleryFolder)}
+        onEditItem={handleOpenMediaEditor}
+        onAddMore={() => {
+          if (activeGalleryFolder === 'document') {
+            documentInputRef.current?.click();
+          } else if (activeGalleryFolder === 'image' || activeGalleryFolder === 'video') {
+            photosVideosInputRef.current?.click();
+          } else if (activeGalleryFolder === 'audio') {
+            audioInputRef.current?.click();
+          } else {
+            setShowMediaPicker(true);
+          }
+        }}
+      />
+
+      {/* WhatsApp Poll Creator Modal */}
+      <PollModal
+        isOpen={showPollModal}
+        onClose={() => setShowPollModal(false)}
+        initialData={pollData}
+        onSave={(newPoll) => {
+          setPollData(newPoll);
+          toast.success(pollData ? 'Poll updated!' : 'WhatsApp Poll attached!');
+        }}
+      />
+
+      {/* Smart Media & Photo Editor Modal (Pro) */}
+      {editingMediaItem && (
+        <MediaEditorModal
+          isOpen={Boolean(editingMediaItem)}
+          onClose={() => setEditingMediaItem(null)}
+          mediaItem={editingMediaItem}
+          onSave={handleSaveEditedMedia}
+          plan={quota?.plan || 'free'}
+          onUpgrade={onViewQuota}
+        />
+      )}
       {showImportModal && (
         <ContactsImportModal
           onClose={() => setShowImportModal(false)}

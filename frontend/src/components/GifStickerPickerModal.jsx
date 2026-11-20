@@ -13,6 +13,21 @@ const USER_GIPHY_KEY = 'Zf8by2lWLWfdCtoo2008F6jWTarkTdKq';
 const ACTIVE_GIPHY_KEY = ENV_GIPHY_KEY.trim() || USER_GIPHY_KEY;
 
 /**
+ * Returns a proxied media URL to bypass ISP / DNS blocks on Giphy CDN domains in India
+ */
+export function getProxiedMediaUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  if (url.startsWith('data:') || url.startsWith('/api/')) return url;
+  if (url.includes('giphy.com')) {
+    const apiBase = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
+      ? 'http://localhost:5000'
+      : 'https://api.wascheduler.site';
+    return `${apiBase}/api/media/proxy?url=${encodeURIComponent(url)}`;
+  }
+  return url;
+}
+
+/**
  * Pixel-perfect SVG matching WhatsApp sticker icon:
  * Rounded square with folded/peeled bottom-right corner flap, circular eyes, and curved smiling mouth.
  */
@@ -111,6 +126,7 @@ export function convertImageFileToWebpSticker(file) {
  */
 export function convertImageUrlToWebpSticker(imageUrl) {
   return new Promise((resolve) => {
+    const finalUrl = getProxiedMediaUrl(imageUrl);
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
@@ -119,7 +135,7 @@ export function convertImageUrlToWebpSticker(imageUrl) {
         canvas.width = 512;
         canvas.height = 512;
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        if (!ctx) return resolve(imageUrl);
+        if (!ctx) return resolve(finalUrl);
 
         ctx.clearRect(0, 0, 512, 512);
         const scale = Math.min(512 / img.width, 512 / img.height);
@@ -133,13 +149,13 @@ export function convertImageUrlToWebpSticker(imageUrl) {
         resolve(webpUrl);
       } catch {
         // In case of CORS canvas taint, resolve direct URL
-        resolve(imageUrl);
+        resolve(finalUrl);
       }
     };
     img.onerror = () => {
-      resolve(imageUrl);
+      resolve(finalUrl);
     };
-    img.src = imageUrl;
+    img.src = finalUrl;
   });
 }
 
@@ -299,45 +315,54 @@ export default function GifStickerPickerModal({
   const handleSelectGif = async (gif) => {
     try {
       setIsProcessing(true);
-      const gifUrl =
+      const originalGifUrl =
         gif.images?.fixed_height?.url ||
         gif.images?.original?.url ||
         gif.images?.downsized_medium?.url;
 
-      if (!gifUrl) {
+      if (!originalGifUrl) {
         toast.error('Unable to retrieve GIF URL.');
         return;
       }
 
-      // Fetch GIF as blob or data URL so it's fully self-contained
+      const proxiedUrl = getProxiedMediaUrl(originalGifUrl);
+      let mediaData = originalGifUrl;
+      let previewUrl = proxiedUrl;
+
+      // Try fast buffer fetch via backend proxy with a 5s abort timeout
       try {
-        const res = await fetch(gifUrl);
-        const blob = await res.blob();
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          onSelectMedia({
-            type: 'gif',
-            data: reader.result,
-            name: `giphy_${gif.id}.gif`,
-            size: `${Math.round(blob.size / 1024)} KB`,
-            preview: gifUrl
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch(proxiedUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const blob = await res.blob();
+          const reader = new FileReader();
+          await new Promise((resolve) => {
+            reader.onloadend = () => {
+              if (reader.result) {
+                mediaData = reader.result;
+                previewUrl = reader.result;
+              }
+              resolve();
+            };
+            reader.readAsDataURL(blob);
           });
-          toast.success('GIF attached!');
-          onClose();
-        };
-        reader.readAsDataURL(blob);
-      } catch {
-        // Fallback: pass direct media URL
-        onSelectMedia({
-          type: 'gif',
-          data: gifUrl,
-          name: `giphy_${gif.id}.gif`,
-          size: 'GIF',
-          preview: gifUrl
-        });
-        toast.success('GIF attached!');
-        onClose();
+        }
+      } catch (e) {
+        console.warn('[GIF Fetch Proxy Fallback]', e.message);
       }
+
+      onSelectMedia({
+        type: 'gif',
+        data: mediaData,
+        name: `giphy_${gif.id}.gif`,
+        size: 'GIF',
+        preview: previewUrl
+      });
+      toast.success('GIF attached!');
+      onClose();
     } catch (err) {
       console.error('GIF selection error:', err);
       toast.error('Failed to attach GIF.');
@@ -424,6 +449,12 @@ export default function GifStickerPickerModal({
             <input
               type="text"
               value={searchQuery}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }
+              }}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
                 setActiveCategory('all');
@@ -511,11 +542,12 @@ export default function GifStickerPickerModal({
               /* Real-time Stickers Grid */
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
                 {items.map((item) => {
-                  const previewUrl =
+                  const rawPreviewUrl =
                     item.images?.fixed_height_small?.webp ||
                     item.images?.fixed_height_small?.url ||
                     item.images?.fixed_height?.webp ||
                     item.images?.fixed_height?.url;
+                  const previewUrl = getProxiedMediaUrl(rawPreviewUrl);
 
                   return (
                     <button
@@ -539,10 +571,11 @@ export default function GifStickerPickerModal({
               /* Real-time GIFs Grid */
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                 {items.map((gif) => {
-                  const previewUrl =
+                  const rawPreviewUrl =
                     gif.images?.fixed_height?.url ||
                     gif.images?.fixed_height_small?.url ||
                     gif.images?.original?.url;
+                  const previewUrl = getProxiedMediaUrl(rawPreviewUrl);
 
                   return (
                     <button

@@ -719,6 +719,48 @@ app.get('/api/media/:id', async (req, res) => {
   }
 });
 
+// Lightweight media proxy for Giphy & external CDN media (bypasses ISP blocks on Giphy)
+app.get('/api/media/proxy', async (req, res) => {
+  try {
+    const targetUrl = req.query.url;
+    if (!targetUrl || typeof targetUrl !== 'string' || (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://'))) {
+      return res.status(400).send('Invalid url parameter');
+    }
+
+    const parsed = new URL(targetUrl);
+    const allowedHosts = [
+      'giphy.com', 'media.giphy.com',
+      'media0.giphy.com', 'media1.giphy.com', 'media2.giphy.com', 'media3.giphy.com', 'media4.giphy.com',
+      'i.giphy.com', 'api.giphy.com'
+    ];
+    const isAllowed = allowedHosts.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h));
+    if (!isAllowed) {
+      return res.status(403).send('Forbidden host');
+    }
+
+    const axios = require('axios');
+    const response = await axios({
+      method: 'GET',
+      url: targetUrl,
+      responseType: 'stream',
+      timeout: 15000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+
+    res.set({
+      'Content-Type': response.headers['content-type'] || 'image/gif',
+      'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+      'Access-Control-Allow-Origin': '*'
+    });
+    return response.data.pipe(res);
+  } catch (err) {
+    console.error('[MediaProxy Error]', err.message);
+    return res.status(502).send('Failed to fetch remote media');
+  }
+});
+
 app.get('/api/messages', async (req, res) => {
   try {
     const browserSessionId = req.headers['x-browser-session-id'] || req.query.browserSessionId || null;
