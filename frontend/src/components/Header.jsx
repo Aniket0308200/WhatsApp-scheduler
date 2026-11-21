@@ -718,16 +718,27 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
         {/* Floating User Guide & Docs Button (opens in new tab) */}
         <div className="relative group">
           <div className="absolute bottom-16 right-0 mb-1 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 bg-slate-950/90 dark:bg-wa-dpanel/95 backdrop-blur-sm text-slate-100 text-xs font-semibold px-3 py-1.5 rounded-xl shadow-xl border border-slate-800 dark:border-wa-dbdr whitespace-nowrap">
-            User Guide & Documentation 📖
+            User Guide & Docs 📖
           </div>
           <a
             href="/guide"
             target="_blank"
             rel="noopener noreferrer"
-            className="w-12 h-12 rounded-full bg-slate-800/90 hover:bg-slate-900 dark:bg-wa-dsurf dark:hover:bg-wa-dbdr text-white flex items-center justify-center shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 border border-slate-700/80 dark:border-wa-dbdr/80 cursor-pointer"
+            className="w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 border border-emerald-400/30 cursor-pointer"
             aria-label="User Guide & Documentation"
           >
-            <span className="text-xl leading-none select-none">📖</span>
+            <svg
+              className="w-6 h-6 text-white"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+            </svg>
           </a>
         </div>
 
