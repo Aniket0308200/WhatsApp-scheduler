@@ -724,7 +724,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
             href="/guide"
             target="_blank"
             rel="noopener noreferrer"
-            className="w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 border border-emerald-400/30 cursor-pointer"
+            className="w-14 h-14 rounded-full bg-[#22332e] hover:bg-[#2a3e38] text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 border border-[#2338304d] cursor-pointer"
             aria-label="User Guide & Documentation"
           >
             <svg

@@ -68,7 +68,7 @@ export default function GuidePage() {
 
       {/* ── Quick Sticky Table of Contents Pills ───────────────────────────── */}
       <div
-        className="sticky top-20 z-30 bg-white/70 dark:bg-[rgba(17,27,33,0.75)] backdrop-blur-xl mb-10 border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.35)] rounded-[15px]"
+        className="sticky top-20 z-30 bg-white/70 dark:bg-[rgba(17,27,33,0.75)] backdrop-blur-[2px] mb-10 border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.35)] rounded-[15px]"
         style={{ borderRadius: '15px', padding: '20px 20px 15px 20px' }}
       >
         <div className="flex items-center gap-2 overflow-x-auto custom-scroll pb-2 px-1">
@@ -357,22 +357,20 @@ export default function GuidePage() {
                     <button
                       type="button"
                       onClick={() => setConnectTab('qr')}
-                      className={`flex-1 py-1.5 text-center text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                        connectTab === 'qr'
+                      className={`flex-1 py-1.5 text-center text-xs font-bold rounded-lg transition-all cursor-pointer ${connectTab === 'qr'
                           ? 'bg-white dark:bg-wa-dpanel text-emerald-700 dark:text-emerald-400 shadow-xs'
                           : 'text-slate-500 dark:text-wa-dmuted hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       📷 QR Code
                     </button>
                     <button
                       type="button"
                       onClick={() => setConnectTab('phone')}
-                      className={`flex-1 py-1.5 text-center text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                        connectTab === 'phone'
+                      className={`flex-1 py-1.5 text-center text-xs font-bold rounded-lg transition-all cursor-pointer ${connectTab === 'phone'
                           ? 'bg-white dark:bg-wa-dpanel text-emerald-700 dark:text-emerald-400 shadow-xs'
                           : 'text-slate-500 dark:text-wa-dmuted hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       📱 Phone Number
                     </button>
@@ -620,11 +618,10 @@ export default function GuidePage() {
                           key={offset}
                           type="button"
                           onClick={() => setSelectedTimeOffset(offset)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                            selectedTimeOffset === offset
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${selectedTimeOffset === offset
                               ? 'bg-wa-teal text-white border-wa-teal shadow-xs'
                               : 'bg-slate-100 dark:bg-wa-dsurf text-slate-600 dark:text-wa-dmuted border-slate-200 dark:border-wa-dbdr hover:bg-slate-200'
-                          }`}
+                            }`}
                         >
                           {offset}
                         </button>
@@ -704,11 +701,10 @@ export default function GuidePage() {
                         key={f.id}
                         type="button"
                         onClick={() => setSelectedFolder(f.id)}
-                        className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                          selectedFolder === f.id
+                        className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${selectedFolder === f.id
                             ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-400 dark:border-emerald-600 shadow-xs'
                             : 'bg-slate-50 dark:bg-wa-dsurf border-slate-200 dark:border-wa-dbdr hover:border-slate-300'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-1 text-xs font-bold text-slate-800 dark:text-wa-dtext">
                           <span>{f.icon}</span>
@@ -927,18 +923,16 @@ export default function GuidePage() {
                       <button
                         type="button"
                         onClick={() => setBillingCycle('monthly')}
-                        className={`px-2 py-1 rounded-md font-bold transition-all cursor-pointer ${
-                          billingCycle === 'monthly' ? 'bg-white dark:bg-wa-dpanel text-emerald-700 dark:text-emerald-300 shadow-2xs' : 'text-slate-400'
-                        }`}
+                        className={`px-2 py-1 rounded-md font-bold transition-all cursor-pointer ${billingCycle === 'monthly' ? 'bg-white dark:bg-wa-dpanel text-emerald-700 dark:text-emerald-300 shadow-2xs' : 'text-slate-400'
+                          }`}
                       >
                         Monthly
                       </button>
                       <button
                         type="button"
                         onClick={() => setBillingCycle('yearly')}
-                        className={`px-2 py-1 rounded-md font-bold transition-all cursor-pointer ${
-                          billingCycle === 'yearly' ? 'bg-white dark:bg-wa-dpanel text-emerald-700 dark:text-emerald-300 shadow-2xs' : 'text-slate-400'
-                        }`}
+                        className={`px-2 py-1 rounded-md font-bold transition-all cursor-pointer ${billingCycle === 'yearly' ? 'bg-white dark:bg-wa-dpanel text-emerald-700 dark:text-emerald-300 shadow-2xs' : 'text-slate-400'
+                          }`}
                       >
                         Yearly (-17%)
                       </button>
@@ -950,11 +944,10 @@ export default function GuidePage() {
                     <button
                       type="button"
                       onClick={() => setSelectedPlanTab('starter')}
-                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                        selectedPlanTab === 'starter'
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${selectedPlanTab === 'starter'
                           ? 'bg-slate-100 dark:bg-wa-dsurf border-slate-400 dark:border-wa-dtext shadow-xs'
                           : 'bg-slate-50 dark:bg-wa-dsurf/50 border-slate-200 dark:border-wa-dbdr'
-                      }`}
+                        }`}
                     >
                       <span className="font-bold block text-xs text-slate-900 dark:text-white">Starter Plan</span>
                       <span className="text-[10px] text-slate-400">
@@ -965,11 +958,10 @@ export default function GuidePage() {
                     <button
                       type="button"
                       onClick={() => setSelectedPlanTab('pro')}
-                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                        selectedPlanTab === 'pro'
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${selectedPlanTab === 'pro'
                           ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-400 dark:border-emerald-600 shadow-xs'
                           : 'bg-slate-50 dark:bg-wa-dsurf/50 border-slate-200 dark:border-wa-dbdr'
-                      }`}
+                        }`}
                     >
                       <span className="font-bold block text-xs text-emerald-900 dark:text-emerald-200">👑 Pro Plan</span>
                       <span className="text-[10px] text-emerald-600 dark:text-emerald-400">
