@@ -96,7 +96,7 @@ export default function GuidePage() {
       <div className="space-y-12 sm:space-y-16">
         {/* ── TOUR: DASHBOARD & WORKSPACE OVERVIEW ─────────────────────────── */}
         <section id="step-tour" className="scroll-mt-36">
-          <div className="p-5 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-xl border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-emerald-500/30 transition-all">
+          <div className="p-5 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-[2px] border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-emerald-500/30 transition-all">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               {/* Left Text */}
               <div className="lg:col-span-5 space-y-4">
@@ -195,7 +195,7 @@ export default function GuidePage() {
 
         {/* ── STEP 1: AUTHENTICATION ───────────────────────────────────────── */}
         <section id="step-1" className="scroll-mt-36">
-          <div className="p-5 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-xl border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-emerald-500/30 transition-all">
+          <div className="p-5 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-[2px] border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-emerald-500/30 transition-all">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               {/* Left Instructions */}
               <div className="lg:col-span-5 space-y-4">
@@ -292,7 +292,7 @@ export default function GuidePage() {
 
         {/* ── STEP 2: CONNECT WHATSAPP (INTERACTIVE TABS) ──────────────────── */}
         <section id="step-2" className="scroll-mt-36">
-          <div className="p-5 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-xl border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-emerald-500/30 transition-all">
+          <div className="p-5 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-[2px] border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-emerald-500/30 transition-all">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               {/* Left Instructions */}
               <div className="lg:col-span-5 space-y-4">
@@ -454,7 +454,7 @@ export default function GuidePage() {
 
         {/* ── STEP 3: CONTACTS, GROUPS & STATUS ────────────────────────────── */}
         <section id="step-3" className="scroll-mt-36">
-          <div className="p-5 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-xl border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-emerald-500/30 transition-all">
+          <div className="p-5 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-[2px] border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-emerald-500/30 transition-all">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               {/* Left Instructions */}
               <div className="lg:col-span-5 space-y-4">
@@ -547,7 +547,7 @@ export default function GuidePage() {
 
         {/* ── STEP 4: COMPOSE & TIMEZONE ───────────────────────────────────── */}
         <section id="step-4" className="scroll-mt-36">
-          <div className="p-5 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-xl border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-emerald-500/30 transition-all">
+          <div className="p-5 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-[2px] border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-emerald-500/30 transition-all">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               {/* Left Instructions */}
               <div className="lg:col-span-5 space-y-4">
@@ -636,7 +636,7 @@ export default function GuidePage() {
 
         {/* ── STEP 5: MEDIA, GIFS, EDITOR & POLLS (INTERACTIVE FOLDERS) ───── */}
         <section id="step-5" className="scroll-mt-36">
-          <div className="p-5 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-xl border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-emerald-500/30 transition-all">
+          <div className="p-5 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-[2px] border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-emerald-500/30 transition-all">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               {/* Left Instructions */}
               <div className="lg:col-span-5 space-y-4">
@@ -775,7 +775,7 @@ export default function GuidePage() {
 
         {/* ── STEP 6: TRACKING & RESCHEDULING ─────────────────────────────── */}
         <section id="step-6" className="scroll-mt-36">
-          <div className="p-5 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-xl border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-emerald-500/30 transition-all">
+          <div className="p-5 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-[2px] border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-emerald-500/30 transition-all">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               {/* Left Instructions */}
               <div className="lg:col-span-5 space-y-4">
@@ -878,7 +878,7 @@ export default function GuidePage() {
 
         {/* ── STEP 7: SUBSCRIPTIONS & UPI (INTERACTIVE PLAN SELECTOR) ──────── */}
         <section id="step-7" className="scroll-mt-36">
-          <div className="p-5 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-xl border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-emerald-500/30 transition-all">
+          <div className="p-5 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-[2px] border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] hover:border-emerald-500/30 transition-all">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               {/* Left Instructions */}
               <div className="lg:col-span-5 space-y-4">
@@ -1010,7 +1010,7 @@ export default function GuidePage() {
       </div>
 
       {/* ── Bottom Help & Support Banner ───────────────────────────────────── */}
-      <div className="mt-16 sm:mt-20 p-6 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-xl border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] text-center max-w-3xl mx-auto">
+      <div className="mt-16 sm:mt-20 p-6 sm:p-8 rounded-3xl bg-white/60 dark:bg-[rgba(32,44,51,0.55)] backdrop-blur-[2px] border border-white/80 dark:border-white/[0.09] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] text-center max-w-3xl mx-auto">
         <span className="text-3xl block mb-2">💬</span>
         <h3 className="text-lg sm:text-2xl font-bold text-slate-900 dark:text-white">
           Still have questions or need assistance?
