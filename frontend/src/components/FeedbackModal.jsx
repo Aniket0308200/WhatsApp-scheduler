@@ -6,10 +6,15 @@ import {
   submitFeedback,
   toggleFeedbackLike
 } from '../api';
+import {
+  computeUnreadReplyCount,
+  markPersonalRepliesAsSeen
+} from '../utils/supportNotifications';
 
-export default function FeedbackModal({ onClose }) {
-  const [activeTab, setActiveTab] = useState('public'); // 'public' | 'personal'
+export default function FeedbackModal({ onClose, initialTab = 'public' }) {
+  const [activeTab, setActiveTab] = useState(initialTab); // 'public' | 'personal'
   const [feedbacks, setFeedbacks] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [messageText, setMessageText] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -43,11 +48,23 @@ export default function FeedbackModal({ onClose }) {
     setLoading(true);
     try {
       if (activeTab === 'public') {
-        const res = await fetchPublicFeedback();
-        setFeedbacks(res.feedbacks || []);
+        const [pubRes, persRes] = await Promise.allSettled([
+          fetchPublicFeedback(),
+          fetchPersonalFeedback()
+        ]);
+        if (pubRes.status === 'fulfilled') {
+          setFeedbacks(pubRes.value.feedbacks || []);
+        }
+        if (persRes.status === 'fulfilled' && Array.isArray(persRes.value.feedbacks)) {
+          setUnreadCount(computeUnreadReplyCount(persRes.value.feedbacks));
+        }
       } else {
         const res = await fetchPersonalFeedback();
-        setFeedbacks(res.feedbacks || []);
+        const list = res.feedbacks || [];
+        setFeedbacks(list);
+        // Mark all current admin replies as seen upon opening Personal tab
+        markPersonalRepliesAsSeen(list);
+        setUnreadCount(0);
       }
     } catch (err) {
       toast.error('Failed to load feedbacks.');
@@ -162,13 +179,18 @@ export default function FeedbackModal({ onClose }) {
           </button>
           <button
             onClick={() => setActiveTab('personal')}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors outline-none focus:outline-none border ${
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors outline-none focus:outline-none border flex items-center justify-center gap-1.5 ${
               activeTab === 'personal'
                 ? 'bg-white dark:bg-wa-dsurf text-wa-teal shadow-sm border-slate-200/40 dark:border-wa-dbdr'
                 : 'border-transparent text-slate-500 dark:text-wa-dmuted hover:text-slate-700 dark:hover:text-slate-300'
             }`}
           >
-            🔒 Personal Support
+            <span>🔒 Personal Support</span>
+            {unreadCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-red-500 text-white animate-pulse">
+                {unreadCount}
+              </span>
+            )}
           </button>
         </div>
 

@@ -23,6 +23,101 @@ import {
 const ADMIN_STORAGE_KEY = 'wa_admin_token';
 const ADMIN_USER_KEY = 'wa_admin_user';
 
+// ─── Reusable Pagination Control ─────────────────────────────────────────────
+function PaginationControl({
+  currentPage,
+  totalItems,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+  pageSizeOptions = [5, 10, 15, 20, 25]
+}) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+  const startItem = totalItems === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const endItem = Math.min(safePage * pageSize, totalItems);
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-slate-950/80 border-t border-slate-800 text-xs text-slate-400">
+      {/* Items per page selector & Range info */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] text-slate-400 font-medium">Rows per page:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              onPageSizeChange(Number(e.target.value));
+              onPageChange(1);
+            }}
+            className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 outline-none focus:border-emerald-500 cursor-pointer"
+          >
+            {pageSizeOptions.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
+        <span className="text-[11px] text-slate-500">
+          Showing <strong className="text-slate-200">{startItem}</strong> - <strong className="text-slate-200">{endItem}</strong> of <strong className="text-slate-200">{totalItems}</strong>
+        </span>
+      </div>
+
+      {/* Page Navigation Controls */}
+      <div className="flex items-center gap-1.5">
+        {/* First Page */}
+        <button
+          type="button"
+          disabled={safePage <= 1}
+          onClick={() => onPageChange(1)}
+          className="px-2.5 py-1 rounded-lg border border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-all text-xs font-semibold"
+          title="First Page"
+        >
+          « First
+        </button>
+
+        {/* Prev Page */}
+        <button
+          type="button"
+          disabled={safePage <= 1}
+          onClick={() => onPageChange(safePage - 1)}
+          className="px-2.5 py-1 rounded-lg border border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-all text-xs font-semibold"
+          title="Previous Page"
+        >
+          ‹ Prev
+        </button>
+
+        {/* Page indicator */}
+        <span className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 font-bold text-xs">
+          Page {safePage} of {totalPages}
+        </span>
+
+        {/* Next Page */}
+        <button
+          type="button"
+          disabled={safePage >= totalPages}
+          onClick={() => onPageChange(safePage + 1)}
+          className="px-2.5 py-1 rounded-lg border border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-all text-xs font-semibold"
+          title="Next Page"
+        >
+          Next ›
+        </button>
+
+        {/* Last Page */}
+        <button
+          type="button"
+          disabled={safePage >= totalPages}
+          onClick={() => onPageChange(totalPages)}
+          className="px-2.5 py-1 rounded-lg border border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-all text-xs font-semibold"
+          title="Last Page"
+        >
+          Last »
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPanel() {
   // ── Authentication State ──────────────────────────────────────────────────
   const [token, setToken] = useState(() => {
@@ -62,6 +157,23 @@ export default function AdminPanel() {
   const [feedbackFilter, setFeedbackFilter] = useState('all'); // 'all' | 'unanswered' | 'answered'
   const [loading, setLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
+
+  // ── Pagination States ─────────────────────────────────────────────────────
+  // Tab 1 Users: 5-25, default 10
+  const [userPage, setUserPage] = useState(1);
+  const [userPageSize, setUserPageSize] = useState(10);
+
+  // Tab 2 Subscriptions: 5-25, default 10
+  const [subPage, setSubPage] = useState(1);
+  const [subPageSize, setSubPageSize] = useState(10);
+
+  // Tab 3 Contact Inquiries: 10, 20, 30, default 10
+  const [contactPage, setContactPage] = useState(1);
+  const [contactPageSize, setContactPageSize] = useState(10);
+
+  // Tab 4 Support & Feedback: 10, 20, 30, default 10
+  const [feedbackPage, setFeedbackPage] = useState(1);
+  const [feedbackPageSize, setFeedbackPageSize] = useState(10);
 
   // User Schedule Activity Overview Modal
   const [selectedUserForDetails, setSelectedUserForDetails] = useState(null);
@@ -357,6 +469,48 @@ export default function AdminPanel() {
       return true;
     });
   }, [users, searchQuery, planFilter]);
+
+  // Reset user page when search or plan filter changes
+  useEffect(() => {
+    setUserPage(1);
+  }, [searchQuery, planFilter]);
+
+  // Paginated users (Tab 1)
+  const paginatedUsers = useMemo(() => {
+    const start = (userPage - 1) * userPageSize;
+    return filteredUsers.slice(start, start + userPageSize);
+  }, [filteredUsers, userPage, userPageSize]);
+
+  // Paginated subscriptions (Tab 2)
+  const paginatedSubs = useMemo(() => {
+    const start = (subPage - 1) * subPageSize;
+    return subscriptions.slice(start, start + subPageSize);
+  }, [subscriptions, subPage, subPageSize]);
+
+  // Paginated contact messages (Tab 3)
+  const paginatedContacts = useMemo(() => {
+    const start = (contactPage - 1) * contactPageSize;
+    return contactMessages.slice(start, start + contactPageSize);
+  }, [contactMessages, contactPage, contactPageSize]);
+
+  // Reset feedback page when feedback filter changes
+  useEffect(() => {
+    setFeedbackPage(1);
+  }, [feedbackFilter]);
+
+  const filteredFeedbacks = useMemo(() => {
+    return feedbacks.filter(f => {
+      if (feedbackFilter === 'unanswered') return !f.adminReply;
+      if (feedbackFilter === 'answered') return !!f.adminReply;
+      return true;
+    });
+  }, [feedbacks, feedbackFilter]);
+
+  // Paginated feedbacks (Tab 4)
+  const paginatedFeedbacks = useMemo(() => {
+    const start = (feedbackPage - 1) * feedbackPageSize;
+    return filteredFeedbacks.slice(start, start + feedbackPageSize);
+  }, [filteredFeedbacks, feedbackPage, feedbackPageSize]);
 
   // Format date helper
   const formatDateTime = (val) => {
@@ -741,7 +895,7 @@ export default function AdminPanel() {
                       </td>
                     </tr>
                   ) : (
-                    filteredUsers.map(u => {
+                    paginatedUsers.map(u => {
                       const isBusy = actionLoadingId === u.id;
 
                       return (
@@ -904,6 +1058,16 @@ export default function AdminPanel() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination for Users Table */}
+            <PaginationControl
+              currentPage={userPage}
+              totalItems={filteredUsers.length}
+              pageSize={userPageSize}
+              onPageChange={setUserPage}
+              onPageSizeChange={setUserPageSize}
+              pageSizeOptions={[5, 10, 15, 20, 25]}
+            />
           </div>
         )}
 
@@ -941,7 +1105,7 @@ export default function AdminPanel() {
                       </td>
                     </tr>
                   ) : (
-                    subscriptions.map(sub => {
+                    paginatedSubs.map(sub => {
                       const isBusy = actionLoadingId === sub._id;
 
                       return (
@@ -1060,6 +1224,16 @@ export default function AdminPanel() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination for Subscriptions Table */}
+            <PaginationControl
+              currentPage={subPage}
+              totalItems={subscriptions.length}
+              pageSize={subPageSize}
+              onPageChange={setSubPage}
+              onPageSizeChange={setSubPageSize}
+              pageSizeOptions={[5, 10, 15, 20, 25]}
+            />
           </div>
         )}
 
@@ -1089,16 +1263,17 @@ export default function AdminPanel() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {contactMessages.map((msg) => (
-                  <div
-                    key={msg._id}
-                    className={`p-4 sm:p-5 rounded-2xl border transition-all ${
-                      msg.status === 'resolved'
-                        ? 'bg-slate-900/40 border-slate-800/60 opacity-80'
-                        : 'bg-slate-900 border-slate-800 shadow-md'
-                    }`}
-                  >
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {paginatedContacts.map((msg) => (
+                    <div
+                      key={msg._id}
+                      className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col justify-between ${
+                        msg.status === 'resolved'
+                          ? 'bg-slate-900/40 border-slate-800/60 opacity-80'
+                          : 'bg-slate-900 border-slate-800 shadow-md'
+                      }`}
+                    >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
                       <div className="flex items-center gap-2.5">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
@@ -1208,6 +1383,17 @@ export default function AdminPanel() {
                     </div>
                   </div>
                 ))}
+                </div>
+
+                {/* Pagination for Contact Inquiries */}
+                <PaginationControl
+                  currentPage={contactPage}
+                  totalItems={contactMessages.length}
+                  pageSize={contactPageSize}
+                  onPageChange={setContactPage}
+                  onPageSizeChange={setContactPageSize}
+                  pageSizeOptions={[10, 20, 30]}
+                />
               </div>
             )}
           </div>
@@ -1290,16 +1476,17 @@ export default function AdminPanel() {
 
               return (
                 <div className="space-y-4">
-                  {displayList.map(item => {
-                    const isBusy = actionLoadingId === item._id;
-                    const draftValue = replyDrafts[item._id] !== undefined ? replyDrafts[item._id] : (item.adminReply || '');
-                    const hasReplied = Boolean(item.adminReply);
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {paginatedFeedbacks.map(item => {
+                      const isBusy = actionLoadingId === item._id;
+                      const draftValue = replyDrafts[item._id] !== undefined ? replyDrafts[item._id] : (item.adminReply || '');
+                      const hasReplied = Boolean(item.adminReply);
 
-                    return (
-                      <div
-                        key={item._id}
-                        className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl transition-all space-y-3.5 hover:border-slate-700/80"
-                      >
+                      return (
+                        <div
+                          key={item._id}
+                          className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl transition-all space-y-3.5 hover:border-slate-700/80 flex flex-col justify-between"
+                        >
                         {/* Top Card Info Bar */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
                           <div className="flex items-center gap-2.5 flex-wrap">
@@ -1422,6 +1609,17 @@ export default function AdminPanel() {
                       </div>
                     );
                   })}
+                  </div>
+
+                  {/* Pagination for Feedback Cards */}
+                  <PaginationControl
+                    currentPage={feedbackPage}
+                    totalItems={filteredFeedbacks.length}
+                    pageSize={feedbackPageSize}
+                    onPageChange={setFeedbackPage}
+                    onPageSizeChange={setFeedbackPageSize}
+                    pageSizeOptions={[10, 20, 30]}
+                  />
                 </div>
               );
             })()}

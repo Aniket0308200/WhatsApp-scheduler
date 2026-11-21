@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { logout, updateProfileName } from '../api';
+import { logout, updateProfileName, fetchPersonalFeedback } from '../api';
 import { useTheme } from '../ThemeContext';
 import FeedbackModal from './FeedbackModal';
 import AvatarSelectorModal, { PRESET_AVATARS, COLOR_OPTIONS } from './AvatarSelectorModal';
 import { navigateTo } from '../utils/navigation';
+import { computeUnreadReplyCount } from '../utils/supportNotifications';
 
 const STATUS_CONFIG = {
   connected: { label: 'Connected', bg: 'bg-green-100 dark:bg-green-900/40', text: 'text-green-700 dark:text-green-400', dot: 'bg-green-500', pulse: false },
@@ -56,8 +57,35 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
   const [editing, setEditing] = useState(false);
   const [editedName, setEditedName] = useState(profile?.name || '');
   const [showFeedback, setShowFeedback] = useState(false);
+  const [unreadSupportCount, setUnreadSupportCount] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  // Poll for unread admin replies in personal feedback
+  const checkUnreadSupportReplies = useCallback(async () => {
+    try {
+      const res = await fetchPersonalFeedback();
+      if (res?.success && Array.isArray(res.feedbacks)) {
+        const count = computeUnreadReplyCount(res.feedbacks);
+        setUnreadSupportCount(count);
+      }
+    } catch {
+      // Ignore background fetch failure
+    }
+  }, []);
+
+  useEffect(() => {
+    checkUnreadSupportReplies();
+
+    const handleUpdate = () => checkUnreadSupportReplies();
+    window.addEventListener('wa_support_replies_updated', handleUpdate);
+    const interval = setInterval(checkUnreadSupportReplies, 45000);
+
+    return () => {
+      window.removeEventListener('wa_support_replies_updated', handleUpdate);
+      clearInterval(interval);
+    };
+  }, [checkUnreadSupportReplies]);
 
   // Avatar state persistence
   const [avatarConfig, setAvatarConfig] = useState(() => {
@@ -746,17 +774,31 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
         <div className="relative group">
           <div className="absolute bottom-16 right-0 mb-1 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 bg-slate-950/90 dark:bg-wa-dpanel/95 backdrop-blur-sm text-slate-100 text-xs font-semibold px-3 py-1.5 rounded-xl shadow-xl border border-slate-800 dark:border-wa-dbdr whitespace-nowrap">
             Feedback & Support Box
+            {unreadSupportCount > 0 && ` (${unreadSupportCount} new reply)`}
           </div>
           <button
             onClick={() => setShowFeedback(true)}
-            className="w-14 h-14 rounded-full bg-wa-teal hover:bg-wa-teal/90 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 border border-teal-400/20 cursor-pointer"
+            className="w-14 h-14 rounded-full bg-wa-teal hover:bg-wa-teal/90 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 border border-teal-400/20 cursor-pointer relative"
             aria-label="Feedback & Support"
           >
             <span className="text-2xl leading-none select-none">💬</span>
+            {unreadSupportCount > 0 && (
+              <span
+                className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-lg border-2 border-white dark:border-slate-900 animate-bounce"
+                title={`${unreadSupportCount} new reply from support`}
+              >
+                {unreadSupportCount}
+              </span>
+            )}
           </button>
         </div>
       </div>
-      {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
+      {showFeedback && (
+        <FeedbackModal
+          onClose={() => setShowFeedback(false)}
+          initialTab={unreadSupportCount > 0 ? 'personal' : 'public'}
+        />
+      )}
       {showAvatarModal && (
         <AvatarSelectorModal
           isOpen={showAvatarModal}
