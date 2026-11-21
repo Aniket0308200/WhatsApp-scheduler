@@ -48,11 +48,11 @@ router.get('/public', async (req, res) => {
 });
 
 // GET /api/feedback/personal
-// Fetch logged-in user's personal messages and their corresponding admin replies
+// Fetch logged-in user's queries (both public and personal) and their corresponding private admin replies
 router.get('/personal', async (req, res) => {
   const sessionId = req.sessionId;
   try {
-    const list = await db.Feedback.find({ userId: sessionId, type: 'personal' }).sort({ createdAt: 1 }).lean();
+    const list = await db.Feedback.find({ userId: sessionId }).sort({ createdAt: 1 }).lean();
     res.json({ success: true, feedbacks: list });
   } catch (err) {
     res.status(500).json({ error: err.message });

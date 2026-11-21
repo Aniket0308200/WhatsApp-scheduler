@@ -11,6 +11,10 @@ import {
   adminGetSubscriptions,
   adminApproveSubscription,
   adminRejectSubscription,
+  adminDeleteSubscription,
+  adminGetFeedbacks,
+  adminReplyFeedback,
+  adminDeleteFeedback,
   adminGetContactMessages,
   adminUpdateContactStatus,
   adminDeleteContactMessage
@@ -48,11 +52,14 @@ export default function AdminPanel() {
   const [loggingIn, setLoggingIn] = useState(false);
 
   // ── Dashboard Data State ──────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState('users'); // 'users' | 'subscriptions' | 'inquiries'
+  const [activeTab, setActiveTab] = useState('users'); // 'users' | 'subscriptions' | 'inquiries' | 'support'
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
   const [contactMessages, setContactMessages] = useState([]);
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [replyDrafts, setReplyDrafts] = useState({});
+  const [feedbackFilter, setFeedbackFilter] = useState('all'); // 'all' | 'unanswered' | 'answered'
   const [loading, setLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
 
@@ -114,11 +121,12 @@ export default function AdminPanel() {
     if (!isBackground) setLoading(true);
 
     try {
-      const [statsRes, usersRes, subsRes, contactRes] = await Promise.allSettled([
+      const [statsRes, usersRes, subsRes, contactRes, feedbackRes] = await Promise.allSettled([
         adminGetStats(token),
         adminGetUsers(token),
         adminGetSubscriptions(token),
-        adminGetContactMessages(token)
+        adminGetContactMessages(token),
+        adminGetFeedbacks(token)
       ]);
 
       if (statsRes.status === 'fulfilled' && statsRes.value?.success) {
@@ -132,6 +140,9 @@ export default function AdminPanel() {
       }
       if (contactRes.status === 'fulfilled' && contactRes.value?.success) {
         setContactMessages(contactRes.value.messages || []);
+      }
+      if (feedbackRes.status === 'fulfilled' && feedbackRes.value?.success) {
+        setFeedbacks(feedbackRes.value.feedbacks || []);
       }
     } catch (err) {
       if (err.response?.status === 401) {
@@ -252,6 +263,58 @@ export default function AdminPanel() {
       refreshData(true);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Rejection failed.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // ── Handle Delete Subscription (Free Database Space) ──────────────────────
+  const handleDeleteSub = async (id, email, utr, amount) => {
+    if (!window.confirm(`Are you sure you want to PERMANENTLY delete this subscription payment record?\n\n• Email: ${email || 'N/A'}\n• UTR: ${utr || 'N/A'}\n• Amount: ₹${amount || '0'}\n\nThis will remove it from the database completely and cannot be undone.`)) {
+      return;
+    }
+    setActionLoadingId(id);
+    try {
+      await adminDeleteSubscription(token, id);
+      setSubscriptions(prev => prev.filter(s => s._id !== id));
+      toast.success('Subscription record permanently deleted!');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete subscription.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // ── Handle Support & Feedback Inquiries ────────────────────────────────────
+  const handleReplyFeedback = async (id, userName) => {
+    const draft = (replyDrafts[id] ?? '').trim();
+    if (!draft) {
+      toast.error('Please type a reply message before sending.');
+      return;
+    }
+    setActionLoadingId(id);
+    try {
+      await adminReplyFeedback(token, id, draft);
+      setFeedbacks(prev => prev.map(f => f._id === id ? { ...f, adminReply: draft } : f));
+      toast.success(`Private reply sent to ${userName || 'user'}! Visible in their Personal Support.`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to send reply.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleDeleteFeedback = async (id, userName) => {
+    if (!window.confirm(`Are you sure you want to PERMANENTLY delete this feedback from "${userName || 'this user'}"?\n\nThis will remove it from the database completely.`)) {
+      return;
+    }
+    setActionLoadingId(id);
+    try {
+      await adminDeleteFeedback(token, id);
+      setFeedbacks(prev => prev.filter(f => f._id !== id));
+      toast.success('Feedback permanently deleted!');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete feedback.');
     } finally {
       setActionLoadingId(null);
     }
@@ -549,7 +612,7 @@ export default function AdminPanel() {
         </div>
 
         {/* ── Navigation Tabs ───────────────────────────────────────────────── */}
-        <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
+        <div className="flex items-center gap-3 border-b border-slate-800 pb-3 flex-wrap">
           <button
             type="button"
             onClick={() => setActiveTab('users')}
@@ -590,6 +653,22 @@ export default function AdminPanel() {
             {contactMessages.filter(m => m.status === 'new').length > 0 && (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-500 text-white">
                 {contactMessages.filter(m => m.status === 'new').length} New
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('support')}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 ${
+              activeTab === 'support'
+                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+          >
+            💬 Support & Feedback ({feedbacks.length})
+            {feedbacks.filter(f => !f.adminReply).length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-slate-950">
+                {feedbacks.filter(f => !f.adminReply).length} Awaiting Reply
               </span>
             )}
           </button>
@@ -935,30 +1014,44 @@ export default function AdminPanel() {
                           </td>
 
                           <td className="px-5 py-4 whitespace-nowrap">
-                            {sub.status === 'pending' ? (
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  disabled={isBusy}
-                                  onClick={() => handleApproveSub(sub._id, sub.email, sub.plan, sub.billingCycle || 'monthly')}
-                                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors"
-                                >
-                                  ✓ Approve
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={isBusy}
-                                  onClick={() => handleRejectSub(sub._id, sub.email)}
-                                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-red-900/60 text-red-300 border border-slate-700 transition-colors"
-                                >
-                                  ✕ Reject
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-[11px] text-slate-500">
-                                {sub.verifiedAt ? `Processed on ${formatDateTime(sub.verifiedAt)}` : 'Completed'}
-                              </span>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {sub.status === 'pending' ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => handleApproveSub(sub._id, sub.email, sub.plan, sub.billingCycle || 'monthly')}
+                                    className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors"
+                                  >
+                                    ✓ Approve
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => handleRejectSub(sub._id, sub.email)}
+                                    className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-red-900/60 text-red-300 border border-slate-700 transition-colors"
+                                  >
+                                    ✕ Reject
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-[11px] text-slate-500">
+                                  {sub.verifiedAt ? `Processed on ${formatDateTime(sub.verifiedAt)}` : 'Completed'}
+                                </span>
+                              )}
+
+                              {/* Delete Payment Record Button to clean database */}
+                              <button
+                                type="button"
+                                disabled={isBusy}
+                                onClick={() => handleDeleteSub(sub._id, sub.email, sub.utr, sub.amount)}
+                                className="px-2 py-1.5 rounded-lg text-xs font-semibold bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-800/80 transition-colors flex items-center gap-1"
+                                title="Permanently delete payment record from database to free space"
+                              >
+                                <span>🗑️</span>
+                                <span>Delete</span>
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1117,6 +1210,221 @@ export default function AdminPanel() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {/* TAB 4: IN-APP FEEDBACK & SUPPORT MESSAGES                           */}
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {activeTab === 'support' && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <span>💬</span> In-App User Support & Feedback
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Direct inquiries and feedback submitted via client support modal. Replies appear exclusively in the user's Personal Support feed.
+                </p>
+              </div>
+
+              {/* Filter Pills */}
+              <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setFeedbackFilter('all')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                    feedbackFilter === 'all'
+                      ? 'bg-emerald-500 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  All ({feedbacks.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFeedbackFilter('unanswered')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                    feedbackFilter === 'unanswered'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Awaiting Reply ({feedbacks.filter(f => !f.adminReply).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFeedbackFilter('answered')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                    feedbackFilter === 'answered'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Replied ({feedbacks.filter(f => !!f.adminReply).length})
+                </button>
+              </div>
+            </div>
+
+            {/* List of Feedback Cards */}
+            {(() => {
+              const displayList = feedbacks.filter(f => {
+                if (feedbackFilter === 'unanswered') return !f.adminReply;
+                if (feedbackFilter === 'answered') return !!f.adminReply;
+                return true;
+              });
+
+              if (displayList.length === 0) {
+                return (
+                  <div className="p-12 text-center bg-slate-900/60 border border-slate-800 rounded-3xl space-y-2">
+                    <span className="text-3xl">🎉</span>
+                    <h4 className="text-sm font-bold text-slate-300">No Support Queries Found</h4>
+                    <p className="text-xs text-slate-500 max-w-md mx-auto">
+                      {feedbackFilter === 'unanswered'
+                        ? 'Great job! All support questions and feedback queries have been answered.'
+                        : 'No feedback messages recorded yet.'}
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-4">
+                  {displayList.map(item => {
+                    const isBusy = actionLoadingId === item._id;
+                    const draftValue = replyDrafts[item._id] !== undefined ? replyDrafts[item._id] : (item.adminReply || '');
+                    const hasReplied = Boolean(item.adminReply);
+
+                    return (
+                      <div
+                        key={item._id}
+                        className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl transition-all space-y-3.5 hover:border-slate-700/80"
+                      >
+                        {/* Top Card Info Bar */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <span className="font-bold text-sm text-white flex items-center gap-1.5">
+                              👤 {item.userName || 'Anonymous User'}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                              item.type === 'personal'
+                                ? 'bg-purple-950/70 text-purple-300 border border-purple-800'
+                                : 'bg-blue-950/70 text-blue-300 border border-blue-800'
+                            }`}>
+                              {item.type === 'personal' ? '🔒 Personal Support' : '👥 Community Post'}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                              hasReplied
+                                ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-800'
+                                : 'bg-amber-950/70 text-amber-300 border border-amber-800 animate-pulse'
+                            }`}>
+                              {hasReplied ? '✓ Replied' : '⏳ Needs Reply'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-3 text-xs text-slate-400">
+                            <span className="text-[11px] font-mono text-slate-500">
+                              {formatDateTime(item.createdAt)}
+                            </span>
+                            {item.likes?.length > 0 && (
+                              <span className="text-pink-400 font-semibold flex items-center gap-1 text-[11px]">
+                                ❤️ {item.likes.length}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* User Message Bubble */}
+                        <div className="space-y-1">
+                          <span className="text-[11px] font-semibold text-slate-400 block">
+                            User Inquiry / Message:
+                          </span>
+                          <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs sm:text-sm text-slate-100 font-medium whitespace-pre-wrap leading-relaxed">
+                            {item.message}
+                          </div>
+                        </div>
+
+                        {/* Existing Admin Reply Banner (if replied) */}
+                        {hasReplied && (
+                          <div className="p-3 rounded-xl bg-emerald-950/25 border border-emerald-900/50 space-y-1">
+                            <div className="flex items-center justify-between text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
+                              <span className="flex items-center gap-1">
+                                🛡️ Current Private Reply (Visible to User in Personal Support)
+                              </span>
+                              <span className="text-[10px] text-emerald-500/80 font-normal lowercase">
+                                private to {item.userName}
+                              </span>
+                            </div>
+                            <p className="text-xs text-emerald-200/90 whitespace-pre-wrap">
+                              {item.adminReply}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Reply Form & Actions */}
+                        <div className="pt-2 space-y-2.5">
+                          <label className="text-[11px] font-semibold text-slate-400 flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <span>💬</span>
+                              <span>{hasReplied ? 'Edit Private Reply:' : 'Send Private Reply to User:'}</span>
+                            </span>
+                            <span className="text-emerald-400 text-[10px] font-medium">
+                              🔒 Only visible to {item.userName} in Personal Support tab
+                            </span>
+                          </label>
+
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <input
+                              type="text"
+                              value={draftValue}
+                              onChange={(e) => setReplyDrafts(prev => ({ ...prev, [item._id]: e.target.value }))}
+                              placeholder="e.g. Yes, your Pro Plan has been activated! Enjoy unlimited scheduling."
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault();
+                                  handleReplyFeedback(item._id, item.userName);
+                                }
+                              }}
+                              className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700/80 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-xs text-white placeholder-slate-500 outline-none transition-all"
+                            />
+                            <button
+                              type="button"
+                              disabled={isBusy || !draftValue.trim()}
+                              onClick={() => handleReplyFeedback(item._id, item.userName)}
+                              className="px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-500/20 active:scale-95 transition-all disabled:opacity-40 flex items-center justify-center gap-1.5 shrink-0"
+                            >
+                              {isBusy ? (
+                                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <>
+                                  <span>{hasReplied ? '✓ Update Reply' : 'Send Reply ➔'}</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-[10px] text-slate-500 font-mono">
+                              User ID: {item.userId}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => handleDeleteFeedback(item._id, item.userName)}
+                              className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-rose-300 hover:text-white bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 transition-colors flex items-center gap-1"
+                              title="Permanently remove inquiry from database"
+                            >
+                              <span>🗑️</span>
+                              <span>Delete Inquiry</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
       </main>

@@ -193,9 +193,20 @@ export default function FeedbackModal({ onClose }) {
                 >
                   {/* Top Row: User Name & Timestamp */}
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold text-xs text-slate-700 dark:text-wa-dtext">
-                      {item.userName}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-xs text-slate-700 dark:text-wa-dtext">
+                        {item.userName}
+                      </span>
+                      {activeTab === 'personal' && (
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
+                          item.type === 'personal'
+                            ? 'bg-teal-100/70 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                        }`}>
+                          {item.type === 'personal' ? '🔒 Private' : '👥 Public'}
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[10px] text-slate-400 dark:text-wa-dmuted">
                       {formatTime(item.createdAt)}
                     </span>
@@ -221,16 +232,24 @@ export default function FeedbackModal({ onClose }) {
                       </button>
                     </div>
                   ) : (
-                    item.adminReply && (
-                      <div className="mt-2 pl-3 border-l-2 border-wa-teal bg-teal-50/50 dark:bg-wa-teal/5 rounded-r-lg p-2.5 flex flex-col gap-1">
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] font-bold text-wa-teal uppercase tracking-wider flex items-center gap-1">
-                            🛡️ Admin Reply
+                    item.adminReply ? (
+                      <div className="mt-2 pl-3 border-l-2 border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-r-xl p-2.5 flex flex-col gap-1 shadow-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                            🛡️ Admin Private Reply
+                          </span>
+                          <span className="text-[8px] font-bold uppercase tracking-wider bg-emerald-200/70 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 px-1 rounded">
+                            Only Visible To You
                           </span>
                         </div>
-                        <p className="text-xs text-slate-600 dark:text-slate-300 italic leading-relaxed">
+                        <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-medium whitespace-pre-wrap">
                           {item.adminReply}
                         </p>
+                      </div>
+                    ) : (
+                      <div className="mt-1 flex items-center gap-1.5 text-[10px] text-amber-600 dark:text-amber-400/90 font-medium bg-amber-50/50 dark:bg-amber-950/20 px-2 py-1 rounded-md border border-amber-200/40 dark:border-amber-900/30">
+                        <span className="animate-spin text-[10px]">⏳</span>
+                        <span>Waiting for Admin reply… Check back soon!</span>
                       </div>
                     )
                   )}

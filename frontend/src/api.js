@@ -166,4 +166,16 @@ export const adminApproveSubscription = (token, id, adminNotes) =>
 export const adminRejectSubscription = (token, id, adminNotes) =>
   api.post(`/admin/subscriptions/${id}/reject`, { adminNotes }, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
 
+export const adminDeleteSubscription = (token, id) =>
+  api.delete(`/admin/subscriptions/${id}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+
+export const adminGetFeedbacks = (token) =>
+  api.get('/admin/feedbacks', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+
+export const adminReplyFeedback = (token, id, reply) =>
+  api.post(`/admin/feedbacks/${id}/reply`, { reply }, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+
+export const adminDeleteFeedback = (token, id) =>
+  api.delete(`/admin/feedbacks/${id}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+
 

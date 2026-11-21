@@ -276,5 +276,93 @@ router.post('/subscriptions/:id/reject', requireAdminAuth, async (req, res) => {
   }
 });
 
+/**
+ * DELETE /api/admin/subscriptions/:id
+ * Permanently deletes a subscription request from the database to save space.
+ */
+router.delete('/subscriptions/:id', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await db.SubscriptionRequest.findByIdAndDelete(id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Subscription request not found.' });
+    }
+    return res.json({
+      success: true,
+      message: 'Subscription request permanently deleted from database.'
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/feedbacks
+ * Fetches all in-app feedback and support queries from users
+ */
+router.get('/feedbacks', requireAdminAuth, async (req, res) => {
+  try {
+    const feedbacks = await db.Feedback.find().sort({ createdAt: -1 }).lean();
+    return res.json({
+      success: true,
+      count: feedbacks.length,
+      feedbacks
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/feedbacks/:id/reply
+ * Admin replies to a user's feedback or support query.
+ * The reply is attached and will be privately visible to that user in their Personal Support tab.
+ */
+router.post('/feedbacks/:id/reply', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reply } = req.body || {};
+    if (reply === undefined || reply === null) {
+      return res.status(400).json({ error: 'Reply text is required.' });
+    }
+
+    const feedback = await db.Feedback.findById(id);
+    if (!feedback) {
+      return res.status(404).json({ error: 'Feedback message not found.' });
+    }
+
+    feedback.adminReply = String(reply).trim();
+    await feedback.save();
+
+    return res.json({
+      success: true,
+      message: 'Private reply saved and dispatched to user support view.',
+      feedback
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /api/admin/feedbacks/:id
+ * Permanently deletes a feedback/support query to maintain database hygiene.
+ */
+router.delete('/feedbacks/:id', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await db.Feedback.findByIdAndDelete(id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Feedback message not found.' });
+    }
+    return res.json({
+      success: true,
+      message: 'Feedback inquiry permanently deleted.'
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
 
