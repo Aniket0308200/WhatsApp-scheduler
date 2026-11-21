@@ -180,9 +180,21 @@ export default function AdminPanel() {
   const [userActivity, setUserActivity] = useState(null);
   const [loadingActivity, setLoadingActivity] = useState(false);
 
-  // Filters & Search
+  // ── Filters & Search States ──────────────────────────────────────────────
+  // Tab 1 (Users)
   const [searchQuery, setSearchQuery] = useState('');
   const [planFilter, setPlanFilter] = useState('all'); // 'all' | 'free' | 'starter' | 'pro' | 'online' | 'locked'
+
+  // Tab 2 (Subscriptions)
+  const [subSearchQuery, setSubSearchQuery] = useState('');
+  const [subStatusFilter, setSubStatusFilter] = useState('all'); // 'all' | 'pending' | 'approved' | 'rejected'
+
+  // Tab 3 (Contact Inquiries)
+  const [contactSearchQuery, setContactSearchQuery] = useState('');
+  const [contactStatusFilter, setContactStatusFilter] = useState('all'); // 'all' | 'new' | 'resolved'
+
+  // Tab 4 (Support & Feedback)
+  const [feedbackSearchQuery, setFeedbackSearchQuery] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState(null);
 
   // Screenshot modal preview
@@ -481,30 +493,95 @@ export default function AdminPanel() {
     return filteredUsers.slice(start, start + userPageSize);
   }, [filteredUsers, userPage, userPageSize]);
 
+  // Reset subscription page when search or status filter changes
+  useEffect(() => {
+    setSubPage(1);
+  }, [subSearchQuery, subStatusFilter]);
+
+  // Filtered subscriptions (Tab 2)
+  const filteredSubs = useMemo(() => {
+    return subscriptions.filter(sub => {
+      const q = subSearchQuery.toLowerCase().trim();
+      const matchSearch =
+        !q ||
+        (sub.email && sub.email.toLowerCase().includes(q)) ||
+        (sub.phone && String(sub.phone).includes(q)) ||
+        (sub.utr && sub.utr.toLowerCase().includes(q)) ||
+        (sub.plan && sub.plan.toLowerCase().includes(q)) ||
+        (sub.amount && String(sub.amount).includes(q));
+
+      if (!matchSearch) return false;
+
+      if (subStatusFilter !== 'all') {
+        return sub.status === subStatusFilter;
+      }
+      return true;
+    });
+  }, [subscriptions, subSearchQuery, subStatusFilter]);
+
   // Paginated subscriptions (Tab 2)
   const paginatedSubs = useMemo(() => {
     const start = (subPage - 1) * subPageSize;
-    return subscriptions.slice(start, start + subPageSize);
-  }, [subscriptions, subPage, subPageSize]);
+    return filteredSubs.slice(start, start + subPageSize);
+  }, [filteredSubs, subPage, subPageSize]);
+
+  // Reset contact page when search or status filter changes
+  useEffect(() => {
+    setContactPage(1);
+  }, [contactSearchQuery, contactStatusFilter]);
+
+  // Filtered contact messages (Tab 3)
+  const filteredContacts = useMemo(() => {
+    return contactMessages.filter(msg => {
+      const q = contactSearchQuery.toLowerCase().trim();
+      const matchSearch =
+        !q ||
+        (msg.loginName && msg.loginName.toLowerCase().includes(q)) ||
+        (msg.loginEmail && msg.loginEmail.toLowerCase().includes(q)) ||
+        (msg.contactEmail && msg.contactEmail.toLowerCase().includes(q)) ||
+        (msg.whatsappNumber && String(msg.whatsappNumber).includes(q)) ||
+        (msg.subject && msg.subject.toLowerCase().includes(q)) ||
+        (msg.message && msg.message.toLowerCase().includes(q)) ||
+        (msg.paymentDetails?.payerRef && msg.paymentDetails.payerRef.toLowerCase().includes(q));
+
+      if (!matchSearch) return false;
+
+      if (contactStatusFilter !== 'all') {
+        return msg.status === contactStatusFilter;
+      }
+      return true;
+    });
+  }, [contactMessages, contactSearchQuery, contactStatusFilter]);
 
   // Paginated contact messages (Tab 3)
   const paginatedContacts = useMemo(() => {
     const start = (contactPage - 1) * contactPageSize;
-    return contactMessages.slice(start, start + contactPageSize);
-  }, [contactMessages, contactPage, contactPageSize]);
+    return filteredContacts.slice(start, start + contactPageSize);
+  }, [filteredContacts, contactPage, contactPageSize]);
 
-  // Reset feedback page when feedback filter changes
+  // Reset feedback page when search or feedback filter changes
   useEffect(() => {
     setFeedbackPage(1);
-  }, [feedbackFilter]);
+  }, [feedbackSearchQuery, feedbackFilter]);
 
+  // Filtered feedbacks (Tab 4)
   const filteredFeedbacks = useMemo(() => {
     return feedbacks.filter(f => {
+      const q = feedbackSearchQuery.toLowerCase().trim();
+      const matchSearch =
+        !q ||
+        (f.userName && f.userName.toLowerCase().includes(q)) ||
+        (f.userId && f.userId.toLowerCase().includes(q)) ||
+        (f.message && f.message.toLowerCase().includes(q)) ||
+        (f.adminReply && f.adminReply.toLowerCase().includes(q));
+
+      if (!matchSearch) return false;
+
       if (feedbackFilter === 'unanswered') return !f.adminReply;
       if (feedbackFilter === 'answered') return !!f.adminReply;
       return true;
     });
-  }, [feedbacks, feedbackFilter]);
+  }, [feedbacks, feedbackSearchQuery, feedbackFilter]);
 
   // Paginated feedbacks (Tab 4)
   const paginatedFeedbacks = useMemo(() => {
@@ -842,11 +919,21 @@ export default function AdminPanel() {
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Search by name, phone (+91), email…"
-                  className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 focus:border-emerald-500 text-xs text-white placeholder-slate-500 outline-none transition-all"
+                  className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-950 border border-slate-700 focus:border-emerald-500 text-xs text-white placeholder-slate-500 outline-none transition-all"
                 />
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">
                   🔍
                 </span>
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs p-1"
+                    title="Clear search"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
 
               {/* Filter Pills */}
@@ -1076,12 +1163,53 @@ export default function AdminPanel() {
         {/* ─────────────────────────────────────────────────────────────────── */}
         {activeTab === 'subscriptions' && (
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
-            <div className="p-5 border-b border-slate-800 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-white">UPI Payment Verifications</h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Review submitted 12-digit UTR numbers and payment screenshots to approve plan upgrades.
-                </p>
+            {/* Filter & Search Bar */}
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
+              {/* Search */}
+              <div className="relative w-full md:w-80">
+                <input
+                  type="text"
+                  value={subSearchQuery}
+                  onChange={e => setSubSearchQuery(e.target.value)}
+                  placeholder="Search by UTR, email, phone (+91), plan…"
+                  className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-950 border border-slate-700 focus:border-emerald-500 text-xs text-white placeholder-slate-500 outline-none transition-all"
+                />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">
+                  🔍
+                </span>
+                {subSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSubSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs p-1"
+                    title="Clear search"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Status Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+                {[
+                  { id: 'all', label: `All (${subscriptions.length})` },
+                  { id: 'pending', label: `⏳ Pending (${subscriptions.filter(s => s.status === 'pending').length})` },
+                  { id: 'approved', label: `✓ Approved (${subscriptions.filter(s => s.status === 'approved').length})` },
+                  { id: 'rejected', label: `✕ Rejected (${subscriptions.filter(s => s.status === 'rejected').length})` }
+                ].map(item => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSubStatusFilter(item.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                      subStatusFilter === item.id
+                        ? 'bg-emerald-500 text-white shadow-sm'
+                        : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -1098,10 +1226,12 @@ export default function AdminPanel() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/80">
-                  {subscriptions.length === 0 ? (
+                  {filteredSubs.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="py-12 text-center text-slate-500">
-                        No subscription payment requests submitted yet.
+                        {subscriptions.length === 0
+                          ? 'No subscription payment requests submitted yet.'
+                          : 'No subscription requests match your search criteria.'}
                       </td>
                     </tr>
                   ) : (
@@ -1228,7 +1358,7 @@ export default function AdminPanel() {
             {/* Pagination for Subscriptions Table */}
             <PaginationControl
               currentPage={subPage}
-              totalItems={subscriptions.length}
+              totalItems={filteredSubs.length}
               pageSize={subPageSize}
               onPageChange={setSubPage}
               onPageSizeChange={setSubPageSize}
@@ -1242,24 +1372,75 @@ export default function AdminPanel() {
         {/* ─────────────────────────────────────────────────────────────────── */}
         {activeTab === 'inquiries' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="text-base font-black text-white">Customer Support & Contact Inquiries</h3>
                 <p className="text-xs text-slate-400">
                   Messages submitted via the homepage contact form (routed to aniketchouhan243@gmail.com)
                 </p>
               </div>
-              <span className="text-xs font-bold text-slate-400 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl">
+              <span className="text-xs font-bold text-slate-400 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl self-start sm:self-auto">
                 {contactMessages.length} Total Messages
               </span>
             </div>
 
-            {contactMessages.length === 0 ? (
+            {/* Filter & Search Bar */}
+            <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
+              {/* Search */}
+              <div className="relative w-full md:w-80">
+                <input
+                  type="text"
+                  value={contactSearchQuery}
+                  onChange={e => setContactSearchQuery(e.target.value)}
+                  placeholder="Search by name, email, WhatsApp, subject, message…"
+                  className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-950 border border-slate-700 focus:border-emerald-500 text-xs text-white placeholder-slate-500 outline-none transition-all"
+                />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">
+                  🔍
+                </span>
+                {contactSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setContactSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs p-1"
+                    title="Clear search"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Status Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+                {[
+                  { id: 'all', label: `All (${contactMessages.length})` },
+                  { id: 'new', label: `🔵 New (${contactMessages.filter(m => m.status === 'new').length})` },
+                  { id: 'resolved', label: `✓ Resolved (${contactMessages.filter(m => m.status === 'resolved').length})` }
+                ].map(item => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setContactStatusFilter(item.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                      contactStatusFilter === item.id
+                        ? 'bg-emerald-500 text-white shadow-sm'
+                        : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {filteredContacts.length === 0 ? (
               <div className="p-12 text-center bg-slate-900/60 border border-slate-800 rounded-3xl space-y-2">
                 <span className="text-3xl">📭</span>
-                <h4 className="text-sm font-bold text-slate-300">No Inquiries Received Yet</h4>
+                <h4 className="text-sm font-bold text-slate-300">No Inquiries Found</h4>
                 <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  When users fill out the Contact Us form on the homepage, their messages and account details will appear here.
+                  {contactMessages.length === 0
+                    ? 'When users fill out the Contact Us form on the homepage, their messages will appear here.'
+                    : 'No customer inquiries match your current search or filter criteria.'}
                 </p>
               </div>
             ) : (
@@ -1388,7 +1569,7 @@ export default function AdminPanel() {
                 {/* Pagination for Contact Inquiries */}
                 <PaginationControl
                   currentPage={contactPage}
-                  totalItems={contactMessages.length}
+                  totalItems={filteredContacts.length}
                   pageSize={contactPageSize}
                   onPageChange={setContactPage}
                   onPageSizeChange={setContactPageSize}
@@ -1413,16 +1594,46 @@ export default function AdminPanel() {
                   Direct inquiries and feedback submitted via client support modal. Replies appear exclusively in the user's Personal Support feed.
                 </p>
               </div>
+              <span className="text-xs font-bold text-slate-400 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl self-start sm:self-auto">
+                {feedbacks.length} Total Messages
+              </span>
+            </div>
 
-              {/* Filter Pills */}
-              <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-xl">
+            {/* Filter & Search Bar */}
+            <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
+              {/* Search */}
+              <div className="relative w-full md:w-80">
+                <input
+                  type="text"
+                  value={feedbackSearchQuery}
+                  onChange={e => setFeedbackSearchQuery(e.target.value)}
+                  placeholder="Search by user name, message, reply, user ID…"
+                  className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-950 border border-slate-700 focus:border-emerald-500 text-xs text-white placeholder-slate-500 outline-none transition-all"
+                />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">
+                  🔍
+                </span>
+                {feedbackSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setFeedbackSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs p-1"
+                    title="Clear search"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Status Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
                 <button
                   type="button"
                   onClick={() => setFeedbackFilter('all')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                     feedbackFilter === 'all'
-                      ? 'bg-emerald-500 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-emerald-500 text-white shadow-sm'
+                      : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   All ({feedbacks.length})
@@ -1430,10 +1641,10 @@ export default function AdminPanel() {
                 <button
                   type="button"
                   onClick={() => setFeedbackFilter('unanswered')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                     feedbackFilter === 'unanswered'
-                      ? 'bg-amber-500 text-slate-950 shadow-xs'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   Awaiting Reply ({feedbacks.filter(f => !f.adminReply).length})
@@ -1441,10 +1652,10 @@ export default function AdminPanel() {
                 <button
                   type="button"
                   onClick={() => setFeedbackFilter('answered')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                     feedbackFilter === 'answered'
-                      ? 'bg-teal-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-teal-600 text-white shadow-sm'
+                      : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   Replied ({feedbacks.filter(f => !!f.adminReply).length})
@@ -1454,21 +1665,15 @@ export default function AdminPanel() {
 
             {/* List of Feedback Cards */}
             {(() => {
-              const displayList = feedbacks.filter(f => {
-                if (feedbackFilter === 'unanswered') return !f.adminReply;
-                if (feedbackFilter === 'answered') return !!f.adminReply;
-                return true;
-              });
-
-              if (displayList.length === 0) {
+              if (filteredFeedbacks.length === 0) {
                 return (
                   <div className="p-12 text-center bg-slate-900/60 border border-slate-800 rounded-3xl space-y-2">
                     <span className="text-3xl">🎉</span>
                     <h4 className="text-sm font-bold text-slate-300">No Support Queries Found</h4>
                     <p className="text-xs text-slate-500 max-w-md mx-auto">
-                      {feedbackFilter === 'unanswered'
-                        ? 'Great job! All support questions and feedback queries have been answered.'
-                        : 'No feedback messages recorded yet.'}
+                      {feedbacks.length === 0
+                        ? 'No feedback messages recorded yet.'
+                        : 'No support queries match your search or filter criteria.'}
                     </p>
                   </div>
                 );
