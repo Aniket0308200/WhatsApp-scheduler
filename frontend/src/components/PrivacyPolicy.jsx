@@ -26,7 +26,7 @@ export default function PrivacyPolicy() {
 
       <div className="space-y-6 text-sm leading-relaxed font-sans">
         <div className="flex flex-wrap items-center justify-between bg-slate-50 dark:bg-wa-dsurf/50 p-4 rounded-xl border border-slate-200/80 dark:border-wa-dbdr text-xs text-slate-600 dark:text-wa-dmuted gap-2">
-          <span><strong>Effective Date:</strong> August 9, 2026</span>
+          <span><strong>Effective Date:</strong> November 22, 2026 (Updated)</span>
           <span><strong>Application URL:</strong> <a href="https://www.wascheduler.site" target="_blank" rel="noopener noreferrer" className="text-emerald-600 dark:text-emerald-400 underline hover:text-emerald-700">https://www.wascheduler.site</a></span>
         </div>
 
@@ -36,7 +36,7 @@ export default function PrivacyPolicy() {
           <p>
             Welcome to <strong>WhatsApp Scheduler (WA Scheduler)</strong> accessible at <a href="https://www.wascheduler.site" className="text-emerald-600 dark:text-emerald-400 font-medium hover:underline">https://www.wascheduler.site</a>.
             We respect your privacy and are deeply committed to protecting any personal data processed through our application.
-            This Privacy Policy explains how information (including Google account details, contact list data, and scheduled message contents) is collected, used, stored, and protected when you use our service.
+            This Privacy Policy explains how information (including Google account details, contact list data, scheduled message contents, optional subscription payments, and customer support queries) is collected, used, stored, and protected when you use our service.
           </p>
         </section>
 
@@ -44,7 +44,7 @@ export default function PrivacyPolicy() {
         <section className="space-y-3">
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">2. Information We Collect</h2>
           <p>
-            WA Scheduler collects only the essential data required to perform scheduled message automation and contact selection:
+            WA Scheduler collects only the essential data required to perform scheduled message automation, contact selection, and customer service:
           </p>
           <ul className="list-disc pl-6 space-y-2 text-slate-700 dark:text-wa-dmuted text-xs sm:text-sm">
             <li>
@@ -55,6 +55,12 @@ export default function PrivacyPolicy() {
             </li>
             <li>
               <strong>WhatsApp Scheduled Message Data:</strong> Recipient phone numbers, scheduled date/time, message contents, and delivery status logs required for automated message dispatch.
+            </li>
+            <li>
+              <strong>Manual Subscription & Payment Details (Optional):</strong> When you choose to upgrade to a paid subscription tier (Starter or Pro) via direct UPI transfer, we collect the submitted 12-digit transaction reference number (UTR), payer phone/email, and optional receipt screenshot solely to manually verify payment and activate your tier quota.
+            </li>
+            <li>
+              <strong>In-App Support & Feedback Inquiries:</strong> When you submit messages via our in-app Support & Feedback box or contact form, we collect your provided message content, session/account identifier, and contact details. Public feedback is shared with the community, whereas official administrative replies are sent strictly and privately to your personal support feed.
             </li>
             <li>
               <strong>Technical & Session Data:</strong> Authentication tokens, QR connection session identifiers, and local session preferences.
@@ -71,6 +77,8 @@ export default function PrivacyPolicy() {
           <ul className="list-disc pl-6 space-y-1.5 text-slate-700 dark:text-wa-dmuted text-xs sm:text-sm">
             <li>To display recipient suggestions when you schedule messages to your Google Contacts.</li>
             <li>To queue, trigger, and deliver automated WhatsApp messages according to your specified schedules.</li>
+            <li>To manually verify and activate requested subscription plan upgrades (Starter / Pro).</li>
+            <li>To provide customer assistance and deliver private responses to your support inquiries.</li>
             <li>To authenticate your user session and secure your dashboard settings.</li>
           </ul>
           
@@ -135,7 +143,8 @@ export default function PrivacyPolicy() {
                 Google Security Account Permissions
               </a>.
             </li>
-            <li><strong>Data Deletion Requests:</strong> You can request a complete deletion of all associated scheduled messages and profile data by contacting our support team.</li>
+            <li><strong>Payment & Support Record Deletion:</strong> You can request permanent deletion of your payment verification submissions (UTR, screenshots) and support inquiry history at any time. Unconfirmed or obsolete payment requests are also permanently purged by administrators to maintain database privacy.</li>
+            <li><strong>Full Account Deletion Requests:</strong> You can request a complete deletion of all associated scheduled messages and profile data by contacting our support team via the Contact form or Support box.</li>
           </ul>
         </section>
 
@@ -156,7 +165,7 @@ export default function PrivacyPolicy() {
           <div className="bg-slate-100/70 dark:bg-wa-dsurf p-4 rounded-xl border border-slate-200 dark:border-wa-dbdr font-mono text-xs sm:text-sm text-slate-800 dark:text-wa-dtext space-y-1">
             <p><strong>App Name:</strong> WhatsApp Scheduler (WA Scheduler)</p>
             <p><strong>Official Site:</strong> <a href="https://www.wascheduler.site" className="text-emerald-600 dark:text-emerald-400 hover:underline">https://www.wascheduler.site</a></p>
-            {/* <p><strong>Privacy & Support Email:</strong> <a href="mailto:support@wascheduler.site" className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold">support@wascheduler.site</a></p> */}
+            <p><strong>Customer Support:</strong> Accessible via our in-app 💬 Support &amp; Feedback box or the homepage Contact Us form.</p>
           </div>
         </section>
       </div>

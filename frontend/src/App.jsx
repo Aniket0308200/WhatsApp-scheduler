@@ -464,15 +464,15 @@ export default function App() {
               <span className="text-slate-100 dark:text-wa-dtext">© {new Date().getFullYear()} WA Scheduler. All rights reserved.</span>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-emerald-200/90 dark:text-wa-dmuted text-[11px] font-semibold whitespace-nowrap shrink-0">
-              <button onClick={() => handleNavigate('landing')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none cursor-pointer">Home</button>
-              <span className="opacity-40">|</span>
-              <button onClick={() => handleNavigate('landing', 'features')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none cursor-pointer">Features</button>
-              <span className="opacity-40">|</span>
-              <button onClick={() => handleNavigate('landing', 'pricing')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none cursor-pointer">Pricing</button>
-              <span className="opacity-40">|</span>
-              <button onClick={() => handleNavigate('landing', 'contact')} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none cursor-pointer">Contact Us</button>
-              <span className="opacity-40">|</span>
+            <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 text-emerald-200/90 dark:text-wa-dmuted text-[11px] font-semibold whitespace-nowrap shrink-0">
+              <button onClick={() => handleNavigate('landing')} className="hidden sm:inline-block hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none cursor-pointer">Home</button>
+              <span className="hidden sm:inline-block opacity-40">|</span>
+              <button onClick={() => handleNavigate('landing', 'features')} className="hidden sm:inline-block hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none cursor-pointer">Features</button>
+              <span className="hidden sm:inline-block opacity-40">|</span>
+              <button onClick={() => handleNavigate('landing', 'pricing')} className="hidden sm:inline-block hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none cursor-pointer">Pricing</button>
+              <span className="hidden sm:inline-block opacity-40">|</span>
+              <button onClick={() => handleNavigate('landing', 'contact')} className="hidden sm:inline-block hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none cursor-pointer">Contact Us</button>
+              <span className="hidden sm:inline-block opacity-40">|</span>
               <Link to="/privacy-policy" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Privacy Policy</Link>
               <span className="opacity-40">|</span>
               <Link to="/terms-of-service" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="hover:text-white dark:hover:text-wa-dtext transition-colors focus:outline-none">Terms of Service</Link>

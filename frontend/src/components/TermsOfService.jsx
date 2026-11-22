@@ -26,7 +26,7 @@ export default function TermsOfService() {
 
       <div className="space-y-6 text-sm leading-relaxed font-sans">
         <div className="flex flex-wrap items-center justify-between bg-slate-50 dark:bg-wa-dsurf/50 p-4 rounded-xl border border-slate-200/80 dark:border-wa-dbdr text-xs text-slate-600 dark:text-wa-dmuted gap-2">
-          <span><strong>Effective Date:</strong> August 9, 2026</span>
+          <span><strong>Effective Date:</strong> November 22, 2026 (Updated)</span>
           <span><strong>Official Website:</strong> <a href="https://www.wascheduler.site" target="_blank" rel="noopener noreferrer" className="text-emerald-600 dark:text-emerald-400 underline hover:text-emerald-700">https://www.wascheduler.site</a></span>
         </div>
 
@@ -44,7 +44,7 @@ export default function TermsOfService() {
         <section className="space-y-2">
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">2. Description of Service</h2>
           <p>
-            WhatsApp Scheduler provides users with tools to schedule and automate message delivery to WhatsApp contacts, manage recurring notifications, and integrate Google Contacts for easy recipient selection.
+            WhatsApp Scheduler provides users with tools to schedule and automate message delivery to WhatsApp contacts, manage recurring notifications, integrate Google Contacts for recipient selection, and access voluntary Starter and Pro tier quota upgrades.
           </p>
         </section>
 
@@ -58,7 +58,7 @@ export default function TermsOfService() {
             <li>Send bulk unsolicited commercial messages (spam) or illegal mass advertising.</li>
             <li>Harass, stalk, abuse, threaten, or violate the privacy of any third party.</li>
             <li>Distribute fraudulent content, malware, phishing links, or computer viruses.</li>
-            <li>Use automated scheduling for prohibited or deceptive practices.</li>
+            <li>Use automated scheduling for prohibited, deceptive, or malicious practices.</li>
           </ul>
         </section>
 
@@ -75,9 +75,22 @@ export default function TermsOfService() {
           </div>
         </section>
 
-        {/* 5. Google API Services */}
+        {/* 5. Subscription Plans & Payment Terms */}
+        <section className="space-y-3">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">5. Subscription Plans & UPI Payment Terms</h2>
+          <p>
+            WA Scheduler provides a standard Free Tier with monthly message allowances, alongside optional paid tiers (Starter and Pro) with elevated quotas:
+          </p>
+          <ul className="list-disc pl-6 space-y-1.5 text-slate-700 dark:text-wa-dmuted text-xs sm:text-sm">
+            <li><strong>Manual UPI Verification:</strong> Upgrades are processed via direct UPI transfer. Users must provide an authentic 12-digit UPI transaction reference (UTR). Submissions containing fabricated, duplicate, or manipulated payment proofs may be rejected and the associated account locked.</li>
+            <li><strong>Digital Quotas:</strong> Subscription quotas are credited to the user's account immediately upon administrative verification for the selected billing cycle (Monthly or Yearly).</li>
+            <li><strong>Refunds & Inquiries:</strong> Subscriptions grant access to digital message scheduling quotas. For any payment issues, users may reach out directly via our in-app support channels.</li>
+          </ul>
+        </section>
+
+        {/* 6. Google API Services */}
         <section className="space-y-2">
-          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">5. Google API Services Compliance</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">6. Google API Services Compliance</h2>
           <p>
             When authenticating via Google OAuth to synchronize contacts, you agree to adhere to Google's Terms of Service and API policies. Your Google user data is handled in strict compliance with our{' '}
             <a onClick={() => navigate('/privacy-policy')} className="text-emerald-600 dark:text-emerald-400 font-semibold cursor-pointer hover:underline">
@@ -87,32 +100,32 @@ export default function TermsOfService() {
           </p>
         </section>
 
-        {/* 6. Disclaimers of Warranties */}
+        {/* 7. Disclaimers of Warranties */}
         <section className="space-y-2">
-          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">6. Disclaimer of Warranties</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">7. Disclaimer of Warranties</h2>
           <p>
             THE SERVICE IS PROVIDED ON AN "AS IS" AND "AS AVAILABLE" BASIS WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT.
           </p>
         </section>
 
-        {/* 7. Limitation of Liability */}
+        {/* 8. Limitation of Liability */}
         <section className="space-y-2">
-          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">7. Limitation of Liability</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">8. Limitation of Liability</h2>
           <p>
             IN NO EVENT SHALL WHATSAPP SCHEDULER, ITS OPERATORS, OR DEVELOPERS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, CONSEQUENTIAL, OR SPECIAL DAMAGES ARISING FROM YOUR USE OF OR INABILITY TO USE THE SERVICE.
           </p>
         </section>
 
-        {/* 8. Contact Information */}
+        {/* 9. Contact Information */}
         <section className="space-y-2 pt-2 border-t border-slate-200 dark:border-wa-dbdr">
-          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">8. Contact Information</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">9. Contact Information</h2>
           <p>
             If you have any questions regarding these Terms of Service, please contact us at:
           </p>
           <div className="bg-slate-100/70 dark:bg-wa-dsurf p-4 rounded-xl border border-slate-200 dark:border-wa-dbdr font-mono text-xs sm:text-sm text-slate-800 dark:text-wa-dtext space-y-1">
             <p><strong>App Name:</strong> WhatsApp Scheduler (WA Scheduler)</p>
             <p><strong>Official Site:</strong> <a href="https://www.wascheduler.site" className="text-emerald-600 dark:text-emerald-400 hover:underline">https://www.wascheduler.site</a></p>
-            {/* <p><strong>Support Email:</strong> <a href="mailto:support@wascheduler.site" className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold">support@wascheduler.site</a></p> */}
+            <p><strong>Customer Support:</strong> In-app 💬 Support &amp; Feedback box or the homepage Contact Us form.</p>
           </div>
         </section>
       </div>
