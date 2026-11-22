@@ -82,7 +82,7 @@ export default function PrivacyPolicy() {
             <li>To authenticate your user session and secure your dashboard settings.</li>
           </ul>
           
-          <div className="bg-emerald-50/80 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-xl p-4.5 my-3 space-y-2">
+          <div className="bg-emerald-50/80 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-xl p-3 my-3 space-y-2">
             <h3 className="font-semibold text-emerald-900 dark:text-emerald-300 text-xs sm:text-sm flex items-center gap-2">
               <span>🛡️</span> Zero Data Selling & Third-Party Sharing Promise
             </h3>
@@ -165,6 +165,7 @@ export default function PrivacyPolicy() {
           <div className="bg-slate-100/70 dark:bg-wa-dsurf p-4 rounded-xl border border-slate-200 dark:border-wa-dbdr font-mono text-xs sm:text-sm text-slate-800 dark:text-wa-dtext space-y-1">
             <p><strong>App Name:</strong> WhatsApp Scheduler (WA Scheduler)</p>
             <p><strong>Official Site:</strong> <a href="https://www.wascheduler.site" className="text-emerald-600 dark:text-emerald-400 hover:underline">https://www.wascheduler.site</a></p>
+            <p><strong>Official Support Email:</strong> <a href="mailto:support@wascheduler.site" className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold">support@wascheduler.site</a></p>
             <p><strong>Customer Support:</strong> Accessible via our in-app 💬 Support &amp; Feedback box or the homepage Contact Us form.</p>
           </div>
         </section>

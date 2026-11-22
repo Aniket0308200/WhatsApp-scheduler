@@ -1020,10 +1020,10 @@ export default function GuidePage() {
         </p>
         <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
           <a
-            href="mailto:aniketchouhan243@gmail.com?subject=WhatsApp%20Scheduler%20Support%20Inquiry"
+            href="mailto:support@wascheduler.site?subject=WhatsApp%20Scheduler%20Support%20Inquiry"
             className="px-5 py-2.5 rounded-xl bg-wa-teal hover:bg-wa-teal/90 text-white font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer"
           >
-            Email Support (aniketchouhan243@gmail.com)
+            Email Support (support@wascheduler.site)
           </a>
           <Link
             to="/"

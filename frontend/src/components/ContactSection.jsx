@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { submitContactForm } from '../api';
 
 const TARGET_SUPPORT_EMAIL = 'aniketchouhan243@gmail.com';
+const OFFICIAL_DISPLAY_EMAIL = 'support@wascheduler.site';
 
 export const PAYMENT_METHODS = [
   'Google Pay',
@@ -171,9 +172,9 @@ Sent via WA Scheduler Contact Form`;
   };
 
   const handleCopyEmailAddress = () => {
-    navigator.clipboard.writeText(TARGET_SUPPORT_EMAIL);
+    navigator.clipboard.writeText(OFFICIAL_DISPLAY_EMAIL);
     setCopiedEmail(true);
-    toast.success('Support email address copied to clipboard!');
+    toast.success('Support email address (support@wascheduler.site) copied to clipboard!');
     setTimeout(() => setCopiedEmail(false), 2500);
   };
 
@@ -265,11 +266,16 @@ Sent via WA Scheduler Contact Form`;
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-slate-100 dark:bg-wa-dsurf border border-slate-200 dark:border-wa-dbdr shadow-xs">
               <span className="text-base">✉️</span>
               <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Direct Support Email:</span>
-              <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 select-all">{TARGET_SUPPORT_EMAIL}</span>
+              <a
+                href={`mailto:${OFFICIAL_DISPLAY_EMAIL}`}
+                className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 hover:underline select-all"
+              >
+                {OFFICIAL_DISPLAY_EMAIL}
+              </a>
               <button
                 type="button"
                 onClick={handleCopyEmailAddress}
-                className="ml-2 text-xs text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 font-bold transition-colors"
+                className="ml-2 text-xs text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 font-bold transition-colors cursor-pointer"
                 title="Copy Email"
               >
                 {copiedEmail ? '✓ Copied' : '📋 Copy'}

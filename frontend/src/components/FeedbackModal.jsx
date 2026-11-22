@@ -154,7 +154,10 @@ export default function FeedbackModal({ onClose, initialTab = 'public' }) {
               💬 Feedback & Support
             </h3>
             <p className="text-[11px] text-slate-500 dark:text-wa-dmuted">
-              Help us improve or submit your support queries.
+              Submit your query or email{' '}
+              <a href="mailto:support@wascheduler.site" className="text-wa-teal dark:text-emerald-400 font-semibold hover:underline">
+                support@wascheduler.site
+              </a>
             </p>
           </div>
           <button
@@ -310,6 +313,19 @@ export default function FeedbackModal({ onClose, initialTab = 'public' }) {
             {submitting ? '…' : 'Send'}
           </button>
         </form>
+
+        {/* Direct Email Support Note */}
+        <div className="px-3 py-1.5 border-t border-slate-200/60 dark:border-wa-dbdr/60 bg-slate-100/70 dark:bg-wa-dsurf/40 text-center relative z-10 shrink-0">
+          <p className="text-[10px] text-slate-500 dark:text-wa-dmuted">
+            Prefer direct email? Contact us anytime at{' '}
+            <a
+              href="mailto:support@wascheduler.site"
+              className="text-wa-teal dark:text-emerald-400 font-bold hover:underline"
+            >
+              support@wascheduler.site
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   );
