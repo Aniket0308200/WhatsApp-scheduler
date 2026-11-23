@@ -19,6 +19,7 @@ import {
   adminUpdateContactStatus,
   adminDeleteContactMessage
 } from '../api';
+import AdminAnalyticsTab from './AdminAnalyticsTab';
 
 const ADMIN_STORAGE_KEY = 'wa_admin_token';
 const ADMIN_USER_KEY = 'wa_admin_user';
@@ -902,6 +903,17 @@ export default function AdminPanel() {
                 {feedbacks.filter(f => !f.adminReply).length} Awaiting Reply
               </span>
             )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('analytics')}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 ${
+              activeTab === 'analytics'
+                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+          >
+            📊 Analytics & Traffic
           </button>
         </div>
 
@@ -1829,6 +1841,13 @@ export default function AdminPanel() {
               );
             })()}
           </div>
+        )}
+
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {/* TAB 5: TRAFFIC & CONVERSION ANALYTICS                              */}
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {activeTab === 'analytics' && (
+          <AdminAnalyticsTab token={token} />
         )}
       </main>
 

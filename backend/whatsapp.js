@@ -962,6 +962,13 @@ async function _performInitWhatsApp(sessionId) {
         session.reconnectTimer = null;
       }
 
+      // Record analytics event for WhatsApp connection
+      try {
+        db.recordAnalyticsEvent('whatsappConnected').catch(() => {});
+      } catch (analyticsErr) {
+        // Safe, non-blocking
+      }
+
       if (session.contactsBuffer) {
         session.contactsBuffer.clear();
       }

@@ -95,7 +95,8 @@ app.use((req, res, next) => {
       req.path.startsWith('/api/auth') ||
       req.path.startsWith('/api/admin') ||
       req.path.startsWith('/api/subscription') ||
-      req.path.startsWith('/api/contact')
+      req.path.startsWith('/api/contact') ||
+      req.path.startsWith('/api/analytics')
     ) {
       return next();
     }
@@ -125,6 +126,19 @@ app.use('/api/feedback', feedbackRouter);
 const contactRouter = require('./routes/contact');
 app.use('/api/contact', contactRouter);
 
+// ─── Analytics Traffic Tracking Route ────────────────────────────────────────
+app.post('/api/analytics/track', async (req, res) => {
+  try {
+    const { visitorId } = req.body || {};
+    if (visitorId) {
+      await db.recordVisitorClick(visitorId);
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(200).json({ success: false }); // Always 200 so it never breaks client
+  }
+});
+
 // ─── User Authentication Routes (Sign Up, Sign In, Session) ────────────────────
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
@@ -152,6 +166,7 @@ app.post('/api/auth/signup', async (req, res) => {
     }
 
     const user = await db.createAuthAccount({ name, email: cleanEmail, password });
+    db.recordAnalyticsEvent('login').catch(() => {});
     const token = db.encrypt(JSON.stringify({ id: user.id, email: user.email, timestamp: Date.now() }));
     return res.json({ success: true, user, token });
   } catch (err) {
@@ -185,6 +200,7 @@ app.post('/api/auth/login', async (req, res) => {
       { _id: account._id },
       { $set: { lastLoginAt: new Date(), lastSeenAt: new Date() } }
     );
+    db.recordAnalyticsEvent('login').catch(() => {});
     const user = {
       id: account._id.toString(),
       name: account.name,
@@ -255,6 +271,7 @@ app.get('/api/auth/google-login/callback', async (req, res) => {
     }
 
     const user = { id: account._id.toString(), name: account.name, email: account.email };
+    db.recordAnalyticsEvent('login').catch(() => {});
     const token = db.encrypt(JSON.stringify({ id: user.id, email: user.email, timestamp: Date.now() }));
     const frontendUrl = process.env.FRONTEND_URL || 'https://www.wascheduler.site';
     const redirectTarget = `${frontendUrl}/?token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(user))}`;

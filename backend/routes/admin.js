@@ -364,5 +364,23 @@ router.delete('/feedbacks/:id', requireAdminAuth, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/admin/analytics
+ * Fetches analytics summary & timeline for the specified date range (Kolkata time).
+ * Query params: ?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+ */
+router.get('/analytics', requireAdminAuth, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query || {};
+    const data = await db.getAnalyticsData(startDate, endDate);
+    return res.json({
+      success: true,
+      ...data
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
 

@@ -178,4 +178,15 @@ export const adminReplyFeedback = (token, id, reply) =>
 export const adminDeleteFeedback = (token, id) =>
   api.delete(`/admin/feedbacks/${id}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
 
+// ─── Analytics APIs ──────────────────────────────────────────────────────────
+export const trackAnalyticsVisit = (payload) =>
+  api.post('/analytics/track', payload).then(r => r.data).catch(() => {});
+
+export const adminGetAnalytics = (token, params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  return api.get(`/admin/analytics${query ? `?${query}` : ''}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  }).then(r => r.data);
+};
+
 

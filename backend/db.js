@@ -355,6 +355,209 @@ ContactMessageSchema.index({ createdAt: -1 });
 
 const ContactMessage = mongoose.model('ContactMessage', ContactMessageSchema);
 
+// ─── Analytics Models (Traffic, Visitors, Funnel) ────────────────────────────
+const DailyAnalyticsSchema = new mongoose.Schema({
+  date: { type: String, required: true, unique: true, index: true }, // 'YYYY-MM-DD' in Kolkata timezone
+  totalViews: { type: Number, default: 0 },
+  uniqueVisitors: { type: Number, default: 0 },
+  logins: { type: Number, default: 0 },
+  whatsappConnected: { type: Number, default: 0 }
+}, { timestamps: true });
+
+const DailyAnalytics = mongoose.model('DailyAnalytics', DailyAnalyticsSchema);
+
+const VisitorLogSchema = new mongoose.Schema({
+  date: { type: String, required: true, index: true }, // 'YYYY-MM-DD' in Kolkata timezone
+  visitorId: { type: String, required: true, index: true },
+  createdAt: { type: Date, default: Date.now, expires: 60 * 60 * 24 * 90 } // 90-day auto cleanup
+});
+VisitorLogSchema.index({ date: 1, visitorId: 1 }, { unique: true });
+
+const VisitorLog = mongoose.model('VisitorLog', VisitorLogSchema);
+
+function getKolkataDateString(d = new Date()) {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    return formatter.format(d);
+  } catch (err) {
+    const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+    const ist = new Date(utc + (3600000 * 5.5));
+    return ist.toISOString().split('T')[0];
+  }
+}
+
+async function recordVisitorClick(visitorId) {
+  if (!visitorId) return;
+  const cleanId = String(visitorId).trim().substring(0, 64);
+  const date = getKolkataDateString();
+
+  try {
+    // 1. Always increment total page clicks/views
+    await DailyAnalytics.updateOne(
+      { date },
+      { $inc: { totalViews: 1 } },
+      { upsert: true }
+    );
+
+    // 2. Check if this visitor is unique for today
+    try {
+      await VisitorLog.create({ date, visitorId: cleanId });
+      // If insert succeeds without duplicate key error, increment uniqueVisitors
+      await DailyAnalytics.updateOne(
+        { date },
+        { $inc: { uniqueVisitors: 1 } },
+        { upsert: true }
+      );
+    } catch (dupErr) {
+      // 11000 = duplicate key error, meaning visitor already counted for today
+      if (dupErr.code !== 11000) {
+        console.warn('[Analytics] VisitorLog insert notice:', dupErr.message);
+      }
+    }
+  } catch (err) {
+    console.error('[Analytics] recordVisitorClick error:', err.message);
+  }
+}
+
+async function recordAnalyticsEvent(eventType) {
+  if (!eventType) return;
+  const date = getKolkataDateString();
+  const field = eventType === 'whatsappConnected' ? 'whatsappConnected' : 'logins';
+
+  try {
+    await DailyAnalytics.updateOne(
+      { date },
+      { $inc: { [field]: 1 } },
+      { upsert: true }
+    );
+  } catch (err) {
+    console.error(`[Analytics] recordAnalyticsEvent(${eventType}) error:`, err.message);
+  }
+}
+
+async function getAnalyticsData(startDate, endDate) {
+  const todayStr = getKolkataDateString();
+  let start = startDate;
+  let end = endDate || todayStr;
+
+  if (!start) {
+    const d = new Date();
+    d.setDate(d.getDate() - 29);
+    start = getKolkataDateString(d);
+  }
+
+  if (start > end) {
+    const tmp = start;
+    start = end;
+    end = tmp;
+  }
+
+  const dailyDocs = await DailyAnalytics.find({
+    date: { $gte: start, $lte: end }
+  }).lean();
+
+  const dailyMap = {};
+  for (const doc of dailyDocs) {
+    dailyMap[doc.date] = doc;
+  }
+
+  let historicalSignupsMap = {};
+  let historicalWaMap = {};
+  try {
+    const startD = new Date(`${start}T00:00:00+05:30`);
+    const endD = new Date(`${end}T23:59:59.999+05:30`);
+
+    const signupAgg = await AuthAccount.aggregate([
+      { $match: { createdAt: { $gte: startD, $lte: endD } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "Asia/Kolkata" } },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    for (const item of signupAgg) {
+      if (item._id) historicalSignupsMap[item._id] = item.count;
+    }
+
+    const waAgg = await User.aggregate([
+      { $match: { createdAt: { $gte: startD, $lte: endD } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "Asia/Kolkata" } },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    for (const item of waAgg) {
+      if (item._id) historicalWaMap[item._id] = item.count;
+    }
+  } catch (aggErr) {
+    console.warn('[Analytics] Historical aggregation note:', aggErr.message);
+  }
+
+  const timeline = [];
+  let curr = new Date(`${start}T00:00:00+05:30`);
+  const stop = new Date(`${end}T00:00:00+05:30`);
+
+  let totalViews = 0;
+  let uniqueVisitors = 0;
+  let logins = 0;
+  let whatsappConnected = 0;
+
+  let loopCount = 0;
+  while (curr <= stop && loopCount < 400) {
+    loopCount++;
+    const dateStr = getKolkataDateString(curr);
+    const existing = dailyMap[dateStr] || {};
+
+    const dayViews = Number(existing.totalViews || 0);
+    const dayUnique = Number(existing.uniqueVisitors || 0);
+    const dayLogins = Math.max(Number(existing.logins || 0), historicalSignupsMap[dateStr] || 0);
+    const dayWa = Math.max(Number(existing.whatsappConnected || 0), historicalWaMap[dateStr] || 0);
+
+    totalViews += dayViews;
+    uniqueVisitors += dayUnique;
+    logins += dayLogins;
+    whatsappConnected += dayWa;
+
+    timeline.push({
+      date: dateStr,
+      totalViews: dayViews,
+      uniqueVisitors: dayUnique,
+      logins: dayLogins,
+      whatsappConnected: dayWa
+    });
+
+    curr.setDate(curr.getDate() + 1);
+  }
+
+  const visitorToLoginRate = uniqueVisitors > 0 ? Number(((logins / uniqueVisitors) * 100).toFixed(1)) : 0;
+  const loginToWaRate = logins > 0 ? Number(((whatsappConnected / logins) * 100).toFixed(1)) : 0;
+
+  return {
+    dateRange: {
+      startDate: start,
+      endDate: end,
+      timezone: 'Asia/Kolkata (IST)'
+    },
+    summary: {
+      totalViews,
+      uniqueVisitors,
+      logins,
+      whatsappConnected,
+      visitorToLoginRate,
+      loginToWaRate
+    },
+    timeline
+  };
+}
+
 function cleanContactName(name) {
   if (!name) return null;
   const trimmed = String(name).trim();
@@ -1417,4 +1620,10 @@ module.exports = {
   updateUserHeartbeat,
   getUserActivityOverviewForAdmin,
   ContactMessage,
+  DailyAnalytics,
+  VisitorLog,
+  recordVisitorClick,
+  recordAnalyticsEvent,
+  getAnalyticsData,
+  getKolkataDateString,
 };

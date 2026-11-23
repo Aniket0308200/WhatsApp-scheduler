@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Routes, Route, useNavigate, Link, useLocation } from 'react-router-dom';
-import { fetchStatus, fetchMessages, fetchUserQuota, sendUserHeartbeat } from './api';
+import { fetchStatus, fetchMessages, fetchUserQuota, sendUserHeartbeat, trackAnalyticsVisit } from './api';
 import ConnectionPanel from './components/ConnectionPanel';
 import SchedulerForm from './components/SchedulerForm';
 import MessageTable from './components/MessageTable';
@@ -126,6 +126,20 @@ export default function App() {
       setHasShownExpiredPopup(true);
     }
   }, [quota?.isExpired, hasShownExpiredPopup]);
+
+  // Track page visit / unique visitor for Analytics
+  useEffect(() => {
+    try {
+      let visitorId = localStorage.getItem('wa_visitor_id');
+      if (!visitorId) {
+        visitorId = 'vid_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 10);
+        localStorage.setItem('wa_visitor_id', visitorId);
+      }
+      trackAnalyticsVisit({ visitorId });
+    } catch {
+      // safe fallback
+    }
+  }, [location.pathname]);
 
   const refreshMessages = useCallback(async () => {
     if (document.hidden) return;
