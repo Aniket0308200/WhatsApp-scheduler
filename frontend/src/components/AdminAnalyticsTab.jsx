@@ -61,7 +61,7 @@ function computeRangeForPreset(key) {
       return { start: getOffsetDateKolkata(-29), end: today };
     case 'this_week': {
       const now = new Date();
-      const day = now.getDay(); // 0 is Sun, 1 is Mon...
+      const day = now.getDay();
       const diffToMon = day === 0 ? 6 : day - 1;
       return { start: getOffsetDateKolkata(-diffToMon), end: today };
     }
@@ -80,7 +80,7 @@ function computeRangeForPreset(key) {
     case 'last_month': {
       const now = new Date();
       let y = now.getFullYear();
-      let m = now.getMonth(); // 0-based
+      let m = now.getMonth();
       if (m === 0) {
         m = 12;
         y -= 1;
@@ -107,19 +107,19 @@ function formatDateDisplay(dateStr) {
   return dateStr;
 }
 
-// ─── Cloudflare-Style SVG Area Chart Component ───────────────────────────────
+// ─── Compact Cloudflare-Style SVG Area Chart Component ───────────────────────
 function CloudflareChart({
   title,
   subtitle,
   metricKey,
   data = [],
-  color = '#38bdf8', // Tailwind sky-400
+  color = '#38bdf8',
   secondaryKey = null,
-  secondaryColor = '#a855f7', // Tailwind purple-500
+  secondaryColor = '#a855f7',
   secondaryTitle = '',
   totalValue = 0,
   secondaryTotal = 0,
-  height = 180
+  height = 115
 }) {
   const [hoverIndex, setHoverIndex] = useState(null);
 
@@ -133,15 +133,15 @@ function CloudflareChart({
       if (val2 > max) max = val2;
     }
     if (max === 0) return 5;
-    return Math.ceil(max * 1.15); // Add headroom
+    return Math.ceil(max * 1.15);
   }, [data, metricKey, secondaryKey]);
 
-  // Generate SVG Points
+  // Generate SVG Points (Tightly scaled)
   const svgWidth = 800;
-  const paddingLeft = 50;
-  const paddingRight = 20;
-  const paddingTop = 20;
-  const paddingBottom = 30;
+  const paddingLeft = 34;
+  const paddingRight = 10;
+  const paddingTop = 8;
+  const paddingBottom = 20;
 
   const chartInnerWidth = svgWidth - paddingLeft - paddingRight;
   const chartInnerHeight = height - paddingTop - paddingBottom;
@@ -200,21 +200,20 @@ function CloudflareChart({
   const primaryPaths = useMemo(() => buildSmoothPath(pointsPrimary), [pointsPrimary, chartInnerHeight, paddingTop]);
   const secondaryPaths = useMemo(() => buildSmoothPath(pointsSecondary), [pointsSecondary, chartInnerHeight, paddingTop]);
 
-  // Y-axis grid ticks (4 ticks)
+  // Y-axis grid ticks (3 ticks for clean compact fit)
   const yTicks = [
     0,
-    Math.round(maxY * 0.33),
-    Math.round(maxY * 0.66),
+    Math.round(maxY * 0.5),
     maxY
   ];
 
-  // X-axis date labels (show ~5 to 7 labels)
+  // X-axis date labels (5 labels)
   const xLabels = useMemo(() => {
     if (!data.length) return [];
-    if (data.length <= 7) {
+    if (data.length <= 6) {
       return data.map((d, idx) => ({ idx, text: d.date.slice(5) }));
     }
-    const step = Math.ceil(data.length / 6);
+    const step = Math.ceil(data.length / 5);
     const labels = [];
     for (let i = 0; i < data.length; i += step) {
       labels.push({ idx: i, text: data[i].date.slice(5) });
@@ -229,38 +228,33 @@ function CloudflareChart({
   const activeSecPoint = hoverIndex !== null && pointsSecondary[hoverIndex] ? pointsSecondary[hoverIndex] : null;
 
   return (
-    <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden transition-all hover:border-slate-700">
+    <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 sm:p-3 shadow-md relative overflow-hidden transition-all hover:border-slate-700">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-            <h4 className="text-sm font-bold text-slate-200">{title}</h4>
-            {subtitle && <span className="text-[11px] text-slate-400">({subtitle})</span>}
-          </div>
-          <div className="flex items-baseline gap-3 mt-1">
-            <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              {totalValue.toLocaleString()}
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="flex items-baseline gap-2">
+          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+          <h4 className="text-xs font-bold text-slate-200 truncate">{title}</h4>
+          <span className="text-base sm:text-lg font-black text-white tracking-tight ml-1">
+            {totalValue.toLocaleString()}
+          </span>
+          {secondaryKey && (
+            <span className="text-[10px] text-slate-400 flex items-center gap-1 font-medium ml-1">
+              vs <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: secondaryColor }} />
+              {secondaryTitle}: <strong className="text-purple-300 font-bold">{secondaryTotal.toLocaleString()}</strong>
             </span>
-            {secondaryKey && (
-              <span className="text-xs text-slate-400 flex items-center gap-1.5 font-medium">
-                vs <span className="w-2 h-2 rounded-full" style={{ backgroundColor: secondaryColor }} />
-                {secondaryTitle}: <strong className="text-purple-300 font-bold">{secondaryTotal.toLocaleString()}</strong>
-              </span>
-            )}
-          </div>
+          )}
         </div>
 
         {/* Legend */}
-        <div className="flex items-center gap-4 text-xs text-slate-400">
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-0.5 rounded" style={{ backgroundColor: color }} />
-            <span className="text-[11px] font-semibold">{title}</span>
+        <div className="flex items-center gap-2 text-[10px] text-slate-400 flex-shrink-0">
+          <div className="flex items-center gap-1">
+            <span className="w-2.5 h-0.5 rounded" style={{ backgroundColor: color }} />
+            <span className="font-medium truncate max-w-[70px] sm:max-w-none">{title}</span>
           </div>
           {secondaryKey && (
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-0.5 rounded" style={{ backgroundColor: secondaryColor }} />
-              <span className="text-[11px] font-semibold">{secondaryTitle}</span>
+            <div className="flex items-center gap-1">
+              <span className="w-2.5 h-0.5 rounded" style={{ backgroundColor: secondaryColor }} />
+              <span className="font-medium truncate max-w-[70px] sm:max-w-none">{secondaryTitle}</span>
             </div>
           )}
         </div>
@@ -306,15 +300,15 @@ function CloudflareChart({
                   x2={paddingLeft + chartInnerWidth}
                   y2={y}
                   stroke="#334155"
-                  strokeDasharray="3 3"
-                  strokeWidth="0.8"
+                  strokeDasharray="2 2"
+                  strokeWidth="0.6"
                 />
                 <text
-                  x={paddingLeft - 8}
-                  y={y + 3.5}
+                  x={paddingLeft - 5}
+                  y={y + 3}
                   textAnchor="end"
                   fill="#64748b"
-                  fontSize="10"
+                  fontSize="9"
                   fontFamily="sans-serif"
                 >
                   {tick}
@@ -332,7 +326,7 @@ function CloudflareChart({
               d={secondaryPaths.line}
               fill="none"
               stroke={secondaryColor}
-              strokeWidth="2.2"
+              strokeWidth="1.8"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
@@ -347,7 +341,7 @@ function CloudflareChart({
               d={primaryPaths.line}
               fill="none"
               stroke={color}
-              strokeWidth="2.5"
+              strokeWidth="2.0"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
@@ -360,10 +354,10 @@ function CloudflareChart({
               <text
                 key={i}
                 x={x}
-                y={height - 8}
+                y={height - 4}
                 textAnchor="middle"
                 fill="#64748b"
-                fontSize="10"
+                fontSize="9"
                 fontFamily="sans-serif"
               >
                 {lbl.text}
@@ -386,19 +380,19 @@ function CloudflareChart({
               <circle
                 cx={activePoint.x}
                 cy={activePoint.y}
-                r="4.5"
+                r="3"
                 fill={color}
                 stroke="#0f172a"
-                strokeWidth="2"
+                strokeWidth="1.5"
               />
               {activeSecPoint && (
                 <circle
                   cx={activeSecPoint.x}
                   cy={activeSecPoint.y}
-                  r="4.5"
+                  r="3"
                   fill={secondaryColor}
                   stroke="#0f172a"
-                  strokeWidth="2"
+                  strokeWidth="1.5"
                 />
               )}
             </g>
@@ -408,18 +402,18 @@ function CloudflareChart({
         {/* Hover Tooltip Card */}
         {activePoint && hoverIndex !== null && data[hoverIndex] && (
           <div
-            className="absolute top-2 pointer-events-none z-10 bg-slate-950/95 border border-slate-700/80 shadow-2xl rounded-xl px-3 py-2 text-xs backdrop-blur-md transition-all duration-75"
+            className="absolute top-1 pointer-events-none z-10 bg-slate-950/95 border border-slate-700/80 shadow-xl rounded-lg px-2 py-1 text-[10px] backdrop-blur-md transition-all duration-75"
             style={{
               left: `${Math.min(85, Math.max(15, (activePoint.x / svgWidth) * 100))}%`,
               transform: 'translateX(-50%)'
             }}
           >
-            <div className="text-[11px] font-bold text-slate-300 border-b border-slate-800 pb-1 mb-1">
+            <div className="font-bold text-slate-300 border-b border-slate-800 pb-0.5 mb-0.5">
               📅 {formatDateDisplay(data[hoverIndex].date)}
             </div>
-            <div className="flex items-center justify-between gap-4 py-0.5">
-              <span className="flex items-center gap-1.5 text-slate-400">
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+            <div className="flex items-center justify-between gap-3 py-0.2">
+              <span className="flex items-center gap-1 text-slate-400">
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
                 {title}:
               </span>
               <strong className="text-white font-mono font-bold">
@@ -427,9 +421,9 @@ function CloudflareChart({
               </strong>
             </div>
             {secondaryKey && (
-              <div className="flex items-center justify-between gap-4 py-0.5">
-                <span className="flex items-center gap-1.5 text-slate-400">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: secondaryColor }} />
+              <div className="flex items-center justify-between gap-3 py-0.2">
+                <span className="flex items-center gap-1 text-slate-400">
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: secondaryColor }} />
                   {secondaryTitle}:
                 </span>
                 <strong className="text-purple-300 font-mono font-bold">
@@ -539,36 +533,36 @@ export default function AdminAnalyticsTab({ token }) {
   }, [selectedPreset]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3.5">
       {/* ── Top Bar: Range Selector & Controls ─────────────────────────────────── */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 sm:p-3.5 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
         {/* Title & Kolkata Timezone Info */}
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xl">📊</span>
-            <h3 className="text-lg font-bold text-white">Traffic & Conversion Analytics</h3>
+            <span className="text-base">📊</span>
+            <h3 className="text-sm sm:text-base font-bold text-white">Traffic & Conversion Analytics</h3>
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Real-time visitor clicks, user logins & WhatsApp connection funnels • <strong className="text-emerald-400 font-semibold">Asia/Kolkata Time (IST)</strong>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            Real-time clicks, logins & WhatsApp funnels • <strong className="text-emerald-400 font-semibold">Asia/Kolkata Time (IST)</strong>
           </p>
         </div>
 
         {/* Date Range Button & Refresh */}
-        <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap">
+        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
           {/* Date Picker Button (Google Ads style trigger) */}
           <button
             type="button"
             onClick={handleOpenCalendarModal}
-            className="flex-1 md:flex-none flex items-center justify-between sm:justify-start gap-2.5 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 hover:border-emerald-500 text-xs text-slate-200 font-bold transition-all shadow-md group"
+            className="flex-1 sm:flex-none flex items-center justify-between sm:justify-start gap-2 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 hover:border-emerald-500 text-xs text-slate-200 font-bold transition-all shadow group"
           >
             <span className="text-slate-400 group-hover:text-emerald-400 transition-colors">📅</span>
             <span>
               {formatDateDisplay(dateRange.start)} – {formatDateDisplay(dateRange.end)}
             </span>
-            <span className="px-2 py-0.5 rounded-md bg-slate-800 text-[10px] text-emerald-400 font-bold border border-slate-700">
+            <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-emerald-400 font-bold border border-slate-700">
               {currentPresetLabel}
             </span>
-            <span className="text-slate-500 text-[10px]">▼</span>
+            <span className="text-slate-500 text-[9px]">▼</span>
           </button>
 
           {/* Refresh Button */}
@@ -576,7 +570,7 @@ export default function AdminAnalyticsTab({ token }) {
             type="button"
             disabled={loading}
             onClick={() => fetchAnalytics(dateRange.start, dateRange.end)}
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors flex items-center gap-1 disabled:opacity-50"
             title="Refresh Analytics"
           >
             <span className={loading ? 'animate-spin' : ''}>🔄</span>
@@ -585,110 +579,110 @@ export default function AdminAnalyticsTab({ token }) {
         </div>
       </div>
 
-      {/* ── Summary Funnel Metric Cards ────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ── Summary Funnel Metric Cards (Compact 2x2 on Mobile, 4 in row on Desktop) ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
         {/* Card 1: Unique Visitors */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg hover:border-sky-500/50 transition-all">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 sm:p-3 shadow-md hover:border-sky-500/50 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-sky-400 flex items-center gap-1.5">
+            <span className="text-[11px] sm:text-xs font-bold text-sky-400 flex items-center gap-1">
               <span>👤</span> Unique Visitors
             </span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-950 text-sky-300 border border-sky-800/80 font-bold">
-              Google & Direct
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-sky-950 text-sky-300 border border-sky-800/80 font-bold">
+              Unique
             </span>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-white mt-2">
+          <div className="text-xl sm:text-2xl font-black text-white mt-1">
             {summary.uniqueVisitors.toLocaleString()}
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Distinct individuals visiting the site per day
+          <p className="text-[10px] text-slate-400 mt-0.5 truncate">
+            Distinct individuals visiting per day
           </p>
         </div>
 
         {/* Card 2: Total Page Views / Clicks */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg hover:border-indigo-500/50 transition-all">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 sm:p-3 shadow-md hover:border-indigo-500/50 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-indigo-400 flex items-center gap-1.5">
-              <span>👁️</span> Total Clicks & Views
+            <span className="text-[11px] sm:text-xs font-bold text-indigo-400 flex items-center gap-1">
+              <span>👁️</span> Total Clicks
             </span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800/80 font-bold">
-              Page Hits
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800/80 font-bold">
+              Hits
             </span>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-white mt-2">
+          <div className="text-xl sm:text-2xl font-black text-white mt-1">
             {summary.totalViews.toLocaleString()}
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Total loads & repeat opens by all users
+          <p className="text-[10px] text-slate-400 mt-0.5 truncate">
+            Total page opens & repeat loads
           </p>
         </div>
 
         {/* Card 3: User Logins / Signups */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg hover:border-emerald-500/50 transition-all">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 sm:p-3 shadow-md hover:border-emerald-500/50 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-              <span>🔑</span> User Logins / Signups
+            <span className="text-[11px] sm:text-xs font-bold text-emerald-400 flex items-center gap-1">
+              <span>🔑</span> Logins / Signups
             </span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800/80 font-bold">
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800/80 font-bold">
               {summary.visitorToLoginRate}% conv.
             </span>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-white mt-2">
+          <div className="text-xl sm:text-2xl font-black text-white mt-1">
             {summary.logins.toLocaleString()}
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Accounts logged in or registered in this date range
+          <p className="text-[10px] text-slate-400 mt-0.5 truncate">
+            Accounts logged in or registered
           </p>
         </div>
 
         {/* Card 4: WhatsApp Connected */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg hover:border-green-500/50 transition-all">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 sm:p-3 shadow-md hover:border-green-500/50 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-green-400 flex items-center gap-1.5">
+            <span className="text-[11px] sm:text-xs font-bold text-green-400 flex items-center gap-1">
               <span>📱</span> WhatsApp Connected
             </span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-950 text-green-300 border border-green-800/80 font-bold">
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-950 text-green-300 border border-green-800/80 font-bold">
               {summary.loginToWaRate}% of users
             </span>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-white mt-2">
+          <div className="text-xl sm:text-2xl font-black text-white mt-1">
             {summary.whatsappConnected.toLocaleString()}
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            QR codes scanned & live WhatsApp sessions established
+          <p className="text-[10px] text-slate-400 mt-0.5 truncate">
+            QR scanned & live WhatsApp sessions
           </p>
         </div>
       </div>
 
-      {/* ── View Toggle Pills (User's Requested Views) ─────────────────────────── */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-        <span className="text-slate-400 font-medium whitespace-nowrap mr-1 text-[11px]">Chart View:</span>
+      {/* ── View Toggle Pills ─────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs">
+        <span className="text-slate-400 font-medium whitespace-nowrap mr-1 text-[10px]">View:</span>
         <button
           type="button"
           onClick={() => setViewMode('all')}
-          className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+          className={`px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap transition-all ${
             viewMode === 'all'
               ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
               : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
         >
-          📊 All Metric Panels
+          📊 All 4 Graphs (Grid)
         </button>
         <button
           type="button"
           onClick={() => setViewMode('compare')}
-          className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+          className={`px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap transition-all ${
             viewMode === 'compare'
               ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
               : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
         >
-          👥 Unique vs Total Clicks (Comparison)
+          👥 Unique vs Total Clicks
         </button>
         <button
           type="button"
           onClick={() => setViewMode('unique')}
-          className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+          className={`px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap transition-all ${
             viewMode === 'unique'
               ? 'bg-sky-500 text-white shadow-md shadow-sky-500/20'
               : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
@@ -699,40 +693,40 @@ export default function AdminAnalyticsTab({ token }) {
         <button
           type="button"
           onClick={() => setViewMode('views')}
-          className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+          className={`px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap transition-all ${
             viewMode === 'views'
               ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'
               : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
         >
-          👁️ Total Page Clicks
+          👁️ Total Clicks
         </button>
         <button
           type="button"
           onClick={() => setViewMode('logins')}
-          className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+          className={`px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap transition-all ${
             viewMode === 'logins'
               ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
               : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
         >
-          🔑 Logins / Signups
+          🔑 Logins
         </button>
         <button
           type="button"
           onClick={() => setViewMode('whatsapp')}
-          className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+          className={`px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap transition-all ${
             viewMode === 'whatsapp'
               ? 'bg-green-500 text-white shadow-md shadow-green-500/20'
               : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
         >
-          📱 WhatsApp Connected
+          📱 WhatsApp
         </button>
       </div>
 
-      {/* ── Graphs Container (Cloudflare Stack Style from Image 1) ─────────────── */}
-      <div className="space-y-4">
+      {/* ── Graphs Container: 2x2 Compact Grid (All 4 fit onto screen at once!) ── */}
+      <div>
         {/* Comparison Mode (Unique Visitors vs Total Clicks) */}
         {viewMode === 'compare' && (
           <CloudflareChart
@@ -746,13 +740,13 @@ export default function AdminAnalyticsTab({ token }) {
             totalValue={summary.uniqueVisitors}
             secondaryTotal={summary.totalViews}
             data={timeline}
-            height={220}
+            height={150}
           />
         )}
 
-        {/* Cloudflare Stack Mode: All 4 Panels */}
+        {/* 2x2 Grid Mode: All 4 Panels visible at once without scrolling! */}
         {viewMode === 'all' && (
-          <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3">
             {/* Panel 1: Unique Visitors */}
             <CloudflareChart
               title="Unique Visitors"
@@ -761,42 +755,42 @@ export default function AdminAnalyticsTab({ token }) {
               color="#38bdf8"
               totalValue={summary.uniqueVisitors}
               data={timeline}
-              height={160}
+              height={115}
             />
 
             {/* Panel 2: Total Page Views / Clicks */}
             <CloudflareChart
-              title="Total Requests & Pageviews"
-              subtitle="All Site Clicks & Opens"
+              title="Total Requests & Clicks"
+              subtitle="Page Views"
               metricKey="totalViews"
               color="#818cf8"
               totalValue={summary.totalViews}
               data={timeline}
-              height={160}
+              height={115}
             />
 
             {/* Panel 3: User Logins / Signups */}
             <CloudflareChart
               title="User Logins & Signups"
-              subtitle="Accounts Authenticated"
+              subtitle="Authenticated"
               metricKey="logins"
               color="#10b981"
               totalValue={summary.logins}
               data={timeline}
-              height={160}
+              height={115}
             />
 
             {/* Panel 4: WhatsApp Connected */}
             <CloudflareChart
-              title="WhatsApp Connected Sessions"
-              subtitle="Live Linked Sockets"
+              title="WhatsApp Connected"
+              subtitle="Live Sockets"
               metricKey="whatsappConnected"
               color="#22c55e"
               totalValue={summary.whatsappConnected}
               data={timeline}
-              height={160}
+              height={115}
             />
-          </>
+          </div>
         )}
 
         {/* Single Panel Modes */}
@@ -808,91 +802,91 @@ export default function AdminAnalyticsTab({ token }) {
             color="#38bdf8"
             totalValue={summary.uniqueVisitors}
             data={timeline}
-            height={220}
+            height={150}
           />
         )}
 
         {viewMode === 'views' && (
           <CloudflareChart
-            title="Total Requests & Pageviews"
-            subtitle="All Site Clicks & Opens"
+            title="Total Requests & Clicks"
+            subtitle="Page Views"
             metricKey="totalViews"
             color="#818cf8"
             totalValue={summary.totalViews}
             data={timeline}
-            height={220}
+            height={150}
           />
         )}
 
         {viewMode === 'logins' && (
           <CloudflareChart
             title="User Logins & Signups"
-            subtitle="Accounts Authenticated"
+            subtitle="Authenticated"
             metricKey="logins"
             color="#10b981"
             totalValue={summary.logins}
             data={timeline}
-            height={220}
+            height={150}
           />
         )}
 
         {viewMode === 'whatsapp' && (
           <CloudflareChart
-            title="WhatsApp Connected Sessions"
-            subtitle="Live Linked Sockets"
+            title="WhatsApp Connected"
+            subtitle="Live Sockets"
             metricKey="whatsappConnected"
             color="#22c55e"
             totalValue={summary.whatsappConnected}
             data={timeline}
-            height={220}
+            height={150}
           />
         )}
       </div>
 
       {/* ── Day-by-Day Data Breakdown Toggle & Table ───────────────────────────── */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+      <div className="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-md">
         <button
           type="button"
           onClick={() => setShowBreakdownTable(!showBreakdownTable)}
-          className="w-full p-4 flex items-center justify-between text-left text-xs font-bold text-slate-300 hover:text-white transition-colors"
+          className="w-full p-3 flex items-center justify-between text-left text-xs font-bold text-slate-300 hover:text-white transition-colors"
         >
           <div className="flex items-center gap-2">
             <span>📋</span>
-            <span>Day-by-Day Detailed Log Breakdown ({timeline.length} Days)</span>
+            <span>Day-by-Day Detailed Log Table ({timeline.length} Days)</span>
           </div>
-          <span className="text-slate-500 font-mono">
-            {showBreakdownTable ? '▲ Hide Table' : '▼ View Table'}
+          <span className="text-slate-500 font-mono text-[11px]">
+            {showBreakdownTable ? '▲ Hide' : '▼ View'}
           </span>
         </button>
 
         {showBreakdownTable && (
           <div className="overflow-x-auto border-t border-slate-800">
             <table className="w-full text-left text-xs text-slate-300">
-              <thead className="bg-slate-950/80 text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
+              <thead className="bg-slate-950/80 text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
                 <tr>
-                  <th className="py-2.5 px-4 font-bold">Date (IST)</th>
-                  <th className="py-2.5 px-4 font-bold">Unique Visitors</th>
-                  <th className="py-2.5 px-4 font-bold">Total Clicks</th>
-                  <th className="py-2.5 px-4 font-bold">Logins / Signups</th>
-                  <th className="py-2.5 px-4 font-bold">WhatsApp Connected</th>
+                  <th className="py-2 px-3 font-bold">Date (IST)</th>
+                  <th className="py-2 px-3 font-bold">Unique Visitors</th>
+                  <th className="py-2 px-3 font-bold">Total Clicks</th>
+                  <th className="py-2 px-3 font-bold">Logins</th>
+                  <th className="py-2 px-3 font-bold">WhatsApp Connected</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono text-xs">
                 {timeline.map((row, idx) => (
                   <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="py-2 px-4 text-slate-300 font-sans font-medium">
+                    <td className="py-1.5 px-3 text-slate-300 font-sans font-medium">
                       {formatDateDisplay(row.date)}
                     </td>
-                    <td className="py-2 px-4 text-sky-400 font-bold">
+                    <td className="py-1.5 px-3 text-sky-400 font-bold">
                       {row.uniqueVisitors}
                     </td>
-                    <td className="py-2 px-4 text-indigo-400 font-bold">
+                    <td className="py-1.5 px-3 text-indigo-400 font-bold">
                       {row.totalViews}
                     </td>
-                    <td className="py-2 px-4 text-emerald-400 font-bold">
+                    <td className="py-1.5 px-3 text-emerald-400 font-bold">
                       {row.logins}
                     </td>
-                    <td className="py-2 px-4 text-green-400 font-bold">
+                    <td className="py-1.5 px-3 text-green-400 font-bold">
                       {row.whatsappConnected}
                     </td>
                   </tr>
@@ -906,17 +900,17 @@ export default function AdminAnalyticsTab({ token }) {
       {/* ── Google Ads Style Date Range Modal (Image 2) ────────────────────────── */}
       {showCalendarModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5">
-          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between">
+            <div className="p-3.5 sm:p-4 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-lg">📅</span>
-                <h3 className="text-base font-bold text-white">Select Date Range</h3>
+                <span className="text-base">📅</span>
+                <h3 className="text-sm font-bold text-white">Select Date Range</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setShowCalendarModal(false)}
-                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+                className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors text-xs"
               >
                 ✕
               </button>
@@ -924,9 +918,9 @@ export default function AdminAnalyticsTab({ token }) {
 
             {/* Modal Body: Left Presets Radio List + Right Custom Range Inputs */}
             <div className="flex-1 overflow-y-auto flex flex-col md:flex-row">
-              {/* Left Pane: Preset Radio Buttons (Exact matches to User's list) */}
-              <div className="w-full md:w-60 border-b md:border-b-0 md:border-r border-slate-800 p-3 sm:p-4 bg-slate-950/60 space-y-1">
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
+              {/* Left Pane: Preset Radio Buttons */}
+              <div className="w-full md:w-52 border-b md:border-b-0 md:border-r border-slate-800 p-2.5 sm:p-3 bg-slate-950/60 space-y-0.5">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-0.5">
                   Preset Options
                 </p>
                 <div className="space-y-0.5">
@@ -934,7 +928,7 @@ export default function AdminAnalyticsTab({ token }) {
                     <label
                       key={opt.key}
                       onClick={() => handleSelectTempPreset(opt.key)}
-                      className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
+                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
                         tempPreset === opt.key
                           ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
                           : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
@@ -954,16 +948,16 @@ export default function AdminAnalyticsTab({ token }) {
               </div>
 
               {/* Right Pane: Custom Start and End Inputs & Preview */}
-              <div className="flex-1 p-4 sm:p-6 flex flex-col justify-between space-y-5">
+              <div className="flex-1 p-3.5 sm:p-4 flex flex-col justify-between space-y-4">
                 <div>
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+                  <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">
                     Date Range Selection (Kolkata Time)
                   </h4>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {/* Start Date */}
                     <div>
-                      <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      <label className="block text-[11px] font-medium text-slate-300 mb-1">
                         Start Date
                       </label>
                       <input
@@ -973,13 +967,13 @@ export default function AdminAnalyticsTab({ token }) {
                           setTempStart(e.target.value);
                           setTempPreset('custom');
                         }}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-xs focus:border-emerald-500 focus:outline-none transition-colors"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-xs focus:border-emerald-500 focus:outline-none transition-colors"
                       />
                     </div>
 
                     {/* End Date */}
                     <div>
-                      <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      <label className="block text-[11px] font-medium text-slate-300 mb-1">
                         End Date
                       </label>
                       <input
@@ -989,28 +983,28 @@ export default function AdminAnalyticsTab({ token }) {
                           setTempEnd(e.target.value);
                           setTempPreset('custom');
                         }}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-xs focus:border-emerald-500 focus:outline-none transition-colors"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-xs focus:border-emerald-500 focus:outline-none transition-colors"
                       />
                     </div>
                   </div>
 
                   {/* Range Preview Badge */}
-                  <div className="mt-4 p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between">
+                  <div className="mt-3 p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between">
                     <div>
-                      <p className="text-[11px] text-slate-400">Selected Range:</p>
+                      <p className="text-[10px] text-slate-400">Selected Range:</p>
                       <p className="text-xs font-bold text-white mt-0.5">
                         {formatDateDisplay(tempStart)} ➔ {formatDateDisplay(tempEnd)}
                       </p>
                     </div>
-                    <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/30">
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 text-[11px] font-bold border border-emerald-500/30">
                       {tempPreset === 'custom' ? 'Custom Calendar' : PRESET_OPTIONS.find(p => p.key === tempPreset)?.label || 'Custom'}
                     </span>
                   </div>
                 </div>
 
-                {/* Kolkata Timezone Footnote (matches Image 2: "Dates are shown in Kolkata Time") */}
-                <div className="pt-2">
-                  <p className="text-[11px] text-slate-400 italic flex items-center gap-1.5">
+                {/* Kolkata Timezone Footnote */}
+                <div className="pt-1">
+                  <p className="text-[10px] text-slate-400 italic flex items-center gap-1">
                     <span>🕒</span> Dates are shown in Kolkata Time (Asia/Kolkata, IST)
                   </p>
                 </div>
@@ -1018,18 +1012,18 @@ export default function AdminAnalyticsTab({ token }) {
             </div>
 
             {/* Modal Footer: Cancel and Update buttons */}
-            <div className="p-4 sm:p-5 border-t border-slate-800 bg-slate-950/80 flex items-center justify-end gap-3">
+            <div className="p-3 sm:p-3.5 border-t border-slate-800 bg-slate-950/80 flex items-center justify-end gap-2.5">
               <button
                 type="button"
                 onClick={() => setShowCalendarModal(false)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleApplyRange}
-                className="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md shadow-blue-600/30 active:scale-95"
+                className="px-4 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md shadow-blue-600/30 active:scale-95"
               >
                 Update
               </button>
