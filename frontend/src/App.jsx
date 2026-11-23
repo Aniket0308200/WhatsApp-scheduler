@@ -127,9 +127,21 @@ export default function App() {
     }
   }, [quota?.isExpired, hasShownExpiredPopup]);
 
-  // Track page visit / unique visitor for Analytics
+  // Track page visit / unique visitor for Analytics (Excludes Admin Aniket)
   useEffect(() => {
     try {
+      const hasAdminToken = Boolean(localStorage.getItem('wa_admin_token'));
+      const adminUser = localStorage.getItem('wa_admin_user') || '';
+      const authUser = localStorage.getItem('wa_auth_user') || '';
+
+      if (
+        hasAdminToken ||
+        adminUser.toLowerCase().includes('aniketchouhan314@gmail.com') ||
+        authUser.toLowerCase().includes('aniketchouhan314@gmail.com')
+      ) {
+        return; // Exclude admin visits from visitor analytics
+      }
+
       let visitorId = localStorage.getItem('wa_visitor_id');
       if (!visitorId) {
         visitorId = 'vid_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 10);

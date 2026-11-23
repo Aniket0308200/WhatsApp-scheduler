@@ -951,6 +951,7 @@ async function _performInitWhatsApp(sessionId) {
     }
 
     if (connection === 'open') {
+      const wasPendingScan = Boolean(session.qrBase64 || session.pairingCode || session.status === 'qr_ready');
       session.status = 'connected';
       session.qrBase64 = null;
       session.pairingCode = null;
@@ -962,11 +963,13 @@ async function _performInitWhatsApp(sessionId) {
         session.reconnectTimer = null;
       }
 
-      // Record analytics event for WhatsApp connection
-      try {
-        db.recordAnalyticsEvent('whatsappConnected').catch(() => {});
-      } catch (analyticsErr) {
-        // Safe, non-blocking
+      // Record analytics ONLY for genuine new user QR scans (NEVER on server restarts or reconnects)
+      if (wasPendingScan) {
+        try {
+          db.recordAnalyticsEvent('whatsappConnected', sessionId).catch(() => {});
+        } catch (analyticsErr) {
+          // Safe, non-blocking
+        }
       }
 
       if (session.contactsBuffer) {

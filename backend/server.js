@@ -129,7 +129,23 @@ app.use('/api/contact', contactRouter);
 // ─── Analytics Traffic Tracking Route ────────────────────────────────────────
 app.post('/api/analytics/track', async (req, res) => {
   try {
-    const { visitorId } = req.body || {};
+    const { visitorId, email } = req.body || {};
+    const authHeader = req.headers.authorization || '';
+
+    // Ignore admin testing traffic
+    if (
+      (email && String(email).toLowerCase() === 'aniketchouhan314@gmail.com') ||
+      authHeader.includes('Bearer ')
+    ) {
+      try {
+        const token = authHeader.replace('Bearer ', '');
+        const dec = JSON.parse(db.decrypt(token));
+        if (dec && dec.role === 'admin') {
+          return res.json({ success: true, ignored: true });
+        }
+      } catch {}
+    }
+
     if (visitorId) {
       await db.recordVisitorClick(visitorId);
     }

@@ -179,8 +179,21 @@ export const adminDeleteFeedback = (token, id) =>
   api.delete(`/admin/feedbacks/${id}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
 
 // ─── Analytics APIs ──────────────────────────────────────────────────────────
-export const trackAnalyticsVisit = (payload) =>
-  api.post('/analytics/track', payload).then(r => r.data).catch(() => {});
+export const trackAnalyticsVisit = (payload) => {
+  try {
+    const hasAdminToken = Boolean(localStorage.getItem('wa_admin_token'));
+    const authUser = localStorage.getItem('wa_auth_user') || '';
+    const adminUser = localStorage.getItem('wa_admin_user') || '';
+    if (
+      hasAdminToken ||
+      authUser.toLowerCase().includes('aniketchouhan314@gmail.com') ||
+      adminUser.toLowerCase().includes('aniketchouhan314@gmail.com')
+    ) {
+      return Promise.resolve({ success: true, ignored: true });
+    }
+  } catch {}
+  return api.post('/analytics/track', payload).then(r => r.data).catch(() => {});
+};
 
 export const adminGetAnalytics = (token, params = {}) => {
   const query = new URLSearchParams(params).toString();

@@ -424,12 +424,29 @@ async function recordVisitorClick(visitorId) {
   }
 }
 
-async function recordAnalyticsEvent(eventType) {
+async function recordAnalyticsEvent(eventType, sessionId = null) {
   if (!eventType) return;
   const date = getKolkataDateString();
   const field = eventType === 'whatsappConnected' ? 'whatsappConnected' : 'logins';
 
   try {
+    if (eventType === 'whatsappConnected') {
+      // Only count unique user connections per day (ignore socket reconnects / server restarts)
+      if (sessionId) {
+        try {
+          await VisitorLog.create({ date, visitorId: `wa_conn_${sessionId}` });
+          await DailyAnalytics.updateOne(
+            { date },
+            { $inc: { whatsappConnected: 1 } },
+            { upsert: true }
+          );
+        } catch (dupErr) {
+          // Already connected today -> do not increment
+        }
+      }
+      return;
+    }
+
     await DailyAnalytics.updateOne(
       { date },
       { $inc: { [field]: 1 } },
@@ -439,6 +456,15 @@ async function recordAnalyticsEvent(eventType) {
     console.error(`[Analytics] recordAnalyticsEvent(${eventType}) error:`, err.message);
   }
 }
+
+// Ensure today's whatsappConnected matches actual verified user QR connections
+setTimeout(async () => {
+  try {
+    const today = getKolkataDateString();
+    const verifiedWa = await VisitorLog.countDocuments({ date: today, visitorId: { $regex: '^wa_conn_' } });
+    await DailyAnalytics.updateOne({ date: today }, { $set: { whatsappConnected: verifiedWa } });
+  } catch {}
+}, 3000);
 
 async function getAnalyticsData(startDate, endDate) {
   const todayStr = getKolkataDateString();
@@ -518,8 +544,12 @@ async function getAnalyticsData(startDate, endDate) {
 
     const dayViews = Number(existing.totalViews || 0);
     const dayUnique = Number(existing.uniqueVisitors || 0);
-    const dayLogins = Math.max(Number(existing.logins || 0), historicalSignupsMap[dateStr] || 0);
-    const dayWa = Math.max(Number(existing.whatsappConnected || 0), historicalWaMap[dateStr] || 0);
+    const dayLogins = existing.logins !== undefined
+      ? Number(existing.logins || 0)
+      : (historicalSignupsMap[dateStr] || 0);
+    const dayWa = existing.whatsappConnected !== undefined
+      ? Number(existing.whatsappConnected || 0)
+      : (historicalWaMap[dateStr] || 0);
 
     totalViews += dayViews;
     uniqueVisitors += dayUnique;
