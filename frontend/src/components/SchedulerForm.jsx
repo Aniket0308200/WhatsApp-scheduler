@@ -653,8 +653,9 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
     const filesToRead = [];
 
     for (const file of files) {
-      if (file.size > 25 * 1024 * 1024) {
-        toast.error(`"${file.name}" exceeds 25MB limit.`);
+      // Allow up to 100MB for media/documents
+      if (file.size > 100 * 1024 * 1024) {
+        toast.error(`"${file.name}" exceeds 100MB limit.`);
         continue;
       }
 
