@@ -132,15 +132,21 @@ app.post('/api/analytics/track', async (req, res) => {
     const { visitorId, email } = req.body || {};
     const authHeader = req.headers.authorization || '';
 
-    // Ignore admin testing traffic
-    if (
-      (email && String(email).toLowerCase() === 'aniketchouhan314@gmail.com') ||
-      authHeader.includes('Bearer ')
-    ) {
+    // Ignore admin testing traffic (specifically aniketchouhan314@gmail.com and admin role)
+    if (email && String(email).toLowerCase() === 'aniketchouhan314@gmail.com') {
+      return res.json({ success: true, ignored: true });
+    }
+
+    if (authHeader.includes('Bearer ')) {
       try {
         const token = authHeader.replace('Bearer ', '');
         const dec = JSON.parse(db.decrypt(token));
-        if (dec && dec.role === 'admin') {
+        if (
+          dec &&
+          (dec.role === 'admin' ||
+           String(dec.email || '').toLowerCase() === 'aniketchouhan314@gmail.com' ||
+           String(dec.username || '').toLowerCase() === 'aniketchouhan314@gmail.com')
+        ) {
           return res.json({ success: true, ignored: true });
         }
       } catch {}
@@ -1020,24 +1026,36 @@ app.post('/api/messages', async (req, res) => {
 
     // Offload media to VPS disk ONCE so all batch recipients share the same file without redundant disk writes!
     const { saveMediaToDisk } = require('./mediaStorage');
-    if (finalMediaData) {
+    if (finalMediaData && !finalMediaData.startsWith('disk:')) {
       finalMediaData = await saveMediaToDisk(finalMediaData, finalMediaName, finalMediaType);
     }
     if (Array.isArray(finalMediaList) && finalMediaList.length > 0) {
-      finalMediaList = await Promise.all(finalMediaList.map(async (item) => {
-        let itemData = item.data;
-        if (itemData) {
-          itemData = await saveMediaToDisk(itemData, item.name, item.type);
-        }
-        return {
-          id: item.id || String(Date.now()),
-          type: item.type,
-          data: itemData,
-          name: item.name || null,
-          size: item.size || null,
+      if (finalMediaList.length === 1 && finalMediaData && finalMediaData.startsWith('disk:')) {
+        // Reuse already saved disk file so single media is never saved twice
+        finalMediaList = [{
+          id: finalMediaList[0].id || String(Date.now()),
+          type: finalMediaList[0].type || finalMediaType,
+          data: finalMediaData,
+          name: finalMediaList[0].name || finalMediaName || null,
+          size: finalMediaList[0].size || null,
           preview: null
-        };
-      }));
+        }];
+      } else {
+        finalMediaList = await Promise.all(finalMediaList.map(async (item) => {
+          let itemData = item.data;
+          if (itemData && !itemData.startsWith('disk:')) {
+            itemData = await saveMediaToDisk(itemData, item.name, item.type);
+          }
+          return {
+            id: item.id || String(Date.now()),
+            type: item.type,
+            data: itemData,
+            name: item.name || null,
+            size: item.size || null,
+            preview: null
+          };
+        }));
+      }
     }
 
     // Create scheduled messages for all recipients
@@ -1046,7 +1064,8 @@ app.post('/api/messages', async (req, res) => {
       let cleanName = r.name;
       if (!cleanName && !r.isStatus) {
         try {
-          cleanName = whatsapp.getContactNameSync(req.sessionId, r.phone) || await whatsapp.getContactName(req.sessionId, r.phone);
+          // Fast sync lookup from in-memory cache (<1ms) - DO NOT block schedule submission on live network socket lookups!
+          cleanName = whatsapp.getContactNameSync(req.sessionId, r.phone);
         } catch (_) {}
       }
 

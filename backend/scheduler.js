@@ -32,74 +32,114 @@ async function processAllDueMessages() {
 
     console.log(`[Scheduler] ── Processing ${due.length} due message(s) ──`);
 
+    // Group due messages by sessionId so multiple accounts dispatch concurrently,
+    // but multiple recipients within the same WhatsApp session are sent SEQUENTIALLY
+    // with a natural safety stagger to prevent socket write collisions, media errors, or WhatsApp bans.
+    const sessionGroups = {};
+    for (const msg of due) {
+      const sid = msg.sessionId || 'default';
+      if (!sessionGroups[sid]) sessionGroups[sid] = [];
+      sessionGroups[sid].push(msg);
+    }
+
     await Promise.allSettled(
-      due.map(async (msg) => {
-        const sessionId = msg.sessionId;
-        let activeSession = typeof whatsapp.getEffectiveSession === 'function' ? whatsapp.getEffectiveSession(sessionId) : null;
-        let isConnected = activeSession && activeSession.status === 'connected' && Boolean(activeSession.sock);
+      Object.entries(sessionGroups).map(async ([sessionId, messages]) => {
+        for (let mIdx = 0; mIdx < messages.length; mIdx++) {
+          const msg = messages[mIdx];
+          let activeSession = typeof whatsapp.getEffectiveSession === 'function' ? whatsapp.getEffectiveSession(sessionId) : null;
+          let isConnected = activeSession && activeSession.status === 'connected' && Boolean(activeSession.sock);
 
-        console.log(`[Scheduler] [${sessionId}] Attempting #${msg.id} → +${msg.phone} (scheduled: ${msg.scheduled_at})`);
+          console.log(`[Scheduler] [${sessionId}] Attempting #${msg.id} → +${msg.phone} (${mIdx + 1}/${messages.length}) (scheduled: ${msg.scheduled_at})`);
 
-        // If session is not currently active in memory, attempt auto-restore from DB on demand
-        if (!isConnected) {
-          const hasCreds = await whatsapp.hasSavedCredentials(sessionId);
-          if (hasCreds) {
-            console.log(`[Scheduler] [${sessionId}] Auto-restoring session on demand to deliver #${msg.id}...`);
-            try {
-              await whatsapp.initWhatsApp(sessionId);
-              // Wait for socket to connect (up to 8s)
-              for (let w = 0; w < 16; w++) {
-                await new Promise(r => setTimeout(r, 500));
-                activeSession = typeof whatsapp.getEffectiveSession === 'function' ? whatsapp.getEffectiveSession(sessionId) : null;
-                if (activeSession && activeSession.status === 'connected') {
-                  isConnected = true;
-                  break;
+          // If session is not currently active in memory, attempt auto-restore from DB on demand
+          if (!isConnected) {
+            const hasCreds = await whatsapp.hasSavedCredentials(sessionId);
+            if (hasCreds) {
+              console.log(`[Scheduler] [${sessionId}] Auto-restoring session on demand to deliver #${msg.id}...`);
+              try {
+                await whatsapp.initWhatsApp(sessionId);
+                // Wait for socket to connect (up to 8s)
+                for (let w = 0; w < 16; w++) {
+                  await new Promise(r => setTimeout(r, 500));
+                  activeSession = typeof whatsapp.getEffectiveSession === 'function' ? whatsapp.getEffectiveSession(sessionId) : null;
+                  if (activeSession && activeSession.status === 'connected') {
+                    isConnected = true;
+                    break;
+                  }
                 }
+              } catch (restoreErr) {
+                console.error(`[Scheduler] [${sessionId}] Auto-restore error:`, restoreErr.message);
               }
-            } catch (restoreErr) {
-              console.error(`[Scheduler] [${sessionId}] Auto-restore error:`, restoreErr.message);
             }
           }
-        }
 
-        if (!isConnected) {
-          const currentStatus = activeSession ? activeSession.status : (whatsapp.getStatus(sessionId) || 'disconnected');
-          const errMsg = `WhatsApp not connected (status: ${currentStatus})`;
-          console.error(`[Scheduler] [${sessionId}] ✗ #${msg.id}: ${errMsg}`);
-          await db.updateMessageStatus(sessionId, msg.id, 'failed', errMsg);
-          return;
-        }
+          if (!isConnected) {
+            const currentStatus = activeSession ? activeSession.status : (whatsapp.getStatus(sessionId) || 'disconnected');
+            const errMsg = `WhatsApp not connected (status: ${currentStatus})`;
+            console.error(`[Scheduler] [${sessionId}] ✗ #${msg.id}: ${errMsg}`);
+            await db.updateMessageStatus(sessionId, msg.id, 'failed', errMsg);
+            continue;
+          }
 
-        const effectiveSessionId = activeSession?.sessionId || sessionId;
+          const effectiveSessionId = activeSession?.sessionId || sessionId;
 
-        try {
-          let lastResult = null;
+          try {
+            let lastResult = null;
 
-          // Personalize smart name variables ({Name}, {FirstName})
-          const recipientDisplayName = (msg.recipient_name && !msg.recipient_name.includes('@')) ? msg.recipient_name : '';
-          const personalizedText = (msg.message || '')
-            .replace(/\{Name\}/gi, recipientDisplayName || '')
-            .replace(/\{FirstName\}/gi, recipientDisplayName ? recipientDisplayName.split(' ')[0] : '');
+            // Personalize smart name variables ({Name}, {FirstName})
+            const recipientDisplayName = (msg.recipient_name && !msg.recipient_name.includes('@')) ? msg.recipient_name : '';
+            const personalizedText = (msg.message || '')
+              .replace(/\{Name\}/gi, recipientDisplayName || '')
+              .replace(/\{FirstName\}/gi, recipientDisplayName ? recipientDisplayName.split(' ')[0] : '');
 
-          if (msg.mediaList && Array.isArray(msg.mediaList) && msg.mediaList.length > 0) {
-            console.log(`[Scheduler] [${effectiveSessionId}] Sending batch of ${msg.mediaList.length} media items to ${msg.phone}`);
-            for (let i = 0; i < msg.mediaList.length; i++) {
-              const item = msg.mediaList[i];
-              // First item carries the text caption; subsequent items send clean media
-              const caption = i === 0 ? personalizedText : '';
+            if (msg.mediaList && Array.isArray(msg.mediaList) && msg.mediaList.length > 0) {
+              console.log(`[Scheduler] [${effectiveSessionId}] Sending batch of ${msg.mediaList.length} media items to ${msg.phone}`);
+              for (let i = 0; i < msg.mediaList.length; i++) {
+                const item = msg.mediaList[i];
+                // First item carries the text caption; subsequent items send clean media
+                const caption = i === 0 ? personalizedText : '';
 
+                const sendPromise = whatsapp.sendMessage(
+                  effectiveSessionId,
+                  msg.phone,
+                  caption,
+                  item.type,
+                  item.data,
+                  item.name,
+                  null,
+                  msg.mentions || [],
+                  msg.mediaData // Fallback to msg.mediaData if item.data disk path has issues
+                );
+                const timeoutPromise = new Promise((_, reject) =>
+                  setTimeout(() => reject(new Error(`Media item #${i + 1} (${item.type}) timed out after 120s`)), 120_000)
+                );
+
+                lastResult = await Promise.race([sendPromise, timeoutPromise]);
+
+                if (lastResult?.id && lastResult?.message) {
+                  whatsapp.cacheMessage(effectiveSessionId, lastResult.id, lastResult.message);
+                }
+
+                // Small delay between items to ensure order & avoid socket congestion
+                if (i < msg.mediaList.length - 1) {
+                  await new Promise(r => setTimeout(r, 800));
+                }
+              }
+            } else {
+              // Single media, poll, or pure text message
               const sendPromise = whatsapp.sendMessage(
                 effectiveSessionId,
                 msg.phone,
-                caption,
-                item.type,
-                item.data,
-                item.name,
-                null,
-                msg.mentions || []
+                personalizedText,
+                msg.mediaType,
+                msg.mediaData,
+                msg.mediaName,
+                msg.pollData,
+                msg.mentions || [],
+                msg.mediaList?.[0]?.data // Fallback to mediaList[0] if mediaData disk path has issues
               );
               const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error(`Media item #${i + 1} (${item.type}) timed out after 120s`)), 120_000)
+                setTimeout(() => reject(new Error('WhatsApp message delivery timed out after 120s')), 120_000)
               );
 
               lastResult = await Promise.race([sendPromise, timeoutPromise]);
@@ -107,47 +147,26 @@ async function processAllDueMessages() {
               if (lastResult?.id && lastResult?.message) {
                 whatsapp.cacheMessage(effectiveSessionId, lastResult.id, lastResult.message);
               }
-
-              // Small delay between items to ensure order & avoid socket congestion
-              if (i < msg.mediaList.length - 1) {
-                await new Promise(r => setTimeout(r, 800));
-              }
             }
-          } else {
-            // Single media, poll, or pure text message
-            const sendPromise = whatsapp.sendMessage(
-              effectiveSessionId,
-              msg.phone,
-              personalizedText,
-              msg.mediaType,
-              msg.mediaData,
-              msg.mediaName,
-              msg.pollData,
-              msg.mentions || []
-            );
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('WhatsApp message delivery timed out after 120s')), 120_000)
-            );
 
-            lastResult = await Promise.race([sendPromise, timeoutPromise]);
-
-            if (lastResult?.id && lastResult?.message) {
-              whatsapp.cacheMessage(effectiveSessionId, lastResult.id, lastResult.message);
-            }
+            const waId = lastResult?.id || lastResult?.key?.id || null;
+            const rawMsg = lastResult?.message ? JSON.stringify(lastResult.message, BufferJSON.replacer) : null;
+            // Atomically mark as sent and store WhatsApp message id and full raw message payload
+            await db.ScheduledMessage.updateOne(
+              { _id: msg.id },
+              { $set: { status: 'sent', waMessageId: waId, rawMessage: rawMsg, error: null } }
+            );
+            console.log(`[Scheduler] [${sessionId}] ✓ #${msg.id} sent to +${msg.phone} (waId: ${waId})`);
+          } catch (err) {
+            const errMsg = err?.message || String(err) || 'Unknown send error';
+            console.error(`[Scheduler] [${sessionId}] ✗ #${msg.id} FAILED: ${errMsg}`);
+            await db.updateMessageStatus(sessionId, msg.id, 'failed', errMsg);
           }
 
-          const waId = lastResult?.id || lastResult?.key?.id || null;
-          const rawMsg = lastResult?.message ? JSON.stringify(lastResult.message, BufferJSON.replacer) : null;
-          // Atomically mark as sent and store WhatsApp message id and full raw message payload
-          await db.ScheduledMessage.updateOne(
-            { _id: msg.id },
-            { $set: { status: 'sent', waMessageId: waId, rawMessage: rawMsg, error: null } }
-          );
-          console.log(`[Scheduler] [${sessionId}] ✓ #${msg.id} sent to +${msg.phone} (waId: ${waId})`);
-        } catch (err) {
-          const errMsg = err?.message || String(err) || 'Unknown send error';
-          console.error(`[Scheduler] [${sessionId}] ✗ #${msg.id} FAILED: ${errMsg}`);
-          await db.updateMessageStatus(sessionId, msg.id, 'failed', errMsg);
+          // Safety stagger delay between sequential recipients in the same session
+          if (mIdx < messages.length - 1) {
+            await new Promise(r => setTimeout(r, 2000));
+          }
         }
       })
     );

@@ -938,26 +938,37 @@ async function insertMessage(sessionId, phone, message, scheduledAt, recipientNa
   const schedDate = new Date(scheduledAt);
 
   let cleanMediaData = mediaData;
-  if (cleanMediaData) {
+  if (cleanMediaData && !cleanMediaData.startsWith('disk:')) {
     cleanMediaData = await saveMediaToDisk(cleanMediaData, mediaName, mediaType);
   }
 
   let cleanMediaList = [];
   if (Array.isArray(mediaList) && mediaList.length > 0) {
-    cleanMediaList = await Promise.all(mediaList.map(async (item) => {
-      let itemData = item.data;
-      if (itemData) {
-        itemData = await saveMediaToDisk(itemData, item.name, item.type);
-      }
-      return {
-        id: item.id || String(Date.now()),
-        type: item.type,
-        data: itemData,
-        name: item.name || null,
-        size: item.size || null,
-        preview: null // Keep MongoDB document < 1KB to prevent BSON RangeError
-      };
-    }));
+    if (mediaList.length === 1 && cleanMediaData && cleanMediaData.startsWith('disk:')) {
+      cleanMediaList = [{
+        id: mediaList[0].id || String(Date.now()),
+        type: mediaList[0].type || mediaType || 'document',
+        data: cleanMediaData,
+        name: mediaList[0].name || mediaName || null,
+        size: mediaList[0].size || null,
+        preview: null
+      }];
+    } else {
+      cleanMediaList = await Promise.all(mediaList.map(async (item) => {
+        let itemData = item.data;
+        if (itemData && !itemData.startsWith('disk:')) {
+          itemData = await saveMediaToDisk(itemData, item.name, item.type);
+        }
+        return {
+          id: item.id || String(Date.now()),
+          type: item.type,
+          data: itemData,
+          name: item.name || null,
+          size: item.size || null,
+          preview: null // Keep MongoDB document < 1KB to prevent BSON RangeError
+        };
+      }));
+    }
   }
 
   const msg = new ScheduledMessage({

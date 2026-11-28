@@ -1413,7 +1413,7 @@ function getAllContacts(sessionId) {
 
 // ─── Send message ─────────────────────────────────────────────────────────────
 
-async function sendMessage(sessionId, phone, text, mediaType = null, mediaData = null, mediaName = null, pollData = null, explicitMentions = []) {
+async function sendMessage(sessionId, phone, text, mediaType = null, mediaData = null, mediaName = null, pollData = null, explicitMentions = [], fallbackMedia = null) {
   const session = await getEffectiveSessionAsync(sessionId);
   if (!session || session.status !== 'connected' || !session.sock) {
     throw new Error('WhatsApp is not connected for this session.');
@@ -1447,13 +1447,14 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
         console.warn(`[WA] [${sessionId}] Warning: mediaType is poll but poll question is missing:`, poll);
         messagePayload = { text: text || '' };
       }
-    } else if (mediaType && mediaData) {
+    } else if (mediaType && (mediaData || fallbackMedia)) {
       let buffer;
       let detectedMime = null;
+      const targetPayload = mediaData || fallbackMedia;
 
-      if (typeof mediaData === 'string' && mediaData.startsWith('disk:')) {
-        buffer = await readMediaBuffer(mediaData);
-        const lowerPath = mediaData.toLowerCase();
+      if (typeof targetPayload === 'string' && targetPayload.startsWith('disk:')) {
+        buffer = await readMediaBuffer(targetPayload, fallbackMedia);
+        const lowerPath = (targetPayload || fallbackMedia || '').toLowerCase();
         if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg')) detectedMime = 'image/jpeg';
         else if (lowerPath.endsWith('.png')) detectedMime = 'image/png';
         else if (lowerPath.endsWith('.webp')) detectedMime = 'image/webp';
@@ -1461,28 +1462,28 @@ async function sendMessage(sessionId, phone, text, mediaType = null, mediaData =
         else if (lowerPath.endsWith('.mp3')) detectedMime = 'audio/mpeg';
         else if (lowerPath.endsWith('.ogg')) detectedMime = 'audio/ogg; codecs=opus';
         else if (lowerPath.endsWith('.pdf')) detectedMime = 'application/pdf';
-      } else if (typeof mediaData === 'string' && (mediaData.startsWith('http://') || mediaData.startsWith('https://'))) {
+      } else if (typeof targetPayload === 'string' && (targetPayload.startsWith('http://') || targetPayload.startsWith('https://'))) {
         const axios = require('axios');
-        const res = await axios.get(mediaData, { responseType: 'arraybuffer', timeout: 30000 });
+        const res = await axios.get(targetPayload, { responseType: 'arraybuffer', timeout: 30000 });
         buffer = Buffer.from(res.data);
         detectedMime = res.headers['content-type'] || null;
-      } else if (typeof mediaData === 'string' && mediaData.startsWith('data:')) {
-        const commaIdx = mediaData.indexOf(',');
+      } else if (typeof targetPayload === 'string' && targetPayload.startsWith('data:')) {
+        const commaIdx = targetPayload.indexOf(',');
         if (commaIdx !== -1) {
-          const header = mediaData.slice(0, commaIdx);
+          const header = targetPayload.slice(0, commaIdx);
           const mimeMatch = header.match(/data:([^;]+)/);
           if (mimeMatch) {
             detectedMime = mimeMatch[1].trim();
           }
-          const rawBase64 = mediaData.slice(commaIdx + 1).replace(/\s+/g, '');
+          const rawBase64 = targetPayload.slice(commaIdx + 1).replace(/\s+/g, '');
           buffer = Buffer.from(rawBase64, 'base64');
         } else {
-          buffer = Buffer.from(mediaData.replace(/\s+/g, ''), 'base64');
+          buffer = Buffer.from(targetPayload.replace(/\s+/g, ''), 'base64');
         }
-      } else if (Buffer.isBuffer(mediaData)) {
-        buffer = mediaData;
-      } else if (typeof mediaData === 'string') {
-        buffer = Buffer.from(mediaData.replace(/\s+/g, ''), 'base64');
+      } else if (Buffer.isBuffer(targetPayload)) {
+        buffer = targetPayload;
+      } else if (typeof targetPayload === 'string') {
+        buffer = Buffer.from(targetPayload.replace(/\s+/g, ''), 'base64');
       }
 
       if (!buffer || buffer.length === 0) {

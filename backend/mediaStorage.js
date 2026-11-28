@@ -68,8 +68,12 @@ async function saveMediaToDisk(payload, filename = null, mimeType = null) {
 /**
  * Reads a media payload into a Buffer.
  * Supports 'disk:<filePath>', 'data:<mime>;base64,<data>', raw base64, or Buffer.
+ * Allows an optional fallbackPayload if the primary path cannot be read.
  */
-async function readMediaBuffer(storedPayload) {
+async function readMediaBuffer(storedPayload, fallbackPayload = null) {
+  if (!storedPayload && fallbackPayload) {
+    return await readMediaBuffer(fallbackPayload);
+  }
   if (!storedPayload) return null;
 
   if (Buffer.isBuffer(storedPayload)) {
@@ -81,6 +85,14 @@ async function readMediaBuffer(storedPayload) {
       const filePath = storedPayload.slice(5);
       if (fs.existsSync(filePath)) {
         return await fs.promises.readFile(filePath);
+      }
+      // If primary disk path is not found, attempt fallback before failing
+      if (fallbackPayload && fallbackPayload !== storedPayload) {
+        console.warn(`[MediaStorage] Primary disk file not found (${filePath}), attempting fallback payload...`);
+        try {
+          const fallbackBuf = await readMediaBuffer(fallbackPayload);
+          if (fallbackBuf) return fallbackBuf;
+        } catch (_) {}
       }
       throw new Error(`Media file on disk not found: ${filePath}`);
     }
@@ -132,11 +144,29 @@ async function readMediaBuffer(storedPayload) {
 
 /**
  * Safely removes a file from disk if path starts with disk:
+ * Verifies that no other pending or scheduled messages still reference this exact file before unlinking!
  */
 async function removeMediaFile(storedPayload) {
   if (typeof storedPayload === 'string' && storedPayload.startsWith('disk:')) {
     const filePath = storedPayload.slice(5);
     try {
+      const mongoose = require('mongoose');
+      if (mongoose.connection && mongoose.connection.readyState === 1) {
+        const ScheduledMessage = mongoose.model('ScheduledMessage');
+        const activeUsage = await ScheduledMessage.findOne({
+          status: { $in: ['pending', 'processing'] },
+          $or: [
+            { mediaData: storedPayload },
+            { 'mediaList.data': storedPayload }
+          ]
+        }).select('_id').lean();
+
+        if (activeUsage) {
+          // File is still referenced by other pending recipients in a batch send — keep it intact!
+          return;
+        }
+      }
+
       if (fs.existsSync(filePath)) {
         await fs.promises.unlink(filePath);
       }

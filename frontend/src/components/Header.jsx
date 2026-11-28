@@ -63,6 +63,9 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
 
   // Poll for unread admin replies in personal feedback
   const checkUnreadSupportReplies = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return;
+    }
     try {
       const res = await fetchPersonalFeedback();
       if (res?.success && Array.isArray(res.feedbacks)) {
@@ -70,7 +73,7 @@ export default function Header({ status, profile, onLogout, isSyncing, activeVie
         setUnreadSupportCount(count);
       }
     } catch {
-      // Ignore background fetch failure
+      // Ignore background fetch failure silently during network drops
     }
   }, []);
 
