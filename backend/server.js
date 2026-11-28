@@ -803,13 +803,7 @@ app.get('/api/media/proxy', async (req, res) => {
 app.get('/api/messages', async (req, res) => {
   try {
     const browserSessionId = req.headers['x-browser-session-id'] || req.query.browserSessionId || null;
-    let connectedPhone = null;
-    try {
-      const profile = whatsapp.getConnectedProfile(req.sessionId) || (browserSessionId ? whatsapp.getConnectedProfile(browserSessionId) : null);
-      if (profile?.phone) connectedPhone = String(profile.phone).replace(/\D/g, '');
-    } catch (_) {}
-
-    res.json(await db.getAllMessages(req.sessionId, browserSessionId, connectedPhone));
+    res.json(await db.getAllMessages(req.sessionId, browserSessionId));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

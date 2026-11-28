@@ -93,21 +93,13 @@ function hasSession(sessionId) {
   return sessions.has(sessionId);
 }
 
-/** Helper to retrieve the effective connected session, reusing any active socket in memory */
+/** Helper to retrieve the effective connected session for this specific session */
 function getEffectiveSession(sessionId) {
   if (!sessionId) return null;
   const direct = sessions.get(sessionId);
   if (direct && direct.status === 'connected' && direct.sock) {
     return direct;
   }
-
-  // If there's any active connected session in memory, return it so multi-tenant/naming differences don't break delivery
-  for (const s of sessions.values()) {
-    if (s.status === 'connected' && s.sock) {
-      return s;
-    }
-  }
-
   return direct || null;
 }
 
@@ -117,7 +109,7 @@ async function getEffectiveSessionAsync(sessionId) {
     return eff;
   }
 
-  // Auto-restore on demand if credentials exist
+  // Auto-restore on demand if credentials exist for this specific session
   if (sessionId && !sessions.has(sessionId)) {
     const hasCreds = await hasSavedCredentials(sessionId);
     if (hasCreds) {
@@ -125,14 +117,14 @@ async function getEffectiveSessionAsync(sessionId) {
         await initWhatsApp(sessionId);
         for (let w = 0; w < 10; w++) {
           await new Promise(r => setTimeout(r, 400));
-          const s = getEffectiveSession(sessionId);
+          const s = sessions.get(sessionId);
           if (s && s.status === 'connected' && s.sock) return s;
         }
       } catch (_) {}
     }
   }
 
-  return getEffectiveSession(sessionId);
+  return sessions.get(sessionId) || null;
 }
 
 /** Returns true if this session has saved, registered credentials in MongoDB. */

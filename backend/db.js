@@ -1060,61 +1060,15 @@ async function rescheduleMessage(id, newScheduledAt, newMessageText = null, extr
   return updated;
 }
 
-async function getAllMessages(sessionId, browserSessionId = null, connectedPhone = null) {
+async function getAllMessages(sessionId, browserSessionId = null) {
   let sessionIds = [sessionId];
-  if (browserSessionId && browserSessionId !== sessionId) {
+  // Include anonymous browser session ID only if it does not belong to another registered user account
+  if (browserSessionId && browserSessionId !== sessionId && !browserSessionId.startsWith('user_acc_')) {
     sessionIds.push(browserSessionId);
   }
 
-  if (sessionId && sessionId.startsWith('user_acc_')) {
-    const accountId = sessionId.replace('user_acc_', '');
-    try {
-      const account = await AuthAccount.findById(accountId).lean();
-      if (account?.linkedWhatsAppPhone) {
-        const rawPhone = account.linkedWhatsAppPhone.replace(/\D/g, '');
-        const waUsers = await User.find({
-          $or: [
-            { phoneNumber: rawPhone },
-            { phoneNumber: { $regex: rawPhone.slice(-10) + '$' } }
-          ]
-        }).lean();
-        waUsers.forEach(w => sessionIds.push(w.sessionId));
-      }
-    } catch (_) {}
-  } else if (sessionId) {
-    try {
-      const waUser = await User.findOne({ sessionId }).lean();
-      if (waUser?.phoneNumber) {
-        const rawPhone = waUser.phoneNumber.replace(/\D/g, '');
-        const linkedAcc = await AuthAccount.findOne({
-          $or: [
-            { linkedWhatsAppPhone: rawPhone },
-            { linkedWhatsAppPhone: { $regex: rawPhone.slice(-10) + '$' } }
-          ]
-        }).lean();
-        if (linkedAcc) {
-          sessionIds.push(`user_acc_${linkedAcc._id.toString()}`);
-        }
-      }
-    } catch (_) {}
-  }
-
-  // Also include sessions matching connectedPhone if provided
-  if (connectedPhone) {
-    try {
-      const rawDigits = String(connectedPhone).replace(/\D/g, '');
-      const waUsers = await User.find({
-        $or: [
-          { phoneNumber: rawDigits },
-          { phoneNumber: { $regex: rawDigits.slice(-10) + '$' } }
-        ]
-      }).lean();
-      waUsers.forEach(w => sessionIds.push(w.sessionId));
-    } catch (_) {}
-  }
-
   sessionIds = Array.from(new Set(sessionIds.filter(Boolean)));
-  // In single-tenant or active session mode, fetch recent messages with positive projection to strip heavy raw base64 data and ensure instant response
+  // Fetch messages strictly scoped to this user's session with positive projection
   const docs = await ScheduledMessage.find({ sessionId: { $in: sessionIds } })
     .select({
       _id: 1,
