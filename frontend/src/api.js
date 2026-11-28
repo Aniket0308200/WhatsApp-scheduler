@@ -175,6 +175,9 @@ export const adminGetFeedbacks = (token) =>
 export const adminReplyFeedback = (token, id, reply) =>
   api.post(`/admin/feedbacks/${id}/reply`, { reply }, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
 
+export const adminToggleRepliedFeedback = (token, id, isReplied) =>
+  api.post(`/admin/feedbacks/${id}/toggle-replied`, { isReplied }, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
+
 export const adminDeleteFeedback = (token, id) =>
   api.delete(`/admin/feedbacks/${id}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.data);
 

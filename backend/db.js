@@ -323,6 +323,11 @@ const FeedbackSchema = new mongoose.Schema({
   type: { type: String, enum: ['public', 'personal'], default: 'public' },
   likes: { type: [String], default: [] }, // Array of userIds/sessionIds
   adminReply: { type: String, default: '' },
+  adminReplies: [{
+    text: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now }
+  }],
+  isReplied: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
 FeedbackSchema.index({ type: 1, createdAt: -1 });

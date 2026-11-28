@@ -20,7 +20,15 @@ export function computeUnreadReplyCount(personalFeedbacks) {
   const seenKeys = new Set(getSeenReplyKeys());
   let count = 0;
   for (const item of personalFeedbacks) {
-    if (item.adminReply && item.adminReply.trim()) {
+    if (Array.isArray(item.adminReplies) && item.adminReplies.length > 0) {
+      item.adminReplies.forEach((r, idx) => {
+        const text = (r?.text || r || '').trim();
+        if (text) {
+          const key = `${item._id}_rep_${idx}_${text}`;
+          if (!seenKeys.has(key)) count++;
+        }
+      });
+    } else if (item.adminReply && item.adminReply.trim()) {
       const key = `${item._id}_${item.adminReply.trim()}`;
       if (!seenKeys.has(key)) {
         count++;
@@ -39,7 +47,18 @@ export function markPersonalRepliesAsSeen(personalFeedbacks) {
     const seenKeys = new Set(getSeenReplyKeys());
     let hasChanges = false;
     for (const item of personalFeedbacks) {
-      if (item.adminReply && item.adminReply.trim()) {
+      if (Array.isArray(item.adminReplies) && item.adminReplies.length > 0) {
+        item.adminReplies.forEach((r, idx) => {
+          const text = (r?.text || r || '').trim();
+          if (text) {
+            const key = `${item._id}_rep_${idx}_${text}`;
+            if (!seenKeys.has(key)) {
+              seenKeys.add(key);
+              hasChanges = true;
+            }
+          }
+        });
+      } else if (item.adminReply && item.adminReply.trim()) {
         const key = `${item._id}_${item.adminReply.trim()}`;
         if (!seenKeys.has(key)) {
           seenKeys.add(key);

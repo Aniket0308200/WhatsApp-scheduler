@@ -316,7 +316,7 @@ router.get('/feedbacks', requireAdminAuth, async (req, res) => {
 /**
  * POST /api/admin/feedbacks/:id/reply
  * Admin replies to a user's feedback or support query.
- * The reply is attached and will be privately visible to that user in their Personal Support tab.
+ * Appends to adminReplies thread so consecutive replies are supported like a chatbox.
  */
 router.post('/feedbacks/:id/reply', requireAdminAuth, async (req, res) => {
   try {
@@ -326,17 +326,60 @@ router.post('/feedbacks/:id/reply', requireAdminAuth, async (req, res) => {
       return res.status(400).json({ error: 'Reply text is required.' });
     }
 
+    const cleanReply = String(reply).trim();
+    if (!cleanReply) {
+      return res.status(400).json({ error: 'Reply message cannot be empty.' });
+    }
+
     const feedback = await db.Feedback.findById(id);
     if (!feedback) {
       return res.status(404).json({ error: 'Feedback message not found.' });
     }
 
-    feedback.adminReply = String(reply).trim();
+    if (!Array.isArray(feedback.adminReplies)) {
+      feedback.adminReplies = [];
+    }
+
+    // Append new reply to thread
+    feedback.adminReplies.push({
+      text: cleanReply,
+      createdAt: new Date()
+    });
+
+    feedback.adminReply = cleanReply; // Latest reply for backward compatibility
+    feedback.isReplied = true;
     await feedback.save();
 
     return res.json({
       success: true,
       message: 'Private reply saved and dispatched to user support view.',
+      feedback
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/feedbacks/:id/toggle-replied
+ * Marks a feedback inquiry as Replied / Resolved or toggles it.
+ */
+router.post('/feedbacks/:id/toggle-replied', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isReplied } = req.body || {};
+
+    const feedback = await db.Feedback.findById(id);
+    if (!feedback) {
+      return res.status(404).json({ error: 'Feedback message not found.' });
+    }
+
+    feedback.isReplied = isReplied !== undefined ? Boolean(isReplied) : !feedback.isReplied;
+    await feedback.save();
+
+    return res.json({
+      success: true,
+      message: feedback.isReplied ? 'Marked as replied.' : 'Marked as awaiting reply.',
       feedback
     });
   } catch (err) {

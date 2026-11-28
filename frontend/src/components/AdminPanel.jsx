@@ -14,6 +14,7 @@ import {
   adminDeleteSubscription,
   adminGetFeedbacks,
   adminReplyFeedback,
+  adminToggleRepliedFeedback,
   adminDeleteFeedback,
   adminGetContactMessages,
   adminUpdateContactStatus,
@@ -197,6 +198,8 @@ export default function AdminPanel() {
   // Tab 4 (Support & Feedback)
   const [feedbackSearchQuery, setFeedbackSearchQuery] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [selectedUserGroup, setSelectedUserGroup] = useState(null);
+  const [groupModalTab, setGroupModalTab] = useState('personal'); // 'personal' | 'community'
 
   // Screenshot modal preview
   const [previewScreenshot, setPreviewScreenshot] = useState(null);
@@ -419,11 +422,42 @@ export default function AdminPanel() {
     }
     setActionLoadingId(id);
     try {
-      await adminReplyFeedback(token, id, draft);
-      setFeedbacks(prev => prev.map(f => f._id === id ? { ...f, adminReply: draft } : f));
+      const res = await adminReplyFeedback(token, id, draft);
+      const updatedItem = res?.feedback;
+      setFeedbacks(prev => prev.map(f => {
+        if (f._id !== id) return f;
+        if (updatedItem) return updatedItem;
+        const currentReplies = Array.isArray(f.adminReplies) ? [...f.adminReplies] : (f.adminReply ? [{ text: f.adminReply, createdAt: f.createdAt }] : []);
+        currentReplies.push({ text: draft, createdAt: new Date().toISOString() });
+        return {
+          ...f,
+          adminReply: draft,
+          adminReplies: currentReplies,
+          isReplied: true
+        };
+      }));
+      setReplyDrafts(prev => ({ ...prev, [id]: '' }));
       toast.success(`Private reply sent to ${userName || 'user'}! Visible in their Personal Support.`);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to send reply.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleToggleReplied = async (id, currentStatus) => {
+    setActionLoadingId(id);
+    try {
+      const res = await adminToggleRepliedFeedback(token, id, !currentStatus);
+      const updatedItem = res?.feedback;
+      setFeedbacks(prev => prev.map(f => {
+        if (f._id !== id) return f;
+        if (updatedItem) return updatedItem;
+        return { ...f, isReplied: !currentStatus };
+      }));
+      toast.success(res.message || (!currentStatus ? 'Marked as replied!' : 'Marked as awaiting reply!'));
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update status.');
     } finally {
       setActionLoadingId(null);
     }
@@ -565,30 +599,95 @@ export default function AdminPanel() {
     setFeedbackPage(1);
   }, [feedbackSearchQuery, feedbackFilter]);
 
-  // Filtered feedbacks (Tab 4)
-  const filteredFeedbacks = useMemo(() => {
-    return feedbacks.filter(f => {
+  // Grouped feedbacks by user (Tab 4)
+  const userFeedbackGroups = useMemo(() => {
+    const map = new Map();
+    feedbacks.forEach(f => {
+      const key = f.userId || f.userName || 'anonymous';
+      if (!map.has(key)) {
+        map.set(key, {
+          userId: f.userId || 'anonymous',
+          userName: f.userName || 'Anonymous User',
+          userPhoto: f.userPhoto || '',
+          items: [],
+          personalItems: [],
+          publicItems: [],
+          latestDate: new Date(0),
+          hasUnreplied: false,
+          totalRepliesCount: 0
+        });
+      }
+      const group = map.get(key);
+      group.items.push(f);
+      if (f.type === 'personal') {
+        group.personalItems.push(f);
+      } else {
+        group.publicItems.push(f);
+      }
+      const itemDate = new Date(f.createdAt || 0);
+      if (itemDate > group.latestDate) {
+        group.latestDate = itemDate;
+        if (f.userName) group.userName = f.userName;
+        if (f.userPhoto) group.userPhoto = f.userPhoto;
+      }
+      const isUnreplied = !f.isReplied && !f.adminReply && (!f.adminReplies || f.adminReplies.length === 0);
+      if (isUnreplied) {
+        group.hasUnreplied = true;
+      }
+      const repCount = (f.adminReplies?.length) || (f.adminReply ? 1 : 0);
+      group.totalRepliesCount += repCount;
+    });
+
+    const groups = Array.from(map.values()).map(g => {
+      g.items.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      g.personalItems.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      g.publicItems.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      return g;
+    });
+
+    // Sort: unreplied groups first, then newest message
+    groups.sort((a, b) => {
+      if (a.hasUnreplied && !b.hasUnreplied) return -1;
+      if (!a.hasUnreplied && b.hasUnreplied) return 1;
+      return b.latestDate - a.latestDate;
+    });
+
+    return groups;
+  }, [feedbacks]);
+
+  // Filtered feedback user groups (Tab 4)
+  const filteredUserGroups = useMemo(() => {
+    return userFeedbackGroups.filter(g => {
       const q = feedbackSearchQuery.toLowerCase().trim();
       const matchSearch =
         !q ||
-        (f.userName && f.userName.toLowerCase().includes(q)) ||
-        (f.userId && f.userId.toLowerCase().includes(q)) ||
-        (f.message && f.message.toLowerCase().includes(q)) ||
-        (f.adminReply && f.adminReply.toLowerCase().includes(q));
+        g.userName.toLowerCase().includes(q) ||
+        g.userId.toLowerCase().includes(q) ||
+        g.items.some(it =>
+          (it.message && it.message.toLowerCase().includes(q)) ||
+          (it.adminReply && it.adminReply.toLowerCase().includes(q)) ||
+          (it.adminReplies && it.adminReplies.some(r => r.text && r.text.toLowerCase().includes(q)))
+        );
 
       if (!matchSearch) return false;
 
-      if (feedbackFilter === 'unanswered') return !f.adminReply;
-      if (feedbackFilter === 'answered') return !!f.adminReply;
+      if (feedbackFilter === 'unanswered') return g.hasUnreplied;
+      if (feedbackFilter === 'answered') return !g.hasUnreplied;
       return true;
     });
-  }, [feedbacks, feedbackSearchQuery, feedbackFilter]);
+  }, [userFeedbackGroups, feedbackSearchQuery, feedbackFilter]);
 
-  // Paginated feedbacks (Tab 4)
-  const paginatedFeedbacks = useMemo(() => {
+  // Paginated user feedback groups (Tab 4)
+  const paginatedUserGroups = useMemo(() => {
     const start = (feedbackPage - 1) * feedbackPageSize;
-    return filteredFeedbacks.slice(start, start + feedbackPageSize);
-  }, [filteredFeedbacks, feedbackPage, feedbackPageSize]);
+    return filteredUserGroups.slice(start, start + feedbackPageSize);
+  }, [filteredUserGroups, feedbackPage, feedbackPageSize]);
+
+  // Active selected user group (stays synced with feedbacks state)
+  const activeSelectedGroup = useMemo(() => {
+    if (!selectedUserGroup) return null;
+    return userFeedbackGroups.find(g => g.userId === selectedUserGroup.userId) || selectedUserGroup;
+  }, [selectedUserGroup, userFeedbackGroups]);
 
   // Format date helper
   const formatDateTime = (val) => {
@@ -898,9 +997,9 @@ export default function AdminPanel() {
             }`}
           >
             💬 Support & Feedback ({feedbacks.length})
-            {feedbacks.filter(f => !f.adminReply).length > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-slate-950">
-                {feedbacks.filter(f => !f.adminReply).length} Awaiting Reply
+            {feedbacks.filter(f => !f.isReplied && !f.adminReply && (!f.adminReplies || f.adminReplies.length === 0)).length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-slate-950 animate-pulse">
+                {feedbacks.filter(f => !f.isReplied && !f.adminReply && (!f.adminReplies || f.adminReplies.length === 0)).length} Awaiting Reply
               </span>
             )}
           </button>
@@ -1603,12 +1702,17 @@ export default function AdminPanel() {
                   <span>💬</span> In-App User Support & Feedback
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Direct inquiries and feedback submitted via client support modal. Replies appear exclusively in the user's Personal Support feed.
+                  Direct inquiries and feedback grouped by user. Click any user to view Community vs Personal messages and chat privately.
                 </p>
               </div>
-              <span className="text-xs font-bold text-slate-400 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl self-start sm:self-auto">
-                {feedbacks.length} Total Messages
-              </span>
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <span className="text-xs font-bold text-slate-300 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl">
+                  {userFeedbackGroups.length} Users
+                </span>
+                <span className="text-xs font-bold text-slate-400 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-xl">
+                  {feedbacks.length} Total Messages
+                </span>
+              </div>
             </div>
 
             {/* Filter & Search Bar */}
@@ -1619,7 +1723,7 @@ export default function AdminPanel() {
                   type="text"
                   value={feedbackSearchQuery}
                   onChange={e => setFeedbackSearchQuery(e.target.value)}
-                  placeholder="Search by user name, message, reply, user ID…"
+                  placeholder="Search user, inquiry, reply..."
                   className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-950 border border-slate-700 focus:border-emerald-500 text-xs text-white placeholder-slate-500 outline-none transition-all"
                 />
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">
@@ -1648,44 +1752,44 @@ export default function AdminPanel() {
                       : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  All ({feedbacks.length})
+                  All ({userFeedbackGroups.length} Users)
                 </button>
                 <button
                   type="button"
                   onClick={() => setFeedbackFilter('unanswered')}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                     feedbackFilter === 'unanswered'
-                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm font-bold'
                       : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  Awaiting Reply ({feedbacks.filter(f => !f.adminReply).length})
+                  Awaiting Reply ({userFeedbackGroups.filter(g => g.hasUnreplied).length})
                 </button>
                 <button
                   type="button"
                   onClick={() => setFeedbackFilter('answered')}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                     feedbackFilter === 'answered'
-                      ? 'bg-teal-600 text-white shadow-sm'
+                      ? 'bg-teal-600 text-white shadow-sm font-bold'
                       : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  Replied ({feedbacks.filter(f => !!f.adminReply).length})
+                  Replied / Resolved ({userFeedbackGroups.filter(g => !g.hasUnreplied).length})
                 </button>
               </div>
             </div>
 
-            {/* List of Feedback Cards */}
+            {/* List of User Feedback Group Cards */}
             {(() => {
-              if (filteredFeedbacks.length === 0) {
+              if (filteredUserGroups.length === 0) {
                 return (
                   <div className="p-12 text-center bg-slate-900/60 border border-slate-800 rounded-3xl space-y-2">
                     <span className="text-3xl">🎉</span>
                     <h4 className="text-sm font-bold text-slate-300">No Support Queries Found</h4>
                     <p className="text-xs text-slate-500 max-w-md mx-auto">
-                      {feedbacks.length === 0
-                        ? 'No feedback messages recorded yet.'
-                        : 'No support queries match your search or filter criteria.'}
+                      {userFeedbackGroups.length === 0
+                        ? 'No user inquiries or feedback recorded yet.'
+                        : 'No users match your search or filter criteria.'}
                     </p>
                   </div>
                 );
@@ -1693,145 +1797,97 @@ export default function AdminPanel() {
 
               return (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {paginatedFeedbacks.map(item => {
-                      const isBusy = actionLoadingId === item._id;
-                      const draftValue = replyDrafts[item._id] !== undefined ? replyDrafts[item._id] : (item.adminReply || '');
-                      const hasReplied = Boolean(item.adminReply);
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {paginatedUserGroups.map(group => {
+                      const latestItem = group.items[0];
+                      const totalMessages = group.items.length;
+                      const personalCount = group.personalItems.length;
+                      const publicCount = group.publicItems.length;
 
                       return (
                         <div
-                          key={item._id}
-                          className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl transition-all space-y-3.5 hover:border-slate-700/80 flex flex-col justify-between"
+                          key={group.userId}
+                          onClick={() => {
+                            setSelectedUserGroup(group);
+                            setGroupModalTab(group.personalItems.length > 0 ? 'personal' : 'community');
+                          }}
+                          className={`p-4 rounded-2xl bg-slate-900/90 border cursor-pointer transition-all duration-200 flex flex-col justify-between hover:scale-[1.01] hover:shadow-xl ${
+                            group.hasUnreplied
+                              ? 'border-amber-500/50 hover:border-amber-400 shadow-amber-500/5'
+                              : 'border-slate-800 hover:border-slate-700'
+                          }`}
                         >
-                        {/* Top Card Info Bar */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
-                          <div className="flex items-center gap-2.5 flex-wrap">
-                            <span className="font-bold text-sm text-white flex items-center gap-1.5">
-                              👤 {item.userName || 'Anonymous User'}
-                            </span>
-                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                              item.type === 'personal'
-                                ? 'bg-purple-950/70 text-purple-300 border border-purple-800'
-                                : 'bg-blue-950/70 text-blue-300 border border-blue-800'
-                            }`}>
-                              {item.type === 'personal' ? '🔒 Personal Support' : '👥 Community Post'}
-                            </span>
-                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                              hasReplied
-                                ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-800'
-                                : 'bg-amber-950/70 text-amber-300 border border-amber-800 animate-pulse'
-                            }`}>
-                              {hasReplied ? '✓ Replied' : '⏳ Needs Reply'}
-                            </span>
-                          </div>
+                          <div className="space-y-3">
+                            {/* Card Header: User avatar, name, badges */}
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center font-bold text-white text-sm shrink-0 uppercase shadow-md">
+                                  {group.userName.charAt(0) || 'U'}
+                                </div>
+                                <div className="min-w-0">
+                                  <h4 className="text-sm font-bold text-white truncate flex items-center gap-1.5">
+                                    {group.userName}
+                                  </h4>
+                                  <span className="text-[10px] text-slate-500 font-mono block truncate">
+                                    ID: {group.userId}
+                                  </span>
+                                </div>
+                              </div>
 
-                          <div className="flex items-center gap-3 text-xs text-slate-400">
-                            <span className="text-[11px] font-mono text-slate-500">
-                              {formatDateTime(item.createdAt)}
-                            </span>
-                            {item.likes?.length > 0 && (
-                              <span className="text-pink-400 font-semibold flex items-center gap-1 text-[11px]">
-                                ❤️ {item.likes.length}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* User Message Bubble */}
-                        <div className="space-y-1">
-                          <span className="text-[11px] font-semibold text-slate-400 block">
-                            User Inquiry / Message:
-                          </span>
-                          <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs sm:text-sm text-slate-100 font-medium whitespace-pre-wrap leading-relaxed">
-                            {item.message}
-                          </div>
-                        </div>
-
-                        {/* Existing Admin Reply Banner (if replied) */}
-                        {hasReplied && (
-                          <div className="p-3 rounded-xl bg-emerald-950/25 border border-emerald-900/50 space-y-1">
-                            <div className="flex items-center justify-between text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
-                              <span className="flex items-center gap-1">
-                                🛡️ Current Private Reply (Visible to User in Personal Support)
-                              </span>
-                              <span className="text-[10px] text-emerald-500/80 font-normal lowercase">
-                                private to {item.userName}
+                              {/* Status Badge */}
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider shrink-0 ${
+                                group.hasUnreplied
+                                  ? 'bg-amber-950/80 text-amber-300 border border-amber-800 animate-pulse'
+                                  : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
+                              }`}>
+                                {group.hasUnreplied ? '⏳ Awaiting Reply' : '✓ Replied'}
                               </span>
                             </div>
-                            <p className="text-xs text-emerald-200/90 whitespace-pre-wrap">
-                              {item.adminReply}
-                            </p>
-                          </div>
-                        )}
 
-                        {/* Reply Form & Actions */}
-                        <div className="pt-2 space-y-2.5">
-                          <label className="text-[11px] font-semibold text-slate-400 flex items-center justify-between">
-                            <span className="flex items-center gap-1.5">
-                              <span>💬</span>
-                              <span>{hasReplied ? 'Edit Private Reply:' : 'Send Private Reply to User:'}</span>
-                            </span>
-                            <span className="text-emerald-400 text-[10px] font-medium">
-                              🔒 Only visible to {item.userName} in Personal Support tab
-                            </span>
-                          </label>
-
-                          <div className="flex flex-col sm:flex-row gap-2">
-                            <input
-                              type="text"
-                              value={draftValue}
-                              onChange={(e) => setReplyDrafts(prev => ({ ...prev, [item._id]: e.target.value }))}
-                              placeholder="e.g. Yes, your Pro Plan has been activated! Enjoy unlimited scheduling."
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                  e.preventDefault();
-                                  handleReplyFeedback(item._id, item.userName);
-                                }
-                              }}
-                              className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700/80 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-xs text-white placeholder-slate-500 outline-none transition-all"
-                            />
-                            <button
-                              type="button"
-                              disabled={isBusy || !draftValue.trim()}
-                              onClick={() => handleReplyFeedback(item._id, item.userName)}
-                              className="px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-500/20 active:scale-95 transition-all disabled:opacity-40 flex items-center justify-center gap-1.5 shrink-0"
-                            >
-                              {isBusy ? (
-                                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                <>
-                                  <span>{hasReplied ? '✓ Update Reply' : 'Send Reply ➔'}</span>
-                                </>
+                            {/* Counts & Tags */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700/60">
+                                💬 {totalMessages} {totalMessages === 1 ? 'Message' : 'Messages'}
+                              </span>
+                              {personalCount > 0 && (
+                                <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-purple-950/60 text-purple-300 border border-purple-800/60">
+                                  🔒 {personalCount} Personal
+                                </span>
                               )}
-                            </button>
+                              {publicCount > 0 && (
+                                <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-950/60 text-blue-300 border border-blue-800/60">
+                                  👥 {publicCount} Community
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Latest Snippet Preview */}
+                            {latestItem && (
+                              <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 text-xs text-slate-300 line-clamp-2 leading-relaxed">
+                                <span className="text-slate-500 font-semibold mr-1">Latest:</span>
+                                {latestItem.message}
+                              </div>
+                            )}
                           </div>
 
-                          <div className="flex items-center justify-between pt-1">
-                            <span className="text-[10px] text-slate-500 font-mono">
-                              User ID: {item.userId}
+                          {/* Card Footer: Timestamp & Action */}
+                          <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-800/60 text-xs text-slate-400">
+                            <span className="text-[11px] font-mono text-slate-500">
+                              {formatDateTime(group.latestDate)}
                             </span>
-                            <button
-                              type="button"
-                              disabled={isBusy}
-                              onClick={() => handleDeleteFeedback(item._id, item.userName)}
-                              className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-rose-300 hover:text-white bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 transition-colors flex items-center gap-1"
-                              title="Permanently remove inquiry from database"
-                            >
-                              <span>🗑️</span>
-                              <span>Delete Inquiry</span>
-                            </button>
+                            <span className="text-emerald-400 text-xs font-bold hover:underline flex items-center gap-1">
+                              Open Chat ➔
+                            </span>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                   </div>
 
-                  {/* Pagination for Feedback Cards */}
+                  {/* Pagination for User Feedback Groups */}
                   <PaginationControl
                     currentPage={feedbackPage}
-                    totalItems={filteredFeedbacks.length}
+                    totalItems={filteredUserGroups.length}
                     pageSize={feedbackPageSize}
                     onPageChange={setFeedbackPage}
                     onPageSizeChange={setFeedbackPageSize}
@@ -1840,6 +1896,322 @@ export default function AdminPanel() {
                 </div>
               );
             })()}
+
+            {/* ── User Conversation Detail Modal ─────────────────────────────── */}
+            {activeSelectedGroup && (
+              <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fadeIn">
+                <div className="relative w-full max-w-4xl max-h-[92vh] flex flex-col bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden">
+                  
+                  {/* Modal Header */}
+                  <div className="p-4 sm:p-5 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center font-black text-white text-base shrink-0 uppercase shadow-lg shadow-emerald-500/20">
+                        {activeSelectedGroup.userName.charAt(0) || 'U'}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-base font-black text-white truncate">
+                            {activeSelectedGroup.userName}
+                          </h3>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                            activeSelectedGroup.hasUnreplied
+                              ? 'bg-amber-950/80 text-amber-300 border border-amber-800 animate-pulse'
+                              : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
+                          }`}>
+                            {activeSelectedGroup.hasUnreplied ? '⏳ Awaiting Reply' : '✓ Replied / Resolved'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 font-mono truncate">
+                          User ID: {activeSelectedGroup.userId}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedUserGroup(null)}
+                      className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition-colors text-sm font-bold shrink-0"
+                      title="Close modal"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* Tabs: Personal Support vs Community Feedback */}
+                  <div className="px-4 sm:px-6 pt-3 pb-2 bg-slate-950/40 border-b border-slate-800 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setGroupModalTab('personal')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                        groupModalTab === 'personal'
+                          ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                          : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <span>🔒 Personal Support</span>
+                      <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${
+                        groupModalTab === 'personal' ? 'bg-purple-800 text-white' : 'bg-slate-800 text-slate-400'
+                      }`}>
+                        {activeSelectedGroup.personalItems.length}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setGroupModalTab('community')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                        groupModalTab === 'community'
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                          : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <span>👥 Community Feedback</span>
+                      <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${
+                        groupModalTab === 'community' ? 'bg-blue-800 text-white' : 'bg-slate-800 text-slate-400'
+                      }`}>
+                        {activeSelectedGroup.publicItems.length}
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Modal Body / Scrollable Content */}
+                  <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 custom-scrollbar">
+                    
+                    {/* TAB 1: PERSONAL SUPPORT THREAD */}
+                    {groupModalTab === 'personal' && (
+                      <div className="space-y-4">
+                        {activeSelectedGroup.personalItems.length === 0 ? (
+                          <div className="p-8 text-center bg-slate-950/50 border border-slate-800/80 rounded-2xl space-y-1">
+                            <span className="text-2xl">📭</span>
+                            <h5 className="text-xs font-bold text-slate-300">No Personal Support Tickets</h5>
+                            <p className="text-[11px] text-slate-500">
+                              This user hasn't submitted private support queries yet. Check Community Feedback for public reviews.
+                            </p>
+                          </div>
+                        ) : (
+                          activeSelectedGroup.personalItems.map((item, idx) => {
+                            const isBusy = actionLoadingId === item._id;
+                            const isReplied = Boolean(item.isReplied || item.adminReply || (item.adminReplies && item.adminReplies.length > 0));
+                            const repliesList = item.adminReplies && item.adminReplies.length > 0
+                              ? item.adminReplies
+                              : (item.adminReply ? [{ text: item.adminReply, createdAt: item.createdAt }] : []);
+                            const draftText = replyDrafts[item._id] || '';
+
+                            return (
+                              <div
+                                key={item._id}
+                                className="p-4 sm:p-5 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-md space-y-4"
+                              >
+                                {/* Inquiry Header */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-800/80">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs font-bold text-purple-300">
+                                      Ticket #{activeSelectedGroup.personalItems.length - idx}
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                                      isReplied
+                                        ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
+                                        : 'bg-amber-950/80 text-amber-300 border border-amber-800 animate-pulse'
+                                    }`}>
+                                      {isReplied ? '✓ Replied / Resolved' : '⏳ Awaiting Reply'}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[11px] font-mono text-slate-500">
+                                      {formatDateTime(item.createdAt)}
+                                    </span>
+                                    {/* Mark as Replied / Awaiting Toggle Button */}
+                                    <button
+                                      type="button"
+                                      disabled={isBusy}
+                                      onClick={() => handleToggleReplied(item._id, !isReplied)}
+                                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 ${
+                                        isReplied
+                                          ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                                          : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm shadow-emerald-600/30'
+                                      }`}
+                                      title={isReplied ? 'Mark as awaiting reply' : 'Clear awaiting badge'}
+                                    >
+                                      {isBusy ? (
+                                        <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                      ) : isReplied ? (
+                                        <><span>↩</span><span>Mark as Awaiting</span></>
+                                      ) : (
+                                        <><span>✓</span><span>Mark as Replied</span></>
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* User's Message */}
+                                <div className="space-y-1">
+                                  <span className="text-[11px] font-semibold text-slate-400 block">
+                                    User Inquiry:
+                                  </span>
+                                  <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-xs sm:text-sm text-slate-100 whitespace-pre-wrap break-words leading-relaxed">
+                                    {item.message}
+                                  </div>
+                                </div>
+
+                                {/* Thread of Admin Replies */}
+                                {repliesList.length > 0 && (
+                                  <div className="space-y-2 pt-1">
+                                    <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                                      🛡️ Admin Private Replies ({repliesList.length})
+                                    </span>
+                                    <div className="space-y-2">
+                                      {repliesList.map((rep, rIdx) => (
+                                        <div
+                                          key={rIdx}
+                                          className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-900/40 space-y-1"
+                                        >
+                                          <div className="flex items-center justify-between text-[10px] text-emerald-400/80 font-mono">
+                                            <span>Reply #{rIdx + 1}</span>
+                                            <span>{formatDateTime(rep.createdAt)}</span>
+                                          </div>
+                                          <div className="text-xs text-emerald-100 whitespace-pre-wrap break-words leading-relaxed">
+                                            {rep.text}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Send New Reply Box */}
+                                <div className="pt-2 space-y-2">
+                                  <label className="text-[11px] font-semibold text-slate-400 flex items-center justify-between">
+                                    <span className="flex items-center gap-1.5">
+                                      <span>💬</span>
+                                      <span>Send Private Reply:</span>
+                                    </span>
+                                    <span className="text-emerald-400 text-[10px] font-medium">
+                                      Supports multiline text, paragraphs & bullets
+                                    </span>
+                                  </label>
+
+                                  <div className="space-y-2">
+                                    <textarea
+                                      rows={3}
+                                      value={draftText}
+                                      onChange={(e) => setReplyDrafts(prev => ({ ...prev, [item._id]: e.target.value }))}
+                                      placeholder="Type your reply here... Press Shift+Enter for new line or format with bullet points."
+                                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700/80 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-xs text-white placeholder-slate-500 outline-none transition-all resize-y whitespace-pre-wrap"
+                                    />
+                                    <div className="flex items-center justify-between gap-2">
+                                      <button
+                                        type="button"
+                                        disabled={isBusy}
+                                        onClick={() => handleDeleteFeedback(item._id, item.userName)}
+                                        className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-rose-300 hover:text-white bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 transition-colors flex items-center gap-1"
+                                        title="Permanently remove inquiry"
+                                      >
+                                        <span>🗑️</span>
+                                        <span>Delete</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        disabled={isBusy || !draftText.trim()}
+                                        onClick={() => handleReplyFeedback(item._id, item.userName)}
+                                        className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-500/20 active:scale-95 transition-all disabled:opacity-40 flex items-center gap-1.5"
+                                      >
+                                        {isBusy ? (
+                                          <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        ) : (
+                                          <><span>Send Reply ➔</span></>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+
+                    {/* TAB 2: COMMUNITY FEEDBACK THREAD */}
+                    {groupModalTab === 'community' && (
+                      <div className="space-y-4">
+                        {activeSelectedGroup.publicItems.length === 0 ? (
+                          <div className="p-8 text-center bg-slate-950/50 border border-slate-800/80 rounded-2xl space-y-1">
+                            <span className="text-2xl">👥</span>
+                            <h5 className="text-xs font-bold text-slate-300">No Community Feedback Posts</h5>
+                            <p className="text-[11px] text-slate-500">
+                              This user hasn't posted public feedback in the community wall yet.
+                            </p>
+                          </div>
+                        ) : (
+                          activeSelectedGroup.publicItems.map((item, idx) => {
+                            const isBusy = actionLoadingId === item._id;
+
+                            return (
+                              <div
+                                key={item._id}
+                                className="p-4 sm:p-5 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-md space-y-3"
+                              >
+                                <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-800/80">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-blue-300">
+                                      Community Post #{activeSelectedGroup.publicItems.length - idx}
+                                    </span>
+                                    {item.likes?.length > 0 && (
+                                      <span className="text-pink-400 font-semibold text-xs flex items-center gap-1">
+                                        ❤️ {item.likes.length} Likes
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[11px] font-mono text-slate-500">
+                                    {formatDateTime(item.createdAt)}
+                                  </span>
+                                </div>
+
+                                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-xs sm:text-sm text-slate-100 whitespace-pre-wrap break-words leading-relaxed">
+                                  {item.message}
+                                </div>
+
+                                <div className="flex items-center justify-between pt-1">
+                                  <span className="text-[11px] text-slate-500">
+                                    Public feedback is visible on the user community feed.
+                                  </span>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => handleDeleteFeedback(item._id, item.userName)}
+                                    className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-rose-300 hover:text-white bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 transition-colors flex items-center gap-1"
+                                    title="Permanently remove post"
+                                  >
+                                    <span>🗑️</span>
+                                    <span>Delete Post</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
+                    <span className="text-xs text-slate-500">
+                      Replies sent here go straight to {activeSelectedGroup.userName}'s Personal Support tab with instant notification.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedUserGroup(null)}
+                      className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

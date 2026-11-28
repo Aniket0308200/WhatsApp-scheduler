@@ -257,7 +257,25 @@ export default function FeedbackModal({ onClose, initialTab = 'public' }) {
                       </button>
                     </div>
                   ) : (
-                    item.adminReply ? (
+                    Array.isArray(item.adminReplies) && item.adminReplies.length > 0 ? (
+                      <div className="mt-2 space-y-2">
+                        {item.adminReplies.map((rep, rIdx) => (
+                          <div key={rIdx} className="pl-3 border-l-2 border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-r-xl p-2.5 flex flex-col gap-1 shadow-xs">
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                                🛡️ Admin Reply {item.adminReplies.length > 1 ? `#${rIdx + 1}` : ''}
+                              </span>
+                              <span className="text-[8px] font-bold uppercase tracking-wider bg-emerald-200/70 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 px-1 rounded">
+                                Private
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-medium whitespace-pre-wrap">
+                              {rep.text || rep}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : item.adminReply ? (
                       <div className="mt-2 pl-3 border-l-2 border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-r-xl p-2.5 flex flex-col gap-1 shadow-xs">
                         <div className="flex items-center gap-1.5">
                           <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1">
@@ -270,6 +288,11 @@ export default function FeedbackModal({ onClose, initialTab = 'public' }) {
                         <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-medium whitespace-pre-wrap">
                           {item.adminReply}
                         </p>
+                      </div>
+                    ) : item.isReplied ? (
+                      <div className="mt-1 flex items-center gap-1.5 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-50/50 dark:bg-emerald-950/20 px-2 py-1 rounded-md border border-emerald-200/40">
+                        <span>✓</span>
+                        <span>Reviewed by Support</span>
                       </div>
                     ) : (
                       <div className="mt-1 flex items-center gap-1.5 text-[10px] text-amber-600 dark:text-amber-400/90 font-medium bg-amber-50/50 dark:bg-amber-950/20 px-2 py-1 rounded-md border border-amber-200/40 dark:border-amber-900/30">
