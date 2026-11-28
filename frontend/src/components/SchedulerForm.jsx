@@ -305,6 +305,25 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
   // Each chip: { phone, name, isGroup }
   const [recipients, setRecipients] = useState([]); // confirmed recipient chips
 
+  // Recent used recipients storage
+  const [recentRecipients, setRecentRecipients] = useState(() => {
+    try {
+      const saved = localStorage.getItem('wa_recent_recipients');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const handleUseRecentRecipients = () => {
+    if (!recentRecipients || recentRecipients.length === 0) return;
+    setRecipients([...recentRecipients]);
+    setPhone('');
+    setContactName(null);
+    setContactExists(false);
+    toast.success(`Loaded ${recentRecipients.length} recent recipient(s)!`);
+  };
+
   // Dynamic Limits based on Plan:
   // Free: 5 contacts, 2 groups
   // Starter: 20 contacts, 10 groups
@@ -1300,6 +1319,14 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
         toast.success(totalScheduled === 1 ? 'Message scheduled successfully!' : `${totalScheduled} messages scheduled successfully!`);
       }
 
+      // Save recent used recipients
+      if (Array.isArray(finalRecipients) && finalRecipients.length > 0) {
+        try {
+          localStorage.setItem('wa_recent_recipients', JSON.stringify(finalRecipients));
+          setRecentRecipients(finalRecipients);
+        } catch (_) {}
+      }
+
       // Reset form
       setPhone('');
       setMessage('');
@@ -1474,6 +1501,17 @@ export default function SchedulerForm({ isConnected, isReconnecting = false, onS
                 Search or type a number, then press <kbd className="px-1 py-0.5 rounded bg-slate-100 dark:bg-wa-dsurf text-[10px] font-mono border border-slate-200 dark:border-wa-dbdr">Enter</kbd> or select from suggestions.
               </p>
             </div>
+            {recentRecipients && recentRecipients.length > 0 && (
+              <button
+                type="button"
+                onClick={handleUseRecentRecipients}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 shadow-2xs transition-all cursor-pointer shrink-0"
+                title={`Load ${recentRecipients.length} recently used recipient(s)`}
+              >
+                <span>🕒</span>
+                <span>Recent Used ({recentRecipients.length})</span>
+              </button>
+            )}
           </div>
 
           {/* Input row: country picker + search box — always clean, no chips inside */}
